@@ -156,7 +156,7 @@ public sealed class CityMap
         map.Add(new Place
         {
             Id = "green-roof", Name = "The Green Roof", Kind = PlaceKind.Clearing,
-            X = 18, Y = 52, Level = 2, Light = 1.0, Danger = 0.08, ForageYield = 0.09, IsExplored = true
+            X = 34, Y = 56, Level = 2, Light = 1.0, Danger = 0.08, ForageYield = 0.09, IsExplored = true
         });
 
         map.Add(new Place
@@ -180,20 +180,20 @@ public sealed class CityMap
         map.Add(new Place
         {
             Id = "tower-lobby", Name = "Tower Lobby", Kind = PlaceKind.Ruin,
-            X = 6, Y = 30, Light = 0.55, Danger = 0.18, SalvageRemaining = 2, IsExplored = true
+            X = 2, Y = 32, Light = 0.55, Danger = 0.18, SalvageRemaining = 2, IsExplored = true
         });
 
         map.Add(new Place
         {
             Id = "east-stair", Name = "The East Stairwell", Kind = PlaceKind.Stairwell,
-            X = 10, Y = 40, Level = 1, Light = 0.2, Danger = 0.42,
+            X = -18, Y = 54, Level = 1, Light = 0.2, Danger = 0.42,
             ClearingRequired = 260, IsExplored = false
         });
 
         map.Add(new Place
         {
             Id = "ninth-floor", Name = "The Ninth Floor", Kind = PlaceKind.Ruin,
-            X = 10, Y = 46, Level = 9, Light = 0.3, Danger = 0.5,
+            X = -34, Y = 76, Level = 9, Light = 0.3, Danger = 0.5,
             SalvageRemaining = 5, ClearingRequired = 120, IsExplored = false
         });
 

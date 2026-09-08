@@ -1,3 +1,4 @@
+| **M1** — the body, with no mind at all | **Done.** Drives, utility scoring, city map, foraging/salvage/building/rest, relationship ledger, episodic capture, event feed, time controls, HTTP/WebSocket API and React client. Zero model calls. |
 # What They Left Running
 
 A city the forest took back, a machine still printing minds into it, and nobody left to say why.
@@ -78,3 +79,27 @@ On the modest profile (Core 7 150U, no GPU, 15.7 GB):
   unparseable. Caps are a correctness constraint, not a budget hint. Revised in
   `CallBudgets`; reflection needed 448 rather than the design's ~200.
 - Ollama returns 500 trying to hold a third model resident on this machine.
+
+## Watching it
+
+The client builds into the API's `wwwroot`, so the whole thing runs as one process:
+
+```bash
+cd client && npm install && npm run build
+```
+
+```bash
+dotnet run --project src/Emberloom.Api --urls http://localhost:5223
+```
+
+Then open http://localhost:5223. For client development with hot reload, run the API and
+`npm run dev` in `client/` side by side — Vite proxies `/api` and `/ws` through to port 5223.
+
+The screen shows the city, the event feed colour-coded by which layer produced each line, the
+roster, and a first cut of the Mind Inspector — including the runners-up in each colonist's
+utility scoring, which is the honest version of the design's "chosen over forage (0.31)".
+
+The **Contemplation readout** beside the speed control is live from M1 even though nothing is
+spending the budget yet: it reads 9.6 calls per colony-day at 1× and 0.16 at 60×, on the 4.8
+calls/min M0 measured for this machine. That is §6's arithmetic, visible before there is a
+governor to enforce it.

@@ -243,7 +243,9 @@ public sealed class BodySimulation
                 break;
 
             case ActionKind.Build:
-                _colony.Log(EventLayer.Body, $"{colonist.DisplayName} finished work at {place.Name}.", colonist, place.Id);
+                // Deliberately not logged. Routine work still becomes a memory — the mind will
+                // want it at reflection — but a feed that reports every finished shift is a work
+                // log, and the feed has to read like something worth watching.
                 Record(colonist, "finished building at", place.Name, place.Id, 0.5, 0.55);
                 break;
 
@@ -332,13 +334,42 @@ public sealed class BodySimulation
     {
         foreach (var colonist in _colony.Living)
         {
-            var pruned = colonist.Memory.Prune(_colony.Day);
-            if (pruned > 0)
-            {
-                _colony.Log(EventLayer.World,
-                    $"{colonist.DisplayName} let go of {pruned} small memories.", colonist);
-            }
+            colonist.Memory.Prune(_colony.Day);
         }
+
+        LogDailySummary();
+    }
+
+    /// <summary>
+    /// One line a day, naming whoever is doing the most distinctive thing. At speed this is what
+    /// carries the feed — a reader skimming 60x should still be able to follow who the colony is
+    /// becoming, rather than watching completions scroll past.
+    /// </summary>
+    private void LogDailySummary()
+    {
+        var day = (int)_colony.Day;
+        if (day <= 0)
+        {
+            return;
+        }
+
+        var restless = _colony.Living
+            .OrderByDescending(c => c.Drives[Drive.Wonder])
+            .FirstOrDefault();
+
+        var frontier = _colony.Map.Places.FirstOrDefault(p => p.IsBlocked && p.ClearingProgress > 0.02);
+
+        var note = frontier is not null
+            ? $"{frontier.Name} is {frontier.ClearingProgress:P0} open."
+            : _colony.Map.Places.Any(p => p.SalvageRemaining > 0)
+                ? $"{_colony.Map.Places.Sum(p => p.SalvageRemaining)} pieces of the makers' still out there."
+                : "There is nothing left in the city they have not already handled.";
+
+        var who = restless is null
+            ? string.Empty
+            : $" {restless.DisplayName} is the restless one — wonder at {restless.Drives[Drive.Wonder]:F2}.";
+
+        _colony.Log(EventLayer.World, $"Day {day}. {note}{who}", notable: true);
     }
 
     /// <summary>

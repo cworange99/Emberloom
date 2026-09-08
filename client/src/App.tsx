@@ -1,0 +1,167 @@
+import { useEffect, useRef, useState } from 'react'
+import { CityMap } from './CityMap'
+import { ColonistDetailView, Roster } from './ColonistPanel'
+import { useColony } from './useColony'
+
+const SPEEDS: Array<{ value: string; label: string }> = [
+  { value: 'Paused', label: 'pause' },
+  { value: 'Normal', label: '1×' },
+  { value: 'Fast', label: '3×' },
+  { value: 'Faster', label: '10×' },
+  { value: 'Fastest', label: '60×' },
+  { value: 'Overnight', label: 'overnight' },
+]
+
+export default function App() {
+  const { world, state, events, connected, setSpeed, setAutoSlow, restart } = useColony()
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [follow, setFollow] = useState(true)
+
+  const feedRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (follow && feedRef.current) {
+      feedRef.current.scrollTop = feedRef.current.scrollHeight
+    }
+  }, [events, follow])
+
+  if (!world || !state) {
+    return (
+      <div className="app">
+        <p className="status-line">{connected ? 'Waiting for the colony…' : 'Connecting…'}</p>
+      </div>
+    )
+  }
+
+  const { clock } = state
+
+  return (
+    <div className="app">
+      <header className="topbar">
+        <div className="brand">
+          What They Left Running
+          <span>M1 · the body, no mind</span>
+        </div>
+
+        <div className="speeds" role="group" aria-label="Simulation speed">
+          {SPEEDS.map((speed) => (
+            <button
+              key={speed.value}
+              aria-pressed={clock.speed === speed.value}
+              onClick={() => void setSpeed(speed.value)}
+            >
+              {speed.label}
+            </button>
+          ))}
+        </div>
+
+        <label className="toggle">
+          <input
+            type="checkbox"
+            checked={clock.autoSlowOnEvent}
+            onChange={(e) => void setAutoSlow(e.target.checked)}
+          />
+          auto-slow
+        </label>
+
+        <label className="toggle">
+          <input type="checkbox" checked={follow} onChange={(e) => setFollow(e.target.checked)} />
+          follow feed
+        </label>
+
+        <button className="back" onClick={() => void restart(8)}>
+          new colony
+        </button>
+
+        <dl className="readouts">
+          <div className="readout">
+            <dt>Day</dt>
+            <dd>{state.day.toFixed(2)}</dd>
+          </div>
+          <div className={state.isNight ? 'readout is-night' : 'readout'}>
+            <dt>Hour</dt>
+            <dd>{formatTimeOfDay(state.timeOfDay)}</dd>
+          </div>
+          <div className="readout">
+            <dt>Charge</dt>
+            <dd>{state.loomCharge.toFixed(0)}</dd>
+          </div>
+          <div className="readout">
+            <dt>Salvage</dt>
+            <dd>{state.artifactsRecovered}</dd>
+          </div>
+          <div className="readout">
+            <dt>Actions</dt>
+            <dd>{state.actionsCompleted}</dd>
+          </div>
+          {/* The Contemplation readout from §6. Nothing is spending the budget yet, but the
+              arithmetic is real from M1: thinking-per-colony-day falls as you accelerate. */}
+          <div className="readout is-mind" title="Deep-lane calls affordable per colony-day at this speed">
+            <dt>Contemplation</dt>
+            <dd>
+              {clock.speed === 'Paused' ? '—' : `${clock.callsPerColonyDay.toFixed(1)}/day`}
+            </dd>
+          </div>
+        </dl>
+      </header>
+
+      {!connected && <div className="disconnected">Disconnected — the colony is still running. Reconnecting…</div>}
+
+      <div className="columns">
+        <div className="left">
+          <CityMap
+            places={world.places}
+            colonists={state.colonists}
+            isNight={state.isNight}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+          />
+
+          <div className="feed">
+            <div className="feed-head">
+              <h2>Event feed</h2>
+              <span className="row-meta" style={{ margin: 0 }}>
+                green is the body · brass would be the mind
+              </span>
+            </div>
+            <div className="feed-list" ref={feedRef}>
+              {events.length === 0 ? (
+                <p className="feed-empty">Nothing has happened yet. Try a faster speed.</p>
+              ) : (
+                events.map((event, index) => (
+                  <div
+                    className={event.notable ? 'feed-row is-notable' : 'feed-row'}
+                    key={`${event.tick}-${index}`}
+                  >
+                    <span className="feed-day">d{event.day.toFixed(2)}</span>
+                    <span className={`feed-layer ${event.layer}`}>{event.layer}</span>
+                    <span>{event.text}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+
+        <aside className="right">
+          {selectedId ? (
+            <ColonistDetailView id={selectedId} onBack={() => setSelectedId(null)} />
+          ) : (
+            <Roster
+              colonists={state.colonists}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+            />
+          )}
+        </aside>
+      </div>
+    </div>
+  )
+}
+
+function formatTimeOfDay(fraction: number) {
+  const totalMinutes = Math.floor(fraction * 24 * 60)
+  const hours = Math.floor(totalMinutes / 60)
+  const minutes = totalMinutes % 60
+  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`
+}
