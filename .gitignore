@@ -1,0 +1,24 @@
+# .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+
+# Node / client
+node_modules/
+client/dist/
+client/.vite/
+
+# Local runtime artifacts
+*.db
+*.db-shm
+*.db-wal
+saves/
+
+# Benchmark output is machine-specific; committed results live in bench/results/*.md
+bench/results/*.raw.json
+
+# OS
+Thumbs.db
+.DS_Store

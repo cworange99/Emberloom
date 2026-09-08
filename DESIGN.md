@@ -1,0 +1,367 @@
+# What They Left Running
+
+*Design plan, draft 2 — 7 September 2026. Ported into the repo from the plan artifact.*
+
+A city the forest took back, a machine still printing minds into it, and nobody left to say why.
+Every character thinks, remembers and inherits — on your own hardware, offline.
+
+| | |
+|---|---|
+| Lineage | Creatures (1996), 30 years on |
+| Brain | Local Ollama |
+| Reuses | Morpheus character stack |
+| Stack | Headless .NET 8 sim behind HTTP/WebSocket + React/TS client |
+
+---
+
+## The one-paragraph version
+
+A city, abandoned long enough that the forest has come back up through it. Somewhere inside, a
+machine called the **Loom** is still running on trickle charge, still printing one mind at a time
+into bodies it builds from what's around it. Nobody told it to stop. The colonists it makes wake
+into a world that is green, abundant, and full of the belongings of people who are not there — and
+their real problem was never food. It's what any of it *meant*. They forage, salvage, argue, pair,
+print successors and die, and what they believed passes to whoever comes next. Six generations in,
+the colony has a founding story about its makers that is entirely wrong and universally believed,
+and you can trace it back to the exact thing that actually happened.
+
+### Three pillars
+
+- **Not a commander.** You print, speak, reveal, provide and withhold. You never give an order. The
+  colony is something you raise, not something you operate.
+- **Cheap bodies, costly minds.** Every moment-to-moment decision is plain code. The model is spent
+  only on personality, reflection, dialogue and genuine forks.
+- **Fully inspectable.** Open any colonist and read their drives, memories, beliefs and
+  relationships — and the raw model trace behind every one.
+
+---
+
+## 1. The concept
+
+Creatures' heritable thing was biology — a genome that wired a neural net and mixed a bloodstream.
+Here the heritable thing is **culture**. That's the one substitution that makes this modern rather
+than nostalgic, and it only works because there's a language model underneath.
+
+### Why printed minds earn their keep
+
+Making new characters **diegetic** — the Loom prints them — turns an authoring menu into a mechanic
+with real cost and real politics. Loom charge is the colony's scarcest resource, so deciding *who*
+to print, and what to seed them with, is a genuine argument between people with different stakes.
+Printed minds arrive with a **designation**, not a name; they take a name once they've done
+something they consider worth being named for.
+
+### What the setting buys mechanically
+
+- **The economy inverts.** Food is easy. What's scarce is **Loom charge**, **salvage**
+  (maker-artifacts, each findable only once) and **understanding**.
+- **Drives shift up the stack.** With survival largely solved, the dominant drives become Standing,
+  Meaning and Wonder. Scarcity makes characters *behave*; abundance makes them *think*.
+- **The myth system gets a subject.** What happened to the makers is the central unanswerable
+  question, so the colony's founding myth is *about its own creators*.
+
+---
+
+## 2. Two hardware profiles
+
+The design targets a 12 GB RTX 5070 and degrades cleanly onto a 15 W laptop with no GPU. The gap is
+roughly 5×, and the two-speed architecture is what lets one build serve both.
+
+| | Modest — laptop, dev | Target — RTX 5070 |
+|---|---|---|
+| Compute | Core 7 150U, CPU only | 12 GB VRAM, Blackwell |
+| Deep lane | 3–4B Q4 · ~10 tok/s | 12–14B Q4 · ~40–60 tok/s |
+| Fast lane | 1B Q4 · ~30 tok/s | 3–4B, or CPU-side |
+| Sustained calls/min | 4–6 | ~20 |
+| Colonists | 8–12 | 25–40 |
+| Role | Development floor | The game as designed |
+
+> **Every figure above is an estimate pending M0**, which is the first thing to build and the thing
+> every other number is sized from. Measured results live in [`bench/results/`](bench/results/).
+
+**Keep the hooks, defer the work.** Every call type declares a templated fallback in the governor's
+interface — but on the Modest profile those implementations stay thin: a deterministic stub and a
+log line. Building out full phrase banks is an M4 decision, not a now decision.
+
+---
+
+## 3. The two-speed mind
+
+Every colonist is two things at once. A **body** that acts every tick without ever touching the
+model, and a **mind** that runs asynchronously, on a budget, and writes down what it concludes.
+
+```
+  LAYER 1 — THE BODY                GOVERNOR              LAYER 2 — THE MIND
+  deterministic, every tick     priority queue            Ollama, async
+  0 model calls                 1 concurrent              never blocks a tick
+                                real-time tok/min
+  seven drives            ──►   ──────────────►   ──►     kindling
+  utility scoring               over budget:              reflection
+  pathing / forage / salvage    drop or slow time         dialogue
+  relationship ledger                                     deliberation
+  episodic capture                                        coinage
+       ▲
+       └──────── durable artifacts rewrite the body's weights ────────┘
+        personality weights · beliefs · consolidated memories ·
+        relationship narratives · drive modifiers
+```
+
+The model never answers *"what should I do next?"* — the body already knows. The model answers
+*"who is this person becoming?"*, and the body reads that answer on every subsequent tick.
+
+> **If Ollama is offline, the game still runs.** Colonists keep foraging, salvaging, building,
+> arguing and dying — they just stop forming new beliefs and speak in templated lines. That's the
+> correctness test for this architecture, and it is an integration test from day one.
+
+---
+
+## 4. Layer 1 — the body
+
+### Seven drives
+
+Each `0.0–1.0`, each with its own decay rate. The physical decay rates sit low on purpose.
+
+| Drive | Rises when | Satisfied by | Decay/day |
+|---|---|---|---|
+| Sustenance | Always, slowly | Foraging; the forest is generous | 0.12 |
+| Rest | Working, climbing, arguing | Sleeping in a claimed shelter | 0.30 |
+| Safety | Unstable ruins, live machinery, dark levels, injury | Cleared ground, light, proximity to trusted others | 0.18 |
+| Belonging | Isolation, rejection, being overruled | Conversation, shared meals, being agreed with | 0.22 |
+| Standing | Being ignored; watching others take credit | Being deferred to, naming things, winning a vote | 0.26 |
+| Meaning | Repetition, idleness, loss | Finishing a build, teaching, ritual, being needed | 0.24 |
+| Wonder | Unexplored levels, unopened doors, artifacts nobody understands | Salvage, reaching somewhere new, a theory that holds | 0.28 |
+
+**Wonder is the setting's load-bearing drive.** Cut it and you have a well-fed colony with nothing
+to do.
+
+### Action selection
+
+Plain utility AI, no planner:
+
+```
+score = Σ(drive_urgency × action_relief × personality_weight)
+        × context_modifier × relationship_modifier
+```
+
+**`personality_weight` is the seam.** It's a number the model wrote, and it's the only place Layer 2
+touches action selection — which is what makes a colonist who watched someone fall through a floor
+behave measurably differently, with zero inference at decision time.
+
+Add scored noise so identical colonists don't move in lockstep, and hysteresis so they don't thrash
+between two near-equal actions.
+
+### The relationship ledger
+
+Per ordered pair: **affinity**, **trust**, **respect**, plus a shared-memory count. Adjusted in code,
+instantly. Layer 2 later writes a *prose* reading of the same relationship, which is what a player
+sees; the numbers are what the simulation runs on.
+
+### What the body records
+
+Raw episodic memories, constantly and cheaply — `{ tick, actors, verb, object, place, valence,
+intensity }`. Thousands accumulate. Layer 2's job is not to generate them; it's to periodically read
+a batch and decide what they *meant*.
+
+---
+
+## 5. Layer 2 — the mind
+
+Five call types, and no sixth. If a proposed feature needs a call that doesn't fit one of these
+five, it's the wrong feature.
+
+| Call | Fires when | Lane | Cap | Produces |
+|---|---|---|---|---|
+| **Kindling** | Once per colonist, at print or birth | deep | ~300 tok | Name candidates, prose personality, and the seven personality weights. One call, consumed forever. |
+| **Reflection** | Memory salience crosses a threshold. A shallow variant — idle thought — fires on the fast lane during downtime. | deep / fast | ~200 / ~40 tok | Deep: consolidated memory, 0–2 beliefs each linked to source memories, relationship narrative, optional weight drift. Shallow: one thought, nothing durable. |
+| **Dialogue** | Two colonists talk, in view or off-screen. Also when the player speaks. | deep | ~80 tok | Spoken lines. The only unconstrained-prose call. |
+| **Deliberation** | The sim flags a genuine fork | deep | ~120 tok each | A structured stance and vote per participant, plus one quotable line. |
+| **Coinage** | A settlement forms, a ritual repeats, a myth calcifies, an artifact is recovered | deep | ~60 tok | Names and phrasings that enter the colony's shared vocabulary and are reused verbatim. |
+
+**Structured output is not optional.** Everything except Dialogue goes out with Ollama's `format`
+parameter carrying a JSON schema. This is the single most valuable upgrade over Morpheus's
+`OllamaService`, which streams free text and parses hopefully.
+
+**Prompt shape, for cache reuse.** Stable prefix first, volatile suffix last: world rules and
+personality (cached across calls) → relationship state → the specific memories in question.
+
+**What deliberately gets no model call:** pathfinding, construction, salvage resolution, resource
+maths, and mood — derive mood from drive levels and recent memory valence.
+
+---
+
+## 6. The budget governor
+
+One component owns the answer to "how much thinking is happening right now."
+
+**What it enforces:** one concurrent request; a rolling *real-world* tokens-per-minute ceiling set
+per profile; a per-colonist cooldown; a max queue depth beyond which the lowest-priority requests
+are dropped, not queued forever.
+
+**How it prioritises**, highest first:
+
+1. Anything the player is looking at right now
+2. **Deliberation at a fork — undroppable**
+3. **Kindling a new mind — undroppable**
+4. Reflection, ordered by accumulated salience
+5. Coinage, off-screen dialogue, idle thought
+
+### Time is the player's, and it costs thought
+
+Speeds run pause, 1×, 3×, 10×, 60×, plus unattended overnight. Because the ceiling is measured in
+*real-world* tokens per minute while demand scales with *game* time, thinking-per-colony-day falls
+automatically as you speed up. So surface it: a **Contemplation readout** beside the speed control
+("3.2 reflections per colony-day") that visibly drops as you accelerate.
+
+> **The one place time bends for function.** Kindling and Deliberation are **undroppable**. If the
+> queue can't serve them at the current speed, **the simulation slows itself** until it can. Pair it
+> with an *auto-slow on event* toggle that drops to 1× when a Deliberation fires.
+
+Expose the governor itself as a live readout: queue depth, tokens/min, calls dropped, current lane.
+
+---
+
+## 7. Memory, belief, and myth
+
+| Tier | Volume | Written by | Lives as |
+|---|---|---|---|
+| Episodic | thousands | Body, every tick | Structured rows with valence and intensity. Salience decays; low-salience rows are pruned. |
+| Consolidated | dozens | Mind, at reflection | A written memory standing in for a batch of episodic rows. Embedded for retrieval. |
+| Belief | 5–20 | Mind, at reflection | A durable claim about the world, **with links back to the memories that produced it**. |
+| Myth | 1–5 per colony | Mind, at coinage | Colony-level, inherited by everyone, mutated slightly at every retelling. |
+
+**The traceable belief** is the feature to build carefully, because it's the one people screenshot.
+A belief is never a free-floating string — it carries the ids of the episodic memories that produced
+it, so the inspector can walk the chain back to the tick where the real thing happened. Nothing in
+that chain is authored.
+
+**Retrieval:** standard RAG over embedded consolidated memories and beliefs, scored on
+`similarity × salience × recency`. Morpheus's `DocumentIndexService` ports nearly verbatim; swap
+pgvector for sqlite-vec so the game stays a single local process with no Docker.
+
+---
+
+## 8. Birth and inheritance
+
+**Printing** — deliberate, expensive, political. The Loom spends charge to instantiate a mind from a
+seed. The player can author it, or the colony can — and when the colony does, it argues first.
+*Carries over: the colony's current values, sharpened by whoever won the argument. No memories.*
+
+**Pairing** — emergent, cheap, personal. Two colonists past a bond threshold produce a successor.
+Personality weights cross over with mutation, plus an **inheritance set**: each parent's most
+salient memories arrive in the child as dreams they half-believe and cannot source.
+*Carries over: weights, and a handful of misattributed memories. This is how a grudge outlives the
+person who formed it.*
+
+Both paths end in a single Kindling call.
+
+**Death.** Bodies fail. The mind persists as a core the colony must decide what to do with: read it,
+archive it, or destroy it. That decision is a Deliberation.
+
+---
+
+## 9. The Mind Inspector
+
+Creatures let you watch neurons fire. Thirty years on, the equivalent isn't prettier neurons — it's
+a mind that can be **read**. Five tabs: **Now**, **Memory**, **Beliefs**, **Relationships**,
+**Trace**.
+
+The **Trace** tab lists every model call this mind has ever made — call type, model, tokens in/out,
+duration, and what it produced. It costs almost nothing to build and is the most convincing thing in
+the game for anyone technical.
+
+A belief flagged as *contradicting the colony myth* — a colonist who is right and outnumbered — is
+the most interesting thing this system can produce.
+
+---
+
+## 10. How you play it
+
+**Simulation mode.** No player. Time runs fast, the camera follows whoever is most interesting. The
+screen a viewer actually reads is the event feed — one line per notable thing, colour-coded by
+whether it came from the body or the mind. Watchable the way an aquarium is watchable.
+
+**Interactive mode — five verbs, none of them "order":**
+
+| Verb | What it does | What it costs |
+|---|---|---|
+| **Print** | Instantiate a new mind. Author its seed in prose, or roll one. | Loom charge |
+| **Speak** | Address any colonist. What you say is remembered, weighted heavily, and can become a belief. | 1 dialogue call |
+| **Reveal** | Show them something of the makers'. Seeds beliefs, unlocks capability, feeds the myth. | Irreversible |
+| **Provide** | Route charge into light, warmth, or a door that won't open. | Loom charge |
+| **Withhold** | Cut what you were providing. They notice. | Free, and expensive |
+
+**Settled for now:** ship influence-only. But design the colony's job queue so a direct-assignment
+verb could be added behind a setting without touching the architecture.
+
+---
+
+## 11. Stack & Morpheus reuse
+
+Headless **.NET 8** simulation service behind HTTP + WebSocket, and a **React/TypeScript** client.
+Persistence is **SQLite + sqlite-vec**: single file, no Docker, no Postgres. Presentation is a
+stylised top-down 2D canvas (PixiJS).
+
+The reasoning over Unity: this game's best screen is a dense reading interface. The de-risking move
+is that **the simulation is headless behind an API from day one**, so the presentation choice stays
+reversible.
+
+| From Morpheus | Take it? | Notes |
+|---|---|---|
+| `OllamaService` | **Port** | Near-verbatim. Add `format` JSON-schema support and `keep_alive`; add a second lane. |
+| `OllamaEmbeddingService` | **Port** | Verbatim. Point at a small embedding model. |
+| `DocumentIndexService` | **Adapt** | Swap pgvector for sqlite-vec; add salience × recency to the score. |
+| `SystemPromptService` | **Adapt** | Keep labelled-block assembly, reorder blocks by volatility. |
+| `CharacterEvolutionService` | **Adapt** | Already 80% of Reflection. Retarget at episodic memories, emit beliefs. |
+| `SummarizationService` | **Adapt** | Becomes memory consolidation. |
+| `RelationshipStages` | **Port** | Five-stage ladder as a derived band over the numeric ledger. |
+| Gated reveals | **Port** | Maps onto colonists withholding what they've found until trust is earned. |
+| Character data-file layout | **Port** | `data/<slug>/*.md` per-mind files are readable and diffable. |
+| `GameController` / `GameSessionService` | **Reference** | Copy the shape, not the code. |
+| `EmotionalStateService` | **Skip** | Derive mood from drives and memory valence. |
+| Postgres, Docker, Identity, payments, TTS/STT, image/video gen, plugins, admin | **Skip** | All platform, none of it game. |
+
+---
+
+## 12. Build order
+
+Ordered so the riskiest assumption is tested first and each milestone is playable — or at least
+watchable — on its own.
+
+| | Milestone | Proves |
+|---|---|---|
+| **M0** | **Benchmark both machines before designing further.** Per machine, pull a 1B, a 3–4B and (Target only) a 12–14B at Q4_K_M. Measure single-stream tok/s on the real call shapes with both lanes resident and a long `keep_alive`. Record schema-adherence failure rate per model and VRAM headroom. | Every number in §2, §5 and §6. **These results supersede all of them.** |
+| **M1** | **The body, with no mind at all.** Seven drives, utility scoring, the city map, foraging and salvage, building, sleeping, the relationship ledger, episodic capture, the event feed, the full time-control UI. Personality weights are hand-authored constants. Zero model calls. | The sim is watchable on its own — the fallback the whole architecture leans on. |
+| **M2** | **Governor and Kindling.** The queue, real-time ceiling, undroppable flags, time-slowing, Contemplation readout. Then the first real call type. | The seam between the layers, at the cheapest possible call rate. |
+| **M3** | **Memory pipeline and Reflection.** Consolidation, beliefs with source links, embedding and retrieval, idle thought on the fast lane. | The core loop. If this isn't compelling to watch, rethink here. |
+| **M4** | **The Mind Inspector.** All five tabs including Trace, belief-to-memory chains clickable end to end. Also the Modest-profile decision point. | The marquee feature, and the best debugging tool for everything after it. |
+| **M5** | **Dialogue and Deliberation.** Colonists speak, in view and off. Genuine forks with structured arguments and auto-slow. | Where the colony stops being a simulation and starts being a cast. |
+| **M6** | **Player verbs.** Print, Speak, Reveal, Provide, Withhold. | First genuinely playable version. |
+| **M7** | **Generations.** Pairing with weight crossover, inheritance dreams, ageing, death, cores, Coinage. Then a long unattended run overnight. | The long game — and what decides whether this is worth selling. |
+
+---
+
+## 13. Settled & still open
+
+### Settled
+
+| | |
+|---|---|
+| **Client** | React + TypeScript over a headless .NET 8 sim behind HTTP/WebSocket. A Unity client stays possible later at no architectural cost. |
+| **Agency** | Influence only. Five verbs, no orders. The job queue is designed so direct assignment could be enabled behind a setting later. |
+| **Time** | Fully player-controlled, with the thinking budget as the natural cost of speed, and forks protected from being skipped. |
+| **Setting** | The Loom in a reclaimed city. Printed minds kept as the mechanic. |
+| **Hardware** | RTX 5070 is the target. The laptop is a development floor; whether it becomes a supported play profile is an M4 decision. |
+
+### Deferred, each with a decision point
+
+- **Decided at M0 — which models, and what the real budget is.** Every throughput figure in this
+  document is an estimate for the hardware class rather than a measurement.
+- **Decided at M4 — whether the laptop profile ships.** The fallback hooks exist from M2; the
+  implementations stay thin until there's a working inspector to judge against.
+- **Decided at M7 — whether this is a product.** Judgeable only after a long unattended run produces
+  a myth worth reading.
+- **Worth checking early — the name.** *What They Left Running* is worth a trademark and storefront
+  search before it hardens into filenames.
+
+---
+
+*Morpheus source reviewed at `77377a7` — `Game/`, `Services/`, `Models/` under `backend/MorpheusI.Api`.*

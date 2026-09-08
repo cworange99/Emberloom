@@ -1,0 +1,76 @@
+using Emberloom.Core.Events;
+using Emberloom.Core.Relationships;
+using Emberloom.Core.World;
+
+namespace Emberloom.Core.Colonists;
+
+/// <summary>
+/// Everything that exists. The colony owns the map, the cast, the ledger and the feed; the
+/// simulation owns the clock and drives this forward.
+/// </summary>
+public sealed class Colony
+{
+    /// <summary>
+    /// A colony-day in ticks. One tick is roughly six minutes of colony time — fine enough that
+    /// an action takes a believable while, coarse enough that a day is cheap to simulate.
+    /// </summary>
+    public const int TicksPerDay = 240;
+
+    private readonly List<Colonist> _colonists = [];
+
+    public Colony(CityMap map)
+    {
+        Map = map;
+    }
+
+    public CityMap Map { get; }
+
+    public RelationshipLedger Relationships { get; } = new();
+
+    public EventFeed Feed { get; } = new();
+
+    public long Tick { get; set; }
+
+    public double Day => (double)Tick / TicksPerDay;
+
+    /// <summary>Fraction through the current day, 0 at dawn.</summary>
+    public double TimeOfDay => (double)(Tick % TicksPerDay) / TicksPerDay;
+
+    public bool IsNight => TimeOfDay is < 0.22 or > 0.80;
+
+    /// <summary>
+    /// The colony's scarcest resource, and the thing every genuine fork is ultimately about.
+    /// Trickles in from the Loom; spent on printing and on the player's Provide verb.
+    /// </summary>
+    public double LoomCharge { get; set; } = 40;
+
+    public double LoomChargePerDay { get; set; } = 3.2;
+
+    public const double PrintCost = 25;
+
+    /// <summary>Maker-artifacts recovered. Each is findable exactly once, anywhere in the city.</summary>
+    public int ArtifactsRecovered { get; set; }
+
+    public IReadOnlyList<Colonist> Colonists => _colonists;
+
+    public IEnumerable<Colonist> Living => _colonists.Where(c => c.IsAlive);
+
+    public IEnumerable<Colonist> ColonistsAt(string placeId) =>
+        _colonists.Where(c => c.IsAlive && c.PlaceId == placeId);
+
+    public Colonist? Find(string id) => _colonists.FirstOrDefault(c => c.Id == id);
+
+    public void Add(Colonist colonist) => _colonists.Add(colonist);
+
+    public void Log(EventLayer layer, string text, Colonist? colonist = null, string? placeId = null, bool notable = false) =>
+        Feed.Append(new ColonyEvent
+        {
+            Tick = Tick,
+            Day = Day,
+            Layer = layer,
+            Text = text,
+            ColonistId = colonist?.Id,
+            PlaceId = placeId ?? colonist?.PlaceId,
+            IsNotable = notable
+        });
+}

@@ -1,0 +1,57 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{E4587410-FE21-4416-91CA-1A57893F98B9}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Emberloom.Core", "src\Emberloom.Core\Emberloom.Core.csproj", "{0D3F3E4D-836D-4659-96AB-11CCFEA6C798}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Emberloom.Mind", "src\Emberloom.Mind\Emberloom.Mind.csproj", "{5A75D8C6-D2E0-4187-9B7E-BE08085A92E8}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Emberloom.Bench", "src\Emberloom.Bench\Emberloom.Bench.csproj", "{A9185161-F8CA-4DF4-B9ED-877C86AFEB6D}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{12869D26-F712-4462-B3E8-D94A3911ABE4}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Emberloom.Tests", "tests\Emberloom.Tests\Emberloom.Tests.csproj", "{659D47AB-1A42-4662-9DF6-F238D7923415}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Emberloom.Sim", "src\Emberloom.Sim\Emberloom.Sim.csproj", "{C7016AB3-858C-45FE-9394-E7DDB845D8E3}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{0D3F3E4D-836D-4659-96AB-11CCFEA6C798}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0D3F3E4D-836D-4659-96AB-11CCFEA6C798}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0D3F3E4D-836D-4659-96AB-11CCFEA6C798}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0D3F3E4D-836D-4659-96AB-11CCFEA6C798}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5A75D8C6-D2E0-4187-9B7E-BE08085A92E8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5A75D8C6-D2E0-4187-9B7E-BE08085A92E8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5A75D8C6-D2E0-4187-9B7E-BE08085A92E8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5A75D8C6-D2E0-4187-9B7E-BE08085A92E8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A9185161-F8CA-4DF4-B9ED-877C86AFEB6D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A9185161-F8CA-4DF4-B9ED-877C86AFEB6D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A9185161-F8CA-4DF4-B9ED-877C86AFEB6D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A9185161-F8CA-4DF4-B9ED-877C86AFEB6D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{659D47AB-1A42-4662-9DF6-F238D7923415}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{659D47AB-1A42-4662-9DF6-F238D7923415}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{659D47AB-1A42-4662-9DF6-F238D7923415}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{659D47AB-1A42-4662-9DF6-F238D7923415}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C7016AB3-858C-45FE-9394-E7DDB845D8E3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C7016AB3-858C-45FE-9394-E7DDB845D8E3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C7016AB3-858C-45FE-9394-E7DDB845D8E3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C7016AB3-858C-45FE-9394-E7DDB845D8E3}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{0D3F3E4D-836D-4659-96AB-11CCFEA6C798} = {E4587410-FE21-4416-91CA-1A57893F98B9}
+		{5A75D8C6-D2E0-4187-9B7E-BE08085A92E8} = {E4587410-FE21-4416-91CA-1A57893F98B9}
+		{A9185161-F8CA-4DF4-B9ED-877C86AFEB6D} = {E4587410-FE21-4416-91CA-1A57893F98B9}
+		{659D47AB-1A42-4662-9DF6-F238D7923415} = {12869D26-F712-4462-B3E8-D94A3911ABE4}
+		{C7016AB3-858C-45FE-9394-E7DDB845D8E3} = {E4587410-FE21-4416-91CA-1A57893F98B9}
+	EndGlobalSection
+EndGlobal
