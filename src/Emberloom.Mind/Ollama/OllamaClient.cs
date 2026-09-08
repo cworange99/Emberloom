@@ -88,6 +88,7 @@ public sealed class OllamaClient : IDisposable
             Prompt = request.Prompt,
             Stream = false,
             KeepAlive = config.KeepAlive,
+            Think = config.Think,
             Format = request.Schema,
             Options = new GenerateOptions
             {
@@ -131,6 +132,7 @@ public sealed class OllamaClient : IDisposable
         {
             Model = config.Model,
             Text = payload.Response ?? string.Empty,
+            ThinkingText = payload.Thinking,
             PromptTokens = payload.PromptEvalCount,
             CompletionTokens = payload.EvalCount,
             TotalDuration = FromNanoseconds(payload.TotalDuration),
@@ -139,6 +141,42 @@ public sealed class OllamaClient : IDisposable
             EvalDuration = FromNanoseconds(payload.EvalDuration)
         };
     }
+
+    /// <summary>
+    /// Which models are resident right now, and how much of each sits in VRAM versus system RAM.
+    /// This is the VRAM-headroom figure M0 is meant to record at Target, and it has to come from
+    /// the API rather than <c>ollama ps</c> so that it describes whichever machine is actually
+    /// serving — which is not necessarily the one running this process.
+    /// </summary>
+    public async Task<string> ResidencyAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            var payload = await _http.GetFromJsonAsync<RunningResponse>("/api/ps", ct).ConfigureAwait(false);
+            if (payload?.Models is not { Count: > 0 })
+            {
+                return "nothing resident";
+            }
+
+            var lines = payload.Models.Select(m =>
+            {
+                var total = m.Size;
+                var vram = m.SizeVram;
+                var share = total > 0 ? (double)vram / total : 0;
+                var where = share >= 0.99 ? "100% GPU" : share <= 0.01 ? "100% CPU" : $"{share:P0} GPU";
+
+                return $"{m.Name,-24} {Gib(total),8} resident  {Gib(vram),8} in VRAM  {where}";
+            });
+
+            return string.Join(Environment.NewLine, lines);
+        }
+        catch (Exception ex)
+        {
+            return $"residency unavailable: {ex.Message}";
+        }
+    }
+
+    private static string Gib(long bytes) => $"{bytes / 1024.0 / 1024 / 1024:F2} GiB";
 
     public async Task<float[]> EmbedAsync(string text, CancellationToken ct = default)
     {
@@ -172,6 +210,7 @@ public sealed class OllamaClient : IDisposable
         [JsonPropertyName("prompt")] public required string Prompt { get; init; }
         [JsonPropertyName("stream")] public bool Stream { get; init; }
         [JsonPropertyName("keep_alive")] public string? KeepAlive { get; init; }
+        [JsonPropertyName("think")] public bool? Think { get; init; }
         [JsonPropertyName("format")] public JsonNode? Format { get; init; }
         [JsonPropertyName("options")] public GenerateOptions? Options { get; init; }
     }
@@ -186,6 +225,7 @@ public sealed class OllamaClient : IDisposable
     private sealed record GenerateResponse
     {
         [JsonPropertyName("response")] public string? Response { get; init; }
+        [JsonPropertyName("thinking")] public string? Thinking { get; init; }
         [JsonPropertyName("prompt_eval_count")] public int PromptEvalCount { get; init; }
         [JsonPropertyName("eval_count")] public int EvalCount { get; init; }
         [JsonPropertyName("total_duration")] public long TotalDuration { get; init; }
@@ -213,5 +253,17 @@ public sealed class OllamaClient : IDisposable
     private sealed record TagModel
     {
         [JsonPropertyName("name")] public required string Name { get; init; }
+    }
+
+    private sealed record RunningResponse
+    {
+        [JsonPropertyName("models")] public List<RunningModel>? Models { get; init; }
+    }
+
+    private sealed record RunningModel
+    {
+        [JsonPropertyName("name")] public required string Name { get; init; }
+        [JsonPropertyName("size")] public long Size { get; init; }
+        [JsonPropertyName("size_vram")] public long SizeVram { get; init; }
     }
 }

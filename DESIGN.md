@@ -66,17 +66,25 @@ something they consider worth being named for.
 The design targets a 12 GB RTX 5070 and degrades cleanly onto a 15 W laptop with no GPU. The gap is
 roughly 5×, and the two-speed architecture is what lets one build serve both.
 
-| | Modest — laptop, dev | Target — RTX 5070 |
+| | Modest — measured | Target — measured |
 |---|---|---|
-| Compute | Core 7 150U, CPU only | 12 GB VRAM, Blackwell |
-| Deep lane | 3–4B Q4 · ~10 tok/s | 12–14B Q4 · ~40–60 tok/s |
-| Fast lane | 1B Q4 · ~30 tok/s | 3–4B, or CPU-side |
-| Sustained calls/min | 4–6 | ~20 |
-| Colonists | 8–12 | 25–40 |
+| Compute | Core 7 150U, CPU only | i7-14700K + RTX 5070 12 GB |
+| Deep lane | `llama3.2:3b` · 8.4–9.8 tok/s *(est ~10)* | `gemma4:12b` Q4_K_M · **61–72 tok/s** *(est 40–60)* |
+| Fast lane | `llama3.2:1b` · 16–18 tok/s *(est ~30)* | `llama3.2:3b` · **152–211 tok/s** |
+| Sustained calls/min | **4.5–5.0** *(est 4–6)* | **20.4** *(est ~20)* |
+| Schema failures | 0/18 once caps were fixed | 0/18 |
+| Colonists | 8–12 (untested) | 25–40 (untested) |
 | Role | Development floor | The game as designed |
 
-> **Every figure above is an estimate pending M0**, which is the first thing to build and the thing
-> every other number is sized from. Measured results live in [`bench/results/`](bench/results/).
+Both profiles are now measured; full reports in [`bench/results/`](bench/results/). The gap came out
+at **4.25x**, close to the estimated 5x. Two things the estimates got wrong in opposite directions:
+the Modest fast lane is about **half** the guessed speed, and the Target deep lane is **faster**
+than the top of its estimated band.
+
+**Residency, the load-bearing claim.** Both lanes sit entirely in VRAM at 4096 context —
+`gemma4:12b` at 6.87 GiB and `llama3.2:3b` at 1.88 GiB, 8.75 GiB of 11.9 GiB total, leaving about
+**1.3 GB spare**. So the claim holds for a 12B pairing, but a true 14B (~9 GB) alongside a 3B
+would be very tight — 12B is the safer target, not 14B.
 
 **Keep the hooks, defer the work.** Every call type declares a templated fallback in the governor's
 interface — but on the Modest profile those implementations stay thin: a deterministic stub and a
@@ -179,6 +187,21 @@ five, it's the wrong feature.
 **Structured output is not optional.** Everything except Dialogue goes out with Ollama's `format`
 parameter carrying a JSON schema. This is the single most valuable upgrade over Morpheus's
 `OllamaService`, which streams free text and parses hopefully.
+
+**Reasoning must be switched off, and this is not a style preference.** On a thinking-capable model
+Ollama counts reasoning tokens against `num_predict` but returns them in a separate `thinking`
+field, so the cap silently buys reasoning instead of the answer. Measured on `gemma4:12b`: a
+one-word reply cost **38 tokens with thinking on and 2 with it off**, and the first Target
+benchmark run came back with *every* schema-constrained call truncated and every dialogue line
+empty — 96 tokens generated, nothing returned. Setting `think: false` fixed all 18 of 18 in the
+re-run. Any per-call cap is meaningless on a thinking model unless reasoning is disabled, and the
+setting is harmless on models that have no thinking mode.
+
+**Token caps, measured.** Reflection needed 448 rather than the planned ~200; kindling 384, coinage
+112, dialogue 96, deliberation 128, idle thought 64. A schema-constrained call that hits its cap
+does not shorten gracefully — it truncates mid-document and the whole result is unparseable, so a
+cap is a correctness constraint rather than a budget hint. They live in one `CallBudgets` table read
+by both the benchmark and the governor.
 
 **Prompt shape, for cache reuse.** Stable prefix first, volatile suffix last: world rules and
 personality (cached across calls) → relationship state → the specific memories in question.

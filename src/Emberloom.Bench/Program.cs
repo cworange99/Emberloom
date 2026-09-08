@@ -24,6 +24,7 @@ Console.CancelKeyPress += (_, e) =>
 
 var probeOptions = new OllamaOptions
 {
+    Endpoint = options.Endpoint,
     Deep = new LaneConfig { Model = options.DeepModels[0] },
     Fast = new LaneConfig { Model = options.FastModel }
 };
@@ -48,16 +49,17 @@ using (var probe = new OllamaClient(probeOptions))
     }
 }
 
-var machine = await MachineInfo.DescribeAsync(cts.Token);
+var machine = await MachineInfo.DescribeAsync(options.Machine, cts.Token);
 
 Console.WriteLine($"M0 benchmark — {machine.Profile} profile");
 Console.WriteLine($"  {machine.Cpu}");
 Console.WriteLine($"  {machine.Gpu}");
 Console.WriteLine($"  {machine.TotalRamGb} GB RAM · Ollama {machine.OllamaVersion}");
 Console.WriteLine($"  {options.Runs} runs per scenario, fast lane = {options.FastModel}");
+Console.WriteLine($"  endpoint {options.Endpoint}");
 Console.WriteLine();
 
-var runner = new BenchRunner(options.Runs, Console.WriteLine);
+var runner = new BenchRunner(options.Runs, Console.WriteLine, options.Endpoint);
 var results = new List<ModelResult>();
 
 foreach (var deepModel in options.DeepModels)
@@ -124,6 +126,8 @@ internal sealed record CliOptions
     public required int DeepContext { get; init; }
     public required int FastContext { get; init; }
     public required string OutputDirectory { get; init; }
+    public required Uri Endpoint { get; init; }
+    public required MachineOverride Machine { get; init; }
 
     public static CliOptions? Parse(string[] args)
     {
@@ -133,6 +137,10 @@ internal sealed record CliOptions
         var deepContext = 4096;
         var fastContext = 2048;
         var output = Path.Combine("bench", "results");
+        var endpoint = new Uri("http://localhost:11434");
+        string? cpu = null, gpu = null, os = null, profile = null;
+        double? ram = null;
+        int? cores = null;
 
         for (var i = 0; i < args.Length; i++)
         {
@@ -179,6 +187,22 @@ internal sealed record CliOptions
                     CallBudgets.Override(call, cap);
                     i++;
                     break;
+                case "--endpoint" or "-e" when next is not null:
+                    endpoint = new Uri(next);
+                    i++;
+                    break;
+                case "--cpu" when next is not null:
+                    cpu = next; i++; break;
+                case "--gpu" when next is not null:
+                    gpu = next; i++; break;
+                case "--os" when next is not null:
+                    os = next; i++; break;
+                case "--ram" when next is not null && double.TryParse(next, out var parsedRam):
+                    ram = parsedRam; i++; break;
+                case "--cores" when next is not null && int.TryParse(next, out var parsedCores):
+                    cores = parsedCores; i++; break;
+                case "--profile" when next is not null:
+                    profile = next; i++; break;
                 case "--help" or "-h":
                     return null;
                 default:
@@ -199,7 +223,17 @@ internal sealed record CliOptions
             Runs = runs,
             DeepContext = deepContext,
             FastContext = fastContext,
-            OutputDirectory = output
+            OutputDirectory = output,
+            Endpoint = endpoint,
+            Machine = new MachineOverride
+            {
+                Cpu = cpu,
+                Gpu = gpu,
+                Os = os,
+                TotalRamGb = ram,
+                LogicalCores = cores,
+                Profile = profile
+            }
         };
     }
 

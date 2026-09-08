@@ -105,11 +105,13 @@ public sealed class BenchRunner
 {
     private readonly int _runs;
     private readonly Action<string> _log;
+    private readonly Uri _endpoint;
 
-    public BenchRunner(int runs, Action<string> log)
+    public BenchRunner(int runs, Action<string> log, Uri endpoint)
     {
         _runs = runs;
         _log = log;
+        _endpoint = endpoint;
     }
 
     public async Task<ModelResult> RunAsync(
@@ -121,6 +123,7 @@ public sealed class BenchRunner
     {
         var options = new OllamaOptions
         {
+            Endpoint = _endpoint,
             Deep = new LaneConfig { Model = deepModel, NumCtx = deepCtx, KeepAlive = "60m" },
             Fast = new LaneConfig { Model = fastModel, NumCtx = fastCtx, KeepAlive = "60m" }
         };
@@ -165,7 +168,7 @@ public sealed class BenchRunner
             FastModel = fastModel,
             Scenarios = summaries,
             Samples = samples,
-            OllamaPs = await MachineInfo.OllamaPsAsync(ct).ConfigureAwait(false)
+            OllamaPs = await client.ResidencyAsync(ct).ConfigureAwait(false)
         };
     }
 

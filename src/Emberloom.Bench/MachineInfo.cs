@@ -13,38 +13,60 @@ public sealed record MachineDescription
     public required double TotalRamGb { get; init; }
     public required string OllamaVersion { get; init; }
 
+    public string? ProfileOverride { get; init; }
+
     /// <summary>
     /// Which of the design's two hardware profiles this machine is. Decided by whether a
     /// discrete GPU with meaningful VRAM is present, since that is what the 5x gap comes from.
     /// </summary>
-    public string Profile => Gpu.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase)
-                             || Gpu.Contains("Radeon RX", StringComparison.OrdinalIgnoreCase)
-        ? "target"
-        : "modest";
+    public string Profile => ProfileOverride
+                             ?? (Gpu.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase)
+                                 || Gpu.Contains("Radeon RX", StringComparison.OrdinalIgnoreCase)
+                                 ? "target"
+                                 : "modest");
+}
+
+/// <summary>
+/// Overrides for the machine being measured. Needed because the benchmark can drive an Ollama
+/// on another box over the network, in which case the process's own CPU and GPU describe the
+/// wrong computer entirely — and a report labelled with the wrong hardware is worse than none.
+/// </summary>
+public sealed record MachineOverride
+{
+    public string? Cpu { get; init; }
+    public string? Gpu { get; init; }
+    public double? TotalRamGb { get; init; }
+    public string? Os { get; init; }
+    public int? LogicalCores { get; init; }
+    public string? Profile { get; init; }
+
+    public bool Any => Cpu is not null || Gpu is not null || TotalRamGb is not null
+                       || Os is not null || LogicalCores is not null || Profile is not null;
 }
 
 public static class MachineInfo
 {
-    public static async Task<MachineDescription> DescribeAsync(CancellationToken ct = default)
+    public static async Task<MachineDescription> DescribeAsync(
+        MachineOverride? overrides = null,
+        CancellationToken ct = default)
     {
+        // Only probe the local machine when nothing has been supplied for that field — a remote
+        // run should never silently report the laptop's CPU next to the GPU's throughput.
+        var remote = overrides?.Any == true;
+
         return new MachineDescription
         {
-            Os = RuntimeInformation.OSDescription,
+            Os = overrides?.Os ?? RuntimeInformation.OSDescription,
             Architecture = RuntimeInformation.OSArchitecture.ToString(),
-            LogicalCores = Environment.ProcessorCount,
-            Cpu = await QueryAsync("cpu", ct).ConfigureAwait(false),
-            Gpu = await QueryAsync("gpu", ct).ConfigureAwait(false),
-            TotalRamGb = Math.Round(GC.GetGCMemoryInfo().TotalAvailableMemoryBytes / 1024.0 / 1024 / 1024, 1),
-            OllamaVersion = (await RunAsync("ollama", "--version", ct).ConfigureAwait(false)).Trim()
+            LogicalCores = overrides?.LogicalCores ?? Environment.ProcessorCount,
+            Cpu = overrides?.Cpu ?? (remote ? "unknown" : await QueryAsync("cpu", ct).ConfigureAwait(false)),
+            Gpu = overrides?.Gpu ?? (remote ? "unknown" : await QueryAsync("gpu", ct).ConfigureAwait(false)),
+            TotalRamGb = overrides?.TotalRamGb
+                         ?? Math.Round(GC.GetGCMemoryInfo().TotalAvailableMemoryBytes / 1024.0 / 1024 / 1024, 1),
+            OllamaVersion = (await RunAsync("ollama", "--version", ct).ConfigureAwait(false)).Trim(),
+            ProfileOverride = overrides?.Profile
         };
     }
-
-    /// <summary>
-    /// <c>ollama ps</c> reports the CPU/GPU split and resident size per model — the VRAM
-    /// headroom figure M0 is meant to record on the Target profile.
-    /// </summary>
-    public static Task<string> OllamaPsAsync(CancellationToken ct = default) =>
-        RunAsync("ollama", "ps", ct);
 
     private static async Task<string> QueryAsync(string what, CancellationToken ct)
     {

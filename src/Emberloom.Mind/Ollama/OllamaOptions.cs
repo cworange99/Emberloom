@@ -16,6 +16,23 @@ public sealed record LaneConfig
     /// mid-simulation costs more than the call it serves.
     /// </summary>
     public string KeepAlive { get; init; } = "30m";
+
+    /// <summary>
+    /// Whether the model may spend tokens on visible reasoning before answering.
+    /// <para>
+    /// Off by default, and that is not a stylistic preference — on a thinking-capable model
+    /// Ollama counts reasoning tokens against <c>num_predict</c> but returns them in a separate
+    /// field, so the token cap silently buys reasoning instead of the answer. Measured on
+    /// gemma4:12b: a one-word reply cost 38 tokens with thinking on and 2 with it off, and every
+    /// schema-constrained call in the first Target benchmark run came back truncated or empty.
+    /// </para>
+    /// <para>
+    /// The design's per-call caps are sized for the artifact a call produces, so reasoning has
+    /// to be off for those caps to mean what §5 says they mean. Sending this to a model with no
+    /// thinking mode is harmless.
+    /// </para>
+    /// </summary>
+    public bool? Think { get; init; } = false;
 }
 
 public sealed record OllamaOptions

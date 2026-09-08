@@ -41,6 +41,12 @@ public sealed record CompletionResult
 
     public int CompletionTokens { get; init; }
 
+    /// <summary>
+    /// Reasoning the model produced before answering, when thinking was left on. Counted against
+    /// the token cap but returned separately, which is why it has to be visible here.
+    /// </summary>
+    public string? ThinkingText { get; init; }
+
     public TimeSpan TotalDuration { get; init; }
 
     /// <summary>Time spent loading the model. Non-zero here means <c>keep_alive</c> expired.</summary>
