@@ -179,6 +179,87 @@ public sealed class SimulationHost : BackgroundService
         }
     }
 
+    /// <summary>
+    /// Serves reflections and idle thought once everyone is kindled.
+    /// <para>
+    /// Still strictly one call at a time, and still not the governor: it picks the colonist with
+    /// the most unprocessed experience rather than running a priority queue with a token budget.
+    /// What it does establish is the ordering the governor will formalise — reflection outranks
+    /// idle thought, because one writes something durable and the other does not.
+    /// </para>
+    /// </summary>
+    private async Task ThinkLoopAsync(CancellationToken stoppingToken)
+    {
+        if (_mind is null)
+        {
+            return;
+        }
+
+        var timer = new PeriodicTimer(TimeSpan.FromSeconds(2));
+
+        while (await timer.WaitForNextTickAsync(stoppingToken).ConfigureAwait(false))
+        {
+            // Kindling is undroppable and comes first; nothing else runs while any mind is
+            // still unwritten.
+            if (_toKindle.Reader.Count > 0)
+            {
+                continue;
+            }
+
+            var (colonist, wantsReflection) = Read((colony, _) =>
+            {
+                var candidate = colony.Living
+                    .Where(c => c.Memory.WantsReflection(colony.Day))
+                    .OrderByDescending(c => c.Memory.UnconsolidatedSalience(colony.Day))
+                    .FirstOrDefault();
+
+                if (candidate is not null)
+                {
+                    return (candidate, true);
+                }
+
+                // Nobody has enough unprocessed experience to reflect on, so spend the lane on
+                // someone's idle thought instead. Prefer whoever has gone longest without one.
+                var idle = colony.Living
+                    .OrderBy(c => c.LastThought is null ? 0 : 1)
+                    .ThenBy(_ => _random.Next())
+                    .FirstOrDefault();
+
+                return (idle, false);
+            });
+
+            if (colonist is null)
+            {
+                continue;
+            }
+
+            try
+            {
+                if (wantsReflection)
+                {
+                    var snapshot = Read((colony, _) => colony);
+                    await _mind.ReflectAsync(colonist, snapshot, stoppingToken).ConfigureAwait(false);
+                    _logger.LogInformation("{Designation} reflected.", colonist.Designation);
+                }
+                else
+                {
+                    var snapshot = Read((colony, _) => colony);
+                    await _mind.ThinkAsync(colonist, snapshot, stoppingToken).ConfigureAwait(false);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Thinking for {Designation} failed.", colonist.Designation);
+            }
+
+            Broadcast(Snapshot());
+        }
+    }
+
     private void ApplyKindling(Colonist colonist, KindlingResult result)
     {
         colonist.Personality = result.Personality;
@@ -213,6 +294,7 @@ public sealed class SimulationHost : BackgroundService
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         _ = Task.Run(() => KindleLoopAsync(stoppingToken), stoppingToken);
+        _ = Task.Run(() => ThinkLoopAsync(stoppingToken), stoppingToken);
 
         var timer = new PeriodicTimer(Interval);
         var last = DateTimeOffset.UtcNow;

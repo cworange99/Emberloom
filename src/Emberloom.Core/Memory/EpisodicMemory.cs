@@ -84,6 +84,9 @@ public sealed record Belief
     public required IReadOnlyList<string> SourceMemoryIds { get; init; }
     public required double Confidence { get; init; }
 
+    /// <summary>Bumped every time retrieval surfaces this. A belief a mind keeps returning to stays available to it.</summary>
+    public int RecallCount { get; set; }
+
     /// <summary>Set when this belief runs against what the colony as a whole holds.</summary>
     public bool ContradictsColonyMyth { get; set; }
 

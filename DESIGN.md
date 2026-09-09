@@ -373,6 +373,7 @@ watchable — on its own.
 | **Time** | Fully player-controlled, with the thinking budget as the natural cost of speed, and forks protected from being skipped. |
 | **Setting** | The Loom in a reclaimed city. Printed minds kept as the mechanic. |
 | **Hardware** | RTX 5070 is the target. The laptop is a development floor; whether it becomes a supported play profile is an M4 decision. |
+| **Inference** | **Hosted**, decided 8 September 2026 — with `Mind:Endpoint` defaulting to `http://127.0.0.1:11434`, so purely local play is the default value rather than a separate build. This costs almost nothing *provided* the golden rule in [CLAUDE.md](CLAUDE.md) holds: every mind call is self-contained, and the server holds no colony state. Retrieval is the likeliest place to break it — embeddings may be computed remotely, but the index stays local. |
 
 ### Deferred, each with a decision point
 

@@ -109,11 +109,56 @@ app.MapGet("/api/colonists/{id}", (string id) => sim.Read<IResult>((colony, body
         .Reverse()
         .ToList();
 
+    // The source rows are resolved here rather than in the client so a belief always arrives with
+    // its chain attached. Episodic rows are pruned over time, so a source that has aged out is
+    // reported as such rather than silently dropped — a broken link is information.
+    MemoryRowDto ResolveSource(string id)
+    {
+        var found = colonist.Memory.FindEpisodic(id);
+
+        return found is null
+            ? new MemoryRowDto(id, 0, "(pruned — too small to keep)", string.Empty, 0, 0, 0)
+            : new MemoryRowDto(
+                found.Id,
+                Math.Round(found.Day, 2),
+                found.Describe(),
+                found.PlaceId,
+                Math.Round(found.Valence, 2),
+                Math.Round(found.Intensity, 2),
+                Math.Round(found.Salience(colony.Day), 3));
+    }
+
+    var consolidated = colonist.Memory.Consolidated
+        .OrderByDescending(m => m.Salience(colony.Day))
+        .Select(m => new ConsolidatedRowDto(
+            m.Id,
+            Math.Round(m.Day, 2),
+            m.Text,
+            Math.Round(m.Valence, 2),
+            Math.Round(m.Salience(colony.Day), 3),
+            m.RecallCount,
+            m.SourceMemoryIds.Select(ResolveSource).ToList()))
+        .ToList();
+
+    var beliefs = colonist.Memory.Beliefs
+        .OrderByDescending(b => b.Confidence)
+        .Select(b => new BeliefRowDto(
+            b.Id,
+            b.Claim,
+            Math.Round(b.FormedOnDay, 2),
+            Math.Round(b.Confidence, 2),
+            b.RecallCount,
+            b.ContradictsColonyMyth,
+            b.SourceMemoryIds.Select(ResolveSource).ToList()))
+        .ToList();
+
     return Results.Ok(new ColonistDetailDto(
         ColonistDto.From(colonist, colony),
         colonist.Personality,
         colonist.Seed,
         trace,
+        consolidated,
+        beliefs,
         memories,
         relationships,
         options));

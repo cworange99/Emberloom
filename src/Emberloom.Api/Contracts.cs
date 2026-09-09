@@ -142,11 +142,37 @@ public sealed record ColonistDetailDto(
     string Personality,
     string Seed,
     IReadOnlyList<TraceRowDto> Trace,
+    IReadOnlyList<ConsolidatedRowDto> Consolidated,
+    IReadOnlyList<BeliefRowDto> Beliefs,
     IReadOnlyList<MemoryRowDto> RecentMemories,
     IReadOnlyList<RelationshipRowDto> Relationships,
     IReadOnlyList<ScoredOptionDto> Considering);
 
 public sealed record MemoryRowDto(string Id, double Day, string Text, string PlaceId, double Valence, double Intensity, double Salience);
+
+/// <summary>A written memory standing in for a batch of episodic rows, with the rows it came from.</summary>
+public sealed record ConsolidatedRowDto(
+    string Id,
+    double Day,
+    string Text,
+    double Valence,
+    double Salience,
+    int RecallCount,
+    IReadOnlyList<MemoryRowDto> Sources);
+
+/// <summary>
+/// A belief and the chain behind it. The source rows travel with it deliberately: a belief the
+/// inspector cannot walk back to the tick it came from is the one thing this design promises
+/// never to show.
+/// </summary>
+public sealed record BeliefRowDto(
+    string Id,
+    string Claim,
+    double FormedOnDay,
+    double Confidence,
+    int RecallCount,
+    bool ContradictsColonyMyth,
+    IReadOnlyList<MemoryRowDto> Sources);
 
 public sealed record RelationshipRowDto(string TowardId, string TowardName, double Affinity, double Trust, double Respect, int SharedMemories, string Stage, string? Narrative);
 
