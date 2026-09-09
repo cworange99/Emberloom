@@ -120,11 +120,33 @@ export interface TraceRow {
   wasFallback: boolean
 }
 
+export interface ConsolidatedRow {
+  id: string
+  day: number
+  text: string
+  valence: number
+  salience: number
+  recallCount: number
+  sources: MemoryRow[]
+}
+
+export interface BeliefRow {
+  id: string
+  claim: string
+  formedOnDay: number
+  confidence: number
+  recallCount: number
+  contradictsColonyMyth: boolean
+  sources: MemoryRow[]
+}
+
 export interface ColonistDetail {
   colonist: Colonist
   personality: string
   seed: string
   trace: TraceRow[]
+  consolidated: ConsolidatedRow[]
+  beliefs: BeliefRow[]
   recentMemories: MemoryRow[]
   relationships: RelationshipRow[]
   considering: ScoredOption[]

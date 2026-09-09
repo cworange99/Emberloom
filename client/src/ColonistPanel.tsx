@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { Colonist, ColonistDetail } from './types'
+import type { Colonist, ColonistDetail, MemoryRow } from './types'
 
 const DRIVE_ORDER = ['sustenance', 'rest', 'safety', 'belonging', 'standing', 'meaning', 'wonder']
 
@@ -80,9 +80,10 @@ export function Roster({
 }
 
 /**
- * The seed of the Mind Inspector. At M1 there are no beliefs and no model trace to show, so it
- * shows what the body actually has: drives, what it chose, what it nearly chose instead, the raw
- * episodic rows, and the numeric ledger. The tabs arrive at M4 once there is more to fill them.
+ * The Mind Inspector. Reads top to bottom as the chain the design promises: the seed the Loom was
+ * given, the personality a model wrote from it, the weights the body scores with, what it chose
+ * and what it nearly chose instead, the beliefs it has come to hold, and the memories behind each
+ * one. The tabbed layout arrives at M4; until then the order carries the argument.
  */
 export function ColonistDetailView({ id, onBack }: { id: string; onBack: () => void }) {
   const [detail, setDetail] = useState<ColonistDetail | null>(null)
@@ -205,6 +206,70 @@ export function ColonistDetailView({ id, onBack }: { id: string; onBack: () => v
         </section>
 
         <section>
+          <h3>Beliefs — each traceable to its source</h3>
+          {detail.beliefs.length === 0 ? (
+            <p className="empty">
+              Nothing has happened to them that they have made up their mind about.
+            </p>
+          ) : (
+            <div className="rows">
+              {detail.beliefs.map((belief) => (
+                <Chain
+                  key={belief.id}
+                  id={belief.id}
+                  when="held"
+                  text={`“${belief.claim}”`}
+                  meta={
+                    <>
+                      formed d{belief.formedOnDay.toFixed(1)} · confidence{' '}
+                      {belief.confidence.toFixed(2)}
+                      {belief.recallCount > 0 && ` · recalled ${belief.recallCount}×`}
+                      {belief.contradictsColonyMyth && (
+                        <>
+                          {' · '}
+                          <b className="neg">contradicts the colony myth</b>
+                        </>
+                      )}
+                    </>
+                  }
+                  sources={belief.sources}
+                  emphasis
+                />
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section>
+          <h3>Consolidated memory — what the days came to</h3>
+          {detail.consolidated.length === 0 ? (
+            <p className="empty">Nothing has been thought about yet.</p>
+          ) : (
+            <div className="rows">
+              {detail.consolidated.map((memory) => (
+                <Chain
+                  key={memory.id}
+                  id={memory.id}
+                  when={`d${memory.day.toFixed(1)}`}
+                  text={memory.text}
+                  meta={
+                    <>
+                      <span className={memory.valence >= 0 ? 'pos' : 'neg'}>
+                        valence {memory.valence >= 0 ? '+' : ''}
+                        {memory.valence.toFixed(2)}
+                      </span>{' '}
+                      · salience {memory.salience.toFixed(3)}
+                      {memory.recallCount > 0 && ` · recalled ${memory.recallCount}×`}
+                    </>
+                  }
+                  sources={memory.sources}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section>
           <h3>Episodic memory — most salient</h3>
           {detail.recentMemories.length === 0 ? (
             <p className="empty">Nothing has happened to them yet.</p>
@@ -309,6 +374,77 @@ export function ColonistDetailView({ id, onBack }: { id: string; onBack: () => v
         </section>
       </div>
     </>
+  )
+}
+
+/**
+ * One row that can be opened to show what produced it.
+ *
+ * The chain is the whole point of the memory pipeline: a belief is never a free-floating string,
+ * it carries the ids of the episodic rows it came from, and those rows are real events from this
+ * playthrough rather than anything authored. Collapsed by default so the list stays readable —
+ * the claim is what you scan, the chain is what you check.
+ */
+function Chain({
+  id,
+  when,
+  text,
+  meta,
+  sources,
+  emphasis = false,
+}: {
+  id: string
+  when: string
+  text: string
+  meta: React.ReactNode
+  sources: MemoryRow[]
+  emphasis?: boolean
+}) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <div className="row">
+      <span className="row-when">{when}</span>
+      <div>
+        <p className={emphasis ? 'row-text claim' : 'row-text'}>{text}</p>
+        <p className="row-meta">
+          {meta}
+          {sources.length > 0 && (
+            <>
+              {' · '}
+              <button
+                className="chain-toggle"
+                onClick={() => setOpen((v) => !v)}
+                aria-expanded={open}
+                aria-controls={`chain-${id}`}
+              >
+                {open ? 'hide' : 'from'} {sources.length} memor
+                {sources.length === 1 ? 'y' : 'ies'}
+              </button>
+            </>
+          )}
+        </p>
+
+        {open && (
+          <ol className="chain" id={`chain-${id}`}>
+            {sources.map((source) => (
+              <li key={source.id} className={source.day === 0 ? 'chain-lost' : undefined}>
+                <span className="chain-when">
+                  {source.day > 0 ? `d${source.day.toFixed(1)}` : '—'}
+                </span>
+                <span className="chain-text">{source.text}</span>
+                {source.day > 0 && (
+                  <span className={source.valence >= 0 ? 'chain-val pos' : 'chain-val neg'}>
+                    {source.valence >= 0 ? '+' : ''}
+                    {source.valence.toFixed(2)}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ol>
+        )}
+      </div>
+    </div>
   )
 }
 

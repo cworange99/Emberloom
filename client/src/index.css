@@ -801,3 +801,82 @@ button {
   margin-left: 6px;
   vertical-align: 2px;
 }
+
+/* ---------- belief chains ---------- */
+
+.row-text.claim {
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--ink);
+}
+
+.chain-toggle {
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--mind-layer);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.chain-toggle:hover {
+  color: var(--ink);
+}
+
+.chain {
+  list-style: none;
+  margin: 8px 0 2px;
+  padding: 8px 0 8px 10px;
+  border-left: 2px solid var(--mind-layer);
+  background: var(--surface-sunk);
+  border-radius: 0 3px 3px 0;
+  display: grid;
+  gap: 5px;
+}
+
+.chain li {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 34px;
+  gap: 7px;
+  align-items: baseline;
+}
+
+.chain-when {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.chain-text {
+  font-family: var(--body);
+  font-size: 12.5px;
+  line-height: 1.35;
+}
+
+.chain-val {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.chain-val.pos {
+  color: var(--body-layer);
+}
+.chain-val.neg {
+  color: var(--flag);
+}
+
+/* A source pruned since the belief formed. Shown rather than hidden — a broken link is
+   information, and silently dropping it would make the chain look complete when it is not. */
+.chain-lost .chain-text {
+  color: var(--muted);
+  font-style: italic;
+}
