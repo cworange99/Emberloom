@@ -32,14 +32,67 @@ public sealed class MemoryStore
     public bool WantsReflection(double currentDay) =>
         UnconsolidatedSalience(currentDay) >= ReflectionThreshold;
 
-    public void Record(EpisodicMemory memory) => _episodic.Add(memory);
+    /// <summary>
+    /// How long the same act, in the same place, folds into one memory rather than becoming a
+    /// new row. Doing a thing twice in a morning is one memory of doing it, not two.
+    /// </summary>
+    private const double CoalesceWindowDays = 2.0;
+
+    private const double CoalescedIntensityCeiling = 0.95;
+
+    /// <summary>
+    /// Records an episodic row, folding it into a recent identical one where there is one.
+    /// <para>
+    /// Without this the body buries the mind. Measured at M3: eight colonists accumulated ~370
+    /// rows each in 28 colony-days, overwhelmingly the same handful of acts repeated — and since
+    /// reflection consolidates a batch at a time, the backlog could never be worked off. Every
+    /// colonist wanted a reflection permanently, which made the signal useless for deciding who
+    /// most needed one.
+    /// </para>
+    /// <para>
+    /// Folding is also the truer model. Repetition does not leave a hundred separate memories; it
+    /// leaves one memory that got stronger, which is exactly what raising intensity encodes. The
+    /// hundredth shift at the same shelter is not news. The first one was.
+    /// </para>
+    /// </summary>
+    public void Record(EpisodicMemory memory)
+    {
+        var recent = _episodic.FindLast(m =>
+            !m.Consolidated
+            && memory.Day - m.Day <= CoalesceWindowDays
+            && string.Equals(m.Verb, memory.Verb, StringComparison.Ordinal)
+            && string.Equals(m.Object, memory.Object, StringComparison.Ordinal)
+            && string.Equals(m.PlaceId, memory.PlaceId, StringComparison.Ordinal));
+
+        if (recent is not null)
+        {
+            // The memory is of the whole run of it, so it sits at the latest occurrence and
+            // carries a little more weight for having happened again.
+            recent.Day = memory.Day;
+            recent.Tick = memory.Tick;
+            recent.Repeats++;
+            recent.Intensity = Math.Min(
+                CoalescedIntensityCeiling,
+                recent.Intensity + memory.Intensity * 0.12);
+            return;
+        }
+
+        _episodic.Add(memory);
+    }
 
     public void Add(ConsolidatedMemory memory) => _consolidated.Add(memory);
 
     public void Add(Belief belief) => _beliefs.Add(belief);
 
-    /// <summary>The batch a reflection reads: the most salient rows nobody has made sense of yet.</summary>
-    public IReadOnlyList<EpisodicMemory> ReflectionBatch(double currentDay, int max = 8) =>
+    /// <summary>
+    /// The batch a reflection reads: the most salient rows nobody has made sense of yet.
+    /// <para>
+    /// Twelve rather than eight because the mind has to keep pace with the body. Prompt tokens are
+    /// cheap to evaluate and the output cap is unchanged, so a wider batch costs almost nothing and
+    /// consolidates half again as much experience per call.
+    /// </para>
+    /// </summary>
+    public IReadOnlyList<EpisodicMemory> ReflectionBatch(double currentDay, int max = 12) =>
         _episodic
             .Where(m => !m.Consolidated)
             .OrderByDescending(m => m.Salience(currentDay))

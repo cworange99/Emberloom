@@ -8,9 +8,9 @@ public sealed record EpisodicMemory
 {
     public required string Id { get; init; }
 
-    public required long Tick { get; init; }
+    public long Tick { get; set; }
 
-    public required double Day { get; init; }
+    public double Day { get; set; }
 
     /// <summary>Colonist ids involved, the owner first.</summary>
     public required IReadOnlyList<string> Actors { get; init; }
@@ -25,7 +25,10 @@ public sealed record EpisodicMemory
     public required double Valence { get; init; }
 
     /// <summary>0 to 1. How much it registered at all.</summary>
-    public required double Intensity { get; init; }
+    public double Intensity { get; set; }
+
+    /// <summary>How many times this same act folded into this one memory. 0 means it happened once.</summary>
+    public int Repeats { get; set; }
 
     /// <summary>Bumped every time retrieval surfaces this. Feeds salience.</summary>
     public int RecallCount { get; set; }
@@ -46,7 +49,8 @@ public sealed record EpisodicMemory
     }
 
     public string Describe() =>
-        Object is null ? Verb : $"{Verb} {Object}";
+        (Object is null ? Verb : $"{Verb} {Object}")
+        + (Repeats > 0 ? $" ({Repeats + 1} times)" : string.Empty);
 }
 
 /// <summary>

@@ -1,6 +1,7 @@
 using Emberloom.Core.Actions;
 using Emberloom.Core.Colonists;
 using Emberloom.Core.Drives;
+using Emberloom.Core.Memory;
 using Emberloom.Core.Simulation;
 using Xunit;
 
@@ -158,4 +159,106 @@ public class BodyWithoutMindTests
 
         return (colony.ArtifactsRecovered, dangerousTicks);
     }
+}
+
+/// <summary>
+/// The body must not bury the mind. Measured at M3 before coalescing: eight colonists accumulated
+/// ~370 episodic rows each in 28 colony-days, overwhelmingly the same few acts repeated, and since
+/// reflection consolidates a batch at a time the backlog could never be worked off.
+/// </summary>
+public class EpisodicVolumeTests
+{
+    [Fact]
+    public void RepeatingTheSameActFoldsIntoOneStrongerMemory()
+    {
+        var store = new MemoryStore();
+
+        for (var i = 0; i < 10; i++)
+        {
+            store.Record(new EpisodicMemory
+            {
+                Id = $"m-{i}",
+                Tick = i,
+                Day = 1 + i * 0.1,
+                Actors = ["c01"],
+                Verb = "finished building at",
+                Object = "East Shelter",
+                PlaceId = "shelter-east",
+                Valence = 0.5,
+                Intensity = 0.55
+            });
+        }
+
+        var memory = Assert.Single(store.Episodic);
+        Assert.Equal(9, memory.Repeats);
+        Assert.True(memory.Intensity > 0.55, "repetition should make the one memory stronger");
+        Assert.Contains("10 times", memory.Describe());
+    }
+
+    [Fact]
+    public void DistinctActsStayDistinct()
+    {
+        var store = new MemoryStore();
+
+        store.Record(Row("m-1", "foraged at", "The Orchard Street", "orchard", day: 1));
+        store.Record(Row("m-2", "recovered an artifact at", "The Substation", "substation", day: 1.1));
+        store.Record(Row("m-3", "foraged at", "The River Edge", "river-edge", day: 1.2));
+
+        Assert.Equal(3, store.Episodic.Count);
+    }
+
+    [Fact]
+    public void TheSameActLongAfterIsANewMemoryAgain()
+    {
+        var store = new MemoryStore();
+
+        store.Record(Row("m-1", "foraged at", "The Orchard Street", "orchard", day: 1));
+        store.Record(Row("m-2", "foraged at", "The Orchard Street", "orchard", day: 40));
+
+        Assert.Equal(2, store.Episodic.Count);
+    }
+
+    /// <summary>
+    /// The end-to-end version: a colony left running must not accumulate a backlog its mind could
+    /// never work off, or the reflection trigger stops meaning anything.
+    /// </summary>
+    [Fact]
+    public void ALongRunDoesNotBuryEveryColonistInRepeatedRows()
+    {
+        var random = new Random(4);
+        var colony = ColonyFactory.Create(8, random);
+        var body = new BodySimulation(colony, random);
+
+        for (var i = 0; i < Colony.TicksPerDay * 28; i++)
+        {
+            body.Tick();
+        }
+
+        foreach (var colonist in colony.Living)
+        {
+            // Before coalescing this sat around 370 per colonist and was overwhelmingly the same
+            // few acts. A few per day is a realistic life; hundreds is a body outrunning its mind.
+            Assert.True(colonist.Memory.Episodic.Count < 250,
+                $"{colonist.DisplayName} is holding {colonist.Memory.Episodic.Count} episodic rows " +
+                "after 28 days — the body is outrunning the mind again");
+        }
+
+        // And the reduction has to be coming from folding, not from the colony doing less.
+        var folded = colony.Living.Sum(c => c.Memory.Episodic.Sum(m => m.Repeats));
+        Assert.True(folded > 200,
+            $"only {folded} events folded into existing memories — coalescing is not doing the work");
+    }
+
+    private static EpisodicMemory Row(string id, string verb, string about, string place, double day) => new()
+    {
+        Id = id,
+        Tick = (long)(day * 240),
+        Day = day,
+        Actors = ["c01"],
+        Verb = verb,
+        Object = about,
+        PlaceId = place,
+        Valence = 0.4,
+        Intensity = 0.5
+    };
 }

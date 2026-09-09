@@ -33,9 +33,19 @@ public class ReflectionTests
         var colony = ColonyFactory.Create(3, random);
         var colonist = colony.Colonists[0];
 
+        // Deliberately four distinct acts. Identical rows fold into one now, which is correct
+        // behaviour but makes for a fixture that does not resemble a real reflection batch.
+        var rows = new (string Verb, string About, string Place)[]
+        {
+            ("worked at clearing", "The East Stairwell", "east-stair"),
+            ("recovered an artifact at", "The Substation", "substation"),
+            ("talked with", "C-02", "plaza"),
+            ("was hurt at", "The Ninth Floor", "ninth-floor")
+        };
+
         var batch = new List<EpisodicMemory>();
 
-        for (var i = 0; i < 4; i++)
+        for (var i = 0; i < rows.Length; i++)
         {
             var memory = new EpisodicMemory
             {
@@ -43,9 +53,9 @@ public class ReflectionTests
                 Tick = i * 10,
                 Day = 1 + i * 0.1,
                 Actors = [colonist.Id],
-                Verb = "worked at clearing",
-                Object = "The East Stairwell",
-                PlaceId = "east-stair",
+                Verb = rows[i].Verb,
+                Object = rows[i].About,
+                PlaceId = rows[i].Place,
                 Valence = 0.4,
                 Intensity = 0.8
             };
