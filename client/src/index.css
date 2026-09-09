@@ -754,3 +754,50 @@ button {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ---------- kindling ---------- */
+
+.seed {
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+  margin: 0;
+  padding: 9px 11px;
+  background: var(--surface-sunk);
+  border-radius: 3px;
+  border-left: 2px solid var(--muted);
+}
+
+.tagline {
+  font-family: var(--mono);
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  border-radius: 999px;
+  padding: 2px 7px;
+  vertical-align: 1px;
+}
+
+.tagline.mind {
+  color: var(--mind-layer);
+  background: var(--mind-wash);
+}
+
+.tagline.stub {
+  color: var(--flag);
+  background: var(--flag-wash);
+}
+
+/* A colonist the mind has written reads differently in the roster. */
+.roster-name.kindled::after {
+  content: '';
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--mind-layer);
+  margin-left: 6px;
+  vertical-align: 2px;
+}

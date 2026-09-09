@@ -38,8 +38,11 @@ public sealed class Colonist
 
     public required double BornOnDay { get; init; }
 
-    /// <summary>Prose written by Kindling. Hand-authored from an archetype in M1.</summary>
+    /// <summary>Prose written by Kindling. An archetype blurb stands in until it returns.</summary>
     public required string Personality { get; set; }
+
+    /// <summary>The prose the Loom was given to print this mind from. Consumed once, at Kindling.</summary>
+    public string Seed { get; set; } = string.Empty;
 
     public required PersonalityWeights Weights { get; set; }
 
@@ -61,10 +64,26 @@ public sealed class Colonist
     /// <summary>The most recent thing Layer 2 had them think. Null until the fast lane runs in M3.</summary>
     public string? LastThought { get; set; }
 
-    /// <summary>Model calls this mind has made. The inspector's Trace tab counts these.</summary>
-    public int ModelCalls { get; set; }
+    /// <summary>
+    /// Every model call this mind has made, newest last. The inspector's Trace tab reads this,
+    /// and it is the cheapest convincing thing in the game for anyone technical.
+    /// </summary>
+    public List<ModelCallRecord> Trace { get; } = [];
 
-    public int TokensSpent { get; set; }
+    public int ModelCalls => Trace.Count;
+
+    public int TokensSpent => Trace.Sum(t => t.TotalTokens);
+
+    /// <summary>
+    /// True once a mind has written this colonist rather than an archetype standing in. Printed
+    /// colonists exist and act immediately; Kindling upgrades them when it returns.
+    /// </summary>
+    public bool IsKindled { get; set; }
+
+    /// <summary>Names this colonist might take, written at Kindling. They take one by earning it.</summary>
+    public IReadOnlyList<string> NameCandidates { get; set; } = [];
+
+    public void RecordCall(ModelCallRecord record) => Trace.Add(record);
 
     public double AgeInDays(double currentDay) => currentDay - BornOnDay;
 

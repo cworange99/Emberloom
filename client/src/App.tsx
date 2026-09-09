@@ -40,7 +40,7 @@ export default function App() {
       <header className="topbar">
         <div className="brand">
           What They Left Running
-          <span>M1 · the body, no mind</span>
+          <span>M2 · kindling</span>
         </div>
 
         <div className="speeds" role="group" aria-label="Simulation speed">
@@ -121,7 +121,7 @@ export default function App() {
             <div className="feed-head">
               <h2>Event feed</h2>
               <span className="row-meta" style={{ margin: 0 }}>
-                green is the body · brass would be the mind
+                green is the body · brass is the mind
               </span>
             </div>
             <div className="feed-list" ref={feedRef}>

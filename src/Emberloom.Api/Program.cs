@@ -95,9 +95,25 @@ app.MapGet("/api/colonists/{id}", (string id) => sim.Read<IResult>((colony, body
             i == 0))
         .ToList();
 
+    var trace = colonist.Trace
+        .Select(t => new TraceRowDto(
+            t.CallType,
+            Math.Round(t.Day, 2),
+            t.Model,
+            t.Lane,
+            t.PromptTokens,
+            t.CompletionTokens,
+            Math.Round(t.Seconds, 2),
+            t.Produced,
+            t.WasFallback))
+        .Reverse()
+        .ToList();
+
     return Results.Ok(new ColonistDetailDto(
         ColonistDto.From(colonist, colony),
         colonist.Personality,
+        colonist.Seed,
+        trace,
         memories,
         relationships,
         options));

@@ -118,7 +118,12 @@ public sealed class OllamaClient : IDisposable
         {
             throw;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        // A request timeout surfaces as TaskCanceledException, which derives from
+        // OperationCanceledException — so "not a cancellation" is not enough to tell a timeout
+        // apart from the caller giving up. Only a cancellation the caller actually asked for is
+        // allowed through; everything else is an ordinary failed call, which is what lets the
+        // layer above fall back rather than fault.
+        catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
         {
             throw new OllamaException($"Ollama call failed for model '{config.Model}'.", ex);
         }

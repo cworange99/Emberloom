@@ -12,7 +12,7 @@ See [DESIGN.md](DESIGN.md) for the full design. Build order and milestone status
 |---|---|
 | **M0** — benchmark before designing further | **Done, both profiles.** See [`bench/results/`](bench/results/). |
 | **M1** — the body, with no mind at all | **Core done.** Drives, utility scoring, city map, foraging/salvage/building/rest, relationship ledger, episodic capture, event feed, time controls. Zero model calls. HTTP/WebSocket API and React client not yet built. |
-| M2 — governor and Kindling | Not started |
+| **M2** — governor and Kindling | **Kindling done**; governor deferred pending the local-vs-hosted decision. Printed colonists get model-written personalities and weights, and the Mind Inspector shows the model trace. |
 | M3 — memory pipeline and Reflection | Not started |
 | M4 — the Mind Inspector | Not started |
 | M5 — dialogue and deliberation | Not started |

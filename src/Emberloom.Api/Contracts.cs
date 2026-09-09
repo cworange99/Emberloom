@@ -59,6 +59,8 @@ public sealed record ColonistDto(
     int MemoryCount,
     bool WantsReflection,
     int ModelCalls,
+    bool IsKindled,
+    IReadOnlyList<string> NameCandidates,
     IReadOnlyDictionary<string, double> Drives,
     IReadOnlyDictionary<string, double> Weights,
     string DominantDrive)
@@ -80,6 +82,8 @@ public sealed record ColonistDto(
         colonist.Memory.Episodic.Count,
         colonist.Memory.WantsReflection(colony.Day),
         colonist.ModelCalls,
+        colonist.IsKindled,
+        colonist.NameCandidates,
         colonist.Drives.Levels.ToSchemaDictionary(),
         colonist.Weights.Vector.ToSchemaDictionary(),
         DriveTable.Describe(colonist.Drives.Dominant(colonist.Weights)));
@@ -122,9 +126,22 @@ public sealed record WorldDto(
     IReadOnlyList<string> DriveNames,
     IReadOnlyList<string> Speeds);
 
+public sealed record TraceRowDto(
+    string CallType,
+    double Day,
+    string Model,
+    string Lane,
+    int PromptTokens,
+    int CompletionTokens,
+    double Seconds,
+    string Produced,
+    bool WasFallback);
+
 public sealed record ColonistDetailDto(
     ColonistDto Colonist,
     string Personality,
+    string Seed,
+    IReadOnlyList<TraceRowDto> Trace,
     IReadOnlyList<MemoryRowDto> RecentMemories,
     IReadOnlyList<RelationshipRowDto> Relationships,
     IReadOnlyList<ScoredOptionDto> Considering);

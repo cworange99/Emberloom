@@ -55,7 +55,9 @@ export function Roster({
               aria-current={colonist.id === selectedId}
             >
               <span className="roster-top">
-                <span className="roster-name">{colonist.displayName}</span>
+                <span className={colonist.isKindled ? 'roster-name kindled' : 'roster-name'}>
+                  {colonist.displayName}
+                </span>
                 <span className="roster-mood">{colonist.mood}</span>
               </span>
               <span className="roster-doing">
@@ -144,8 +146,31 @@ export function ColonistDetailView({ id, onBack }: { id: string; onBack: () => v
         </div>
 
         <section>
-          <h3>Personality</h3>
+          <h3>Seed — what the Loom was given</h3>
+          <p className="seed">{detail.seed || 'nothing recorded'}</p>
+        </section>
+
+        <section>
+          <h3>
+            Personality{' '}
+            {colonist.isKindled ? (
+              <span className="tagline mind">written by the mind</span>
+            ) : (
+              <span className="tagline stub">fallback stub</span>
+            )}
+          </h3>
           <p className="personality">{detail.personality}</p>
+          {colonist.nameCandidates.length > 0 && (
+            <p className="row-meta" style={{ marginTop: 10 }}>
+              may one day take the name{' '}
+              {colonist.nameCandidates.map((n, i) => (
+                <span key={n}>
+                  {i > 0 && ' · '}
+                  <b>{n}</b>
+                </span>
+              ))}
+            </p>
+          )}
         </section>
 
         <section>
@@ -174,7 +199,8 @@ export function ColonistDetailView({ id, onBack }: { id: string; onBack: () => v
           <h3>Weights — the seam</h3>
           <DriveBars drives={normaliseWeights(colonist.weights)} />
           <p className="row-meta" style={{ marginTop: 8 }}>
-            Shown as a share of the 0.2–2.0 range. Hand-authored at M1; written by Kindling from M2.
+            Shown as a share of the 0.2–2.0 range. Written once by Kindling, then read by the body on
+            every tick without further inference.
           </p>
         </section>
 
@@ -244,11 +270,42 @@ export function ColonistDetailView({ id, onBack }: { id: string; onBack: () => v
         </section>
 
         <section>
-          <h3>Model trace</h3>
-          <p className="empty">
-            No calls yet — the mind arrives at M2. Everything above was produced by the body, with
-            no inference at all.
-          </p>
+          <h3>Model trace — every call this mind has made</h3>
+          {detail.trace.length === 0 ? (
+            <p className="empty">
+              No calls yet. Everything above was produced by the body, with no inference at all.
+            </p>
+          ) : (
+            <>
+              <div className="rows">
+                {detail.trace.map((row, index) => (
+                  <div className="row" key={`${row.callType}-${row.day}-${index}`}>
+                    <span className="row-when">d{row.day.toFixed(1)}</span>
+                    <div>
+                      <p className="row-text">
+                        <b>{row.callType}</b>
+                        {row.wasFallback ? (
+                          <span className="tagline stub" style={{ marginLeft: 6 }}>
+                            fallback
+                          </span>
+                        ) : (
+                          <>
+                            {' · '}
+                            {row.model} · {row.promptTokens} in / {row.completionTokens} out ·{' '}
+                            {row.seconds.toFixed(1)}s
+                          </>
+                        )}
+                      </p>
+                      <p className="row-meta">{row.produced}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p className="row-meta" style={{ marginTop: 10 }}>
+                {colonist.modelCalls} call{colonist.modelCalls === 1 ? '' : 's'} lifetime
+              </p>
+            </>
+          )}
         </section>
       </div>
     </>

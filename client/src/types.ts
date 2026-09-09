@@ -31,6 +31,8 @@ export interface Colonist {
   memoryCount: number
   wantsReflection: boolean
   modelCalls: number
+  isKindled: boolean
+  nameCandidates: string[]
   drives: Record<string, number>
   weights: Record<string, number>
   dominantDrive: string
@@ -106,9 +108,23 @@ export interface ScoredOption {
   chosen: boolean
 }
 
+export interface TraceRow {
+  callType: string
+  day: number
+  model: string
+  lane: string
+  promptTokens: number
+  completionTokens: number
+  seconds: number
+  produced: string
+  wasFallback: boolean
+}
+
 export interface ColonistDetail {
   colonist: Colonist
   personality: string
+  seed: string
+  trace: TraceRow[]
   recentMemories: MemoryRow[]
   relationships: RelationshipRow[]
   considering: ScoredOption[]

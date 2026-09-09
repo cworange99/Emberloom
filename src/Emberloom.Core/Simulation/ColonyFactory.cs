@@ -52,8 +52,12 @@ public static class ColonyFactory
             Designation = $"C-{index:00}",
             Lineage = LineageKind.Printed,
             BornOnDay = colony.Day,
+            // Stand-in until Kindling returns. A printed mind exists and acts from the tick it is
+            // printed — waiting on inference to start living would put a model call on the
+            // critical path, which is exactly what the two-layer split exists to avoid.
             Personality = archetype.Blurb,
             Weights = archetype.Weights.Clone(),
+            Seed = SeedRoller.Roll(random),
             PlaceId = "loom"
         };
 
@@ -91,6 +95,7 @@ public static class ColonyFactory
             ParentIds = [left.Id, right.Id],
             BornOnDay = colony.Day,
             Personality = $"Born to {left.DisplayName} and {right.DisplayName}.",
+            Seed = $"inherits from {left.DisplayName} and {right.DisplayName}",
             Weights = PersonalityWeights.Crossover(left.Weights, right.Weights, random),
             PlaceId = left.PlaceId
         };

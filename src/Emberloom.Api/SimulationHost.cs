@@ -1,6 +1,9 @@
 using System.Collections.Concurrent;
 using Emberloom.Core.Actions;
 using Emberloom.Core.Colonists;
+using Emberloom.Mind;
+using Emberloom.Mind.Calls;
+using Emberloom.Mind.Ollama;
 using Emberloom.Core.Events;
 using Emberloom.Core.Simulation;
 
@@ -25,12 +28,39 @@ public sealed class SimulationHost : BackgroundService
     private BodySimulation _body;
     private Random _random;
 
+    private readonly MindService? _mind;
+    private readonly System.Threading.Channels.Channel<string> _toKindle =
+        System.Threading.Channels.Channel.CreateUnbounded<string>();
+
     public SimulationHost(ILogger<SimulationHost> logger, IConfiguration configuration)
     {
         _logger = logger;
 
         var seed = configuration.GetValue("Simulation:Seed", 4);
         var colonists = configuration.GetValue("Simulation:Colonists", 8);
+
+        if (configuration.GetValue("Mind:Enabled", true))
+        {
+            // The endpoint is a setting with a localhost default on purpose. Local play and a
+            // remote inference box are the same code path — which is only true because every mind
+            // call carries its whole context and the thing serving it holds no colony state.
+            _mind = new MindService(new OllamaOptions
+            {
+                Endpoint = new Uri(configuration.GetValue("Mind:Endpoint", "http://127.0.0.1:11434")!),
+                Deep = new LaneConfig
+                {
+                    Model = configuration.GetValue("Mind:DeepModel", "llama3.2:3b")!,
+                    NumCtx = configuration.GetValue("Mind:DeepContext", 4096),
+                    KeepAlive = "60m"
+                },
+                Fast = new LaneConfig
+                {
+                    Model = configuration.GetValue("Mind:FastModel", "llama3.2:1b")!,
+                    NumCtx = configuration.GetValue("Mind:FastContext", 2048),
+                    KeepAlive = "60m"
+                }
+            });
+        }
 
         // Measured at M0 on this machine. From M2 the governor owns this; until then it only
         // feeds the Contemplation readout, which is worth showing from M1 so the cost of speed
@@ -43,9 +73,12 @@ public sealed class SimulationHost : BackgroundService
         Clock = new SimulationClock();
 
         _colony.Feed.Appended += OnEvent;
+        QueueKindlingForEveryone();
     }
 
     public SimulationClock Clock { get; }
+
+    public bool MindConfigured => _mind is not null;
 
     public double SustainedCallsPerMinute { get; }
 
@@ -73,11 +106,114 @@ public sealed class SimulationHost : BackgroundService
             _colony.Feed.Appended += OnEvent;
         }
 
+        QueueKindlingForEveryone();
         _logger.LogInformation("Colony restarted with {Colonists} colonists, seed {Seed}.", colonists, seed);
+    }
+
+    private void QueueKindlingForEveryone()
+    {
+        foreach (var colonist in _colony.Colonists.Where(c => !c.IsKindled))
+        {
+            _toKindle.Writer.TryWrite(colonist.Id);
+        }
+    }
+
+    /// <summary>
+    /// Kindles queued colonists one at a time. Strictly sequential, because a second in-flight
+    /// request halves both — that rule is from the design and holds whether or not the governor
+    /// exists yet. What this deliberately is <em>not</em> is the governor: no priorities, no
+    /// budget, no dropping. Those arrive with M2.
+    /// </summary>
+    private async Task KindleLoopAsync(CancellationToken stoppingToken)
+    {
+        if (_mind is null)
+        {
+            return;
+        }
+
+        await foreach (var colonistId in _toKindle.Reader.ReadAllAsync(stoppingToken))
+        {
+            var colonist = Read((colony, _) => colony.Find(colonistId));
+            if (colonist is null || colonist.IsKindled)
+            {
+                continue;
+            }
+
+            try
+            {
+                // The colony is mutated on the tick thread, so the write-back has to take the
+                // same lock. The call itself is made outside it — holding the lock across a
+                // multi-second inference would stall the simulation, which is the one thing
+                // Layer 2 is never allowed to do.
+                var seedText = colonist.Seed;
+                var result = await KindlingCall.ExecuteAsync(_mind.Client,
+                    new KindlingSeed { Designation = colonist.Designation, Seed = seedText },
+                    stoppingToken).ConfigureAwait(false);
+
+                lock (_gate)
+                {
+                    ApplyKindling(colonist, result);
+                }
+
+                _logger.LogInformation(
+                    "Kindled {Designation} ({Source}).",
+                    colonist.Designation,
+                    result.FromModel ? "model" : "fallback");
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Kindling {Designation} failed; leaving the stub in place.", colonist.Designation);
+
+                lock (_gate)
+                {
+                    ApplyKindling(colonist, KindlingCall.Fallback(
+                        new KindlingSeed { Designation = colonist.Designation, Seed = colonist.Seed }));
+                }
+            }
+
+            Broadcast(Snapshot());
+        }
+    }
+
+    private void ApplyKindling(Colonist colonist, KindlingResult result)
+    {
+        colonist.Personality = result.Personality;
+        colonist.Weights = result.Weights;
+        colonist.NameCandidates = result.NameCandidates;
+        colonist.IsKindled = result.FromModel;
+
+        colonist.RecordCall(new ModelCallRecord
+        {
+            CallType = "Kindling",
+            Day = _colony.Day,
+            Model = result.Call?.Model ?? "none",
+            Lane = "deep",
+            PromptTokens = result.Call?.PromptTokens ?? 0,
+            CompletionTokens = result.Call?.CompletionTokens ?? 0,
+            Seconds = result.Call?.TotalDuration.TotalSeconds ?? 0,
+            Produced = result.FromModel
+                ? $"personality, {result.NameCandidates.Count} name candidates, seven weights"
+                : "fallback stub — the mind was unavailable",
+            WasFallback = !result.FromModel
+        });
+
+        _colony.Log(
+            result.FromModel ? EventLayer.Mind : EventLayer.World,
+            result.FromModel
+                ? $"{colonist.Designation} woke. {result.SeedSummary}"
+                : $"{colonist.Designation} woke, but nothing was there to write them.",
+            colonist,
+            notable: true);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        _ = Task.Run(() => KindleLoopAsync(stoppingToken), stoppingToken);
+
         var timer = new PeriodicTimer(Interval);
         var last = DateTimeOffset.UtcNow;
 
