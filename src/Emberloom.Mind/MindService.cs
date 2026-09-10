@@ -295,16 +295,19 @@ public sealed class MindService : IDisposable
     }
 
     /// <summary>Idle thought on the fast lane. Writes nothing durable; failure is simply silence.</summary>
-    public async Task<string?> ThinkAsync(Colonist colonist, Colony colony, CancellationToken ct = default)
+    public async Task<(string? Thought, CompletionResult? Call)> ThinkAsync(
+        Colonist colonist,
+        Colony colony,
+        CancellationToken ct = default)
     {
-        var thought = await IdleThoughtCall.ExecuteAsync(_client, colonist, colony, ct).ConfigureAwait(false);
+        var (thought, call) = await IdleThoughtCall.ExecuteAsync(_client, colonist, colony, ct).ConfigureAwait(false);
 
         if (thought is not null)
         {
             colonist.LastThought = thought;
         }
 
-        return thought;
+        return (thought, call);
     }
 
     private static string WeightSummary(KindlingResult result) =>

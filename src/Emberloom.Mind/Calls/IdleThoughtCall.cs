@@ -15,7 +15,7 @@ namespace Emberloom.Mind.Calls;
 /// </summary>
 public static class IdleThoughtCall
 {
-    public static async Task<string?> ExecuteAsync(
+    public static async Task<(string? Thought, CompletionResult? Call)> ExecuteAsync(
         OllamaClient client,
         Colonist colonist,
         Colony colony,
@@ -59,7 +59,9 @@ public static class IdleThoughtCall
                 ? element.GetString()?.Trim()
                 : null;
 
-            return string.IsNullOrWhiteSpace(thought) ? null : thought;
+            // The call is returned even when the thought is empty, because it still cost tokens
+            // and the governor budgets on what was spent rather than on what was useful.
+            return (string.IsNullOrWhiteSpace(thought) ? null : thought, result);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -69,7 +71,7 @@ public static class IdleThoughtCall
         {
             // Nothing durable was going to come of it, so there is nothing to fall back to.
             // Silence is the correct degradation for a thought that never arrived.
-            return null;
+            return (null, null);
         }
     }
 }

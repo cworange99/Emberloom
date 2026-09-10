@@ -60,6 +60,30 @@ export interface Clock {
   sustainedCallsPerMinute: number
 }
 
+export interface Governor {
+  queueDepth: number
+  tokensPerMinute: number
+  tokensInLastMinute: number
+  pressure: number
+  dropped: number
+  served: number
+  fallbacks: number
+  currentCall: string | null
+  throttling: boolean
+}
+
+export interface Governor {
+  queueDepth: number
+  tokensPerMinute: number
+  tokensInLastMinute: number
+  pressure: number
+  dropped: number
+  served: number
+  fallbacks: number
+  currentCall: string | null
+  throttling: boolean
+}
+
 export interface ColonyState {
   tick: number
   day: number
@@ -70,6 +94,7 @@ export interface ColonyState {
   population: number
   actionsCompleted: number
   clock: Clock
+  governor: Governor | null
   colonists: Colonist[]
 }
 

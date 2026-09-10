@@ -108,6 +108,22 @@ public sealed record ClockDto(
     double CallsPerColonyDay,
     double SustainedCallsPerMinute);
 
+/// <summary>
+/// The governor, exposed. On a game whose whole premise is local AI, how much thinking is
+/// happening right now is genuinely interesting rather than a debug leftover — and it is what
+/// lets someone on better hardware turn the ceiling up and watch the colony think harder.
+/// </summary>
+public sealed record GovernorDto(
+    int QueueDepth,
+    int TokensPerMinute,
+    int TokensInLastMinute,
+    double Pressure,
+    int Dropped,
+    int Served,
+    int Fallbacks,
+    string? CurrentCall,
+    bool Throttling);
+
 public sealed record ColonyStateDto(
     long Tick,
     double Day,
@@ -118,6 +134,7 @@ public sealed record ColonyStateDto(
     int Population,
     int ActionsCompleted,
     ClockDto Clock,
+    GovernorDto? Governor,
     IReadOnlyList<ColonistDto> Colonists);
 
 /// <summary>Sent once when a client connects, so it does not have to rebuild the map every frame.</summary>

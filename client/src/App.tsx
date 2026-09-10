@@ -102,6 +102,40 @@ export default function App() {
               {clock.speed === 'Paused' ? '—' : `${clock.callsPerColonyDay.toFixed(1)}/day`}
             </dd>
           </div>
+
+          {/* The governor, exposed. On a game whose whole premise is local AI, how much thinking
+              is happening right now is worth watching rather than hiding as a debug leftover. */}
+          {state.governor && (
+            <>
+              <div
+                className={state.governor.throttling ? 'readout is-flag' : 'readout'}
+                title={
+                  state.governor.throttling
+                    ? 'A turning point could not be served at this speed, so the simulation slowed itself'
+                    : 'Calls waiting. The governor serves one at a time.'
+                }
+              >
+                <dt>Queue</dt>
+                <dd>{state.governor.queueDepth}</dd>
+              </div>
+              <div className="readout is-mind" title="Rolling real-world tokens per minute, against the ceiling">
+                <dt>Tok/min</dt>
+                <dd>
+                  {state.governor.tokensInLastMinute}
+                  <span className="of">/{state.governor.tokensPerMinute}</span>
+                </dd>
+              </div>
+              <div className="readout" title="Calls served, and calls refused because something mattered more">
+                <dt>Served</dt>
+                <dd>
+                  {state.governor.served}
+                  {state.governor.dropped > 0 && (
+                    <span className="of">−{state.governor.dropped}</span>
+                  )}
+                </dd>
+              </div>
+            </>
+          )}
         </dl>
       </header>
 

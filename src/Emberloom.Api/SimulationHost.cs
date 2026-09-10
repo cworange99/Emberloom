@@ -3,7 +3,9 @@ using Emberloom.Core.Actions;
 using Emberloom.Core.Colonists;
 using Emberloom.Mind;
 using Emberloom.Mind.Calls;
+using Emberloom.Mind.Governor;
 using Emberloom.Mind.Ollama;
+using Emberloom.Core.Memory;
 using Emberloom.Core.Events;
 using Emberloom.Core.Simulation;
 
@@ -29,8 +31,7 @@ public sealed class SimulationHost : BackgroundService
     private Random _random;
 
     private readonly MindService? _mind;
-    private readonly System.Threading.Channels.Channel<string> _toKindle =
-        System.Threading.Channels.Channel.CreateUnbounded<string>();
+    private readonly MindGovernor? _governor;
 
     public SimulationHost(ILogger<SimulationHost> logger, IConfiguration configuration)
     {
@@ -60,6 +61,32 @@ public sealed class SimulationHost : BackgroundService
                     KeepAlive = "60m"
                 }
             });
+
+            // The ceiling is real-world tokens per minute, for the machine actually serving. It has
+            // to sit ABOVE measured sustained throughput: it exists to stop demand outrunning
+            // supply, not to hold the machine below its own speed. Set to 2400 initially, which
+            // was under the ~2650 tok/min this laptop actually sustains, and the result was a
+            // governor that throttled permanently and pinned the simulation at 1x.
+            _governor = new MindGovernor(
+                tokensPerMinute: configuration.GetValue("Mind:TokensPerMinute", 3600),
+                maxQueueDepth: configuration.GetValue("Mind:MaxQueueDepth", 32),
+                perColonistCooldown: TimeSpan.FromSeconds(
+                    configuration.GetValue("Mind:PerColonistCooldownSeconds", 20)));
+
+            // The one place time bends for function: an undroppable call that cannot be served
+            // inside the budget slows the simulation rather than being skipped.
+            _governor.ThrottleRequested += throttling =>
+            {
+                if (throttling)
+                {
+                    Clock.ThrottleForThought();
+                    _logger.LogInformation("Slowed the simulation: a turning point could not be served at speed.");
+                }
+                else
+                {
+                    Clock.ReleaseThrottle();
+                }
+            };
         }
 
         // Measured at M0 on this machine. From M2 the governor owns this; until then it only
@@ -114,150 +141,152 @@ public sealed class SimulationHost : BackgroundService
     {
         foreach (var colonist in _colony.Colonists.Where(c => !c.IsKindled))
         {
-            _toKindle.Writer.TryWrite(colonist.Id);
+            SubmitKindling(colonist);
         }
     }
 
     /// <summary>
-    /// Kindles queued colonists one at a time. Strictly sequential, because a second in-flight
-    /// request halves both — that rule is from the design and holds whether or not the governor
-    /// exists yet. What this deliberately is <em>not</em> is the governor: no priorities, no
-    /// budget, no dropping. Those arrive with M2.
+    /// Kindling is undroppable. A colonist who was never written would act on archetype weights
+    /// forever, which is the one degradation the design refuses to accept quietly.
     /// </summary>
-    private async Task KindleLoopAsync(CancellationToken stoppingToken)
+    private void SubmitKindling(Colonist colonist)
     {
-        if (_mind is null)
+        if (_mind is null || _governor is null)
         {
             return;
         }
 
-        await foreach (var colonistId in _toKindle.Reader.ReadAllAsync(stoppingToken))
+        _governor.Submit(new MindRequest
         {
-            var colonist = Read((colony, _) => colony.Find(colonistId));
-            if (colonist is null || colonist.IsKindled)
+            Call = CallType.Kindling,
+            Priority = CallPriority.Kindling,
+            ColonistId = colonist.Id,
+            Undroppable = true,
+            Work = async ct =>
             {
-                continue;
-            }
-
-            try
-            {
-                // The colony is mutated on the tick thread, so the write-back has to take the
-                // same lock. The call itself is made outside it — holding the lock across a
-                // multi-second inference would stall the simulation, which is the one thing
-                // Layer 2 is never allowed to do.
-                var seedText = colonist.Seed;
-                var result = await KindlingCall.ExecuteAsync(_mind.Client,
-                    new KindlingSeed { Designation = colonist.Designation, Seed = seedText },
-                    stoppingToken).ConfigureAwait(false);
+                // The call happens outside the colony lock — holding it across a multi-second
+                // inference would stall the tick loop, which Layer 2 is never allowed to do.
+                var seed = colonist.Seed;
+                var result = await KindlingCall.ExecuteAsync(
+                    _mind.Client,
+                    new KindlingSeed { Designation = colonist.Designation, Seed = seed },
+                    ct).ConfigureAwait(false);
 
                 lock (_gate)
                 {
                     ApplyKindling(colonist, result);
                 }
 
-                _logger.LogInformation(
-                    "Kindled {Designation} ({Source}).",
-                    colonist.Designation,
-                    result.FromModel ? "model" : "fallback");
-            }
-            catch (OperationCanceledException)
-            {
-                break;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Kindling {Designation} failed; leaving the stub in place.", colonist.Designation);
+                Broadcast(Snapshot());
 
-                lock (_gate)
+                return new MindCallOutcome
                 {
-                    ApplyKindling(colonist, KindlingCall.Fallback(
-                        new KindlingSeed { Designation = colonist.Designation, Seed = colonist.Seed }));
-                }
+                    PromptTokens = result.Call?.PromptTokens ?? 0,
+                    CompletionTokens = result.Call?.CompletionTokens ?? 0,
+                    WasFallback = !result.FromModel
+                };
             }
-
-            Broadcast(Snapshot());
-        }
+        });
     }
 
     /// <summary>
-    /// Serves reflections and idle thought once everyone is kindled.
+    /// Offers work to the governor. It decides what actually runs; this only decides what is worth
+    /// asking for, and asks often enough that the queue always has something to serve.
     /// <para>
-    /// Still strictly one call at a time, and still not the governor: it picks the colonist with
-    /// the most unprocessed experience rather than running a priority queue with a token budget.
-    /// What it does establish is the ordering the governor will formalise — reflection outranks
-    /// idle thought, because one writes something durable and the other does not.
+    /// Reflection carries its accumulated salience as weight, so the colonist holding the most
+    /// unprocessed experience is served first. Idle thought is offered only to colonists with
+    /// nothing to reflect on, and is refused freely — it writes nothing durable, so a dropped one
+    /// costs nothing. That refusal is the mechanism behind the Contemplation readout: at speed the
+    /// cheap calls stop being served long before the important ones do.
     /// </para>
     /// </summary>
-    private async Task ThinkLoopAsync(CancellationToken stoppingToken)
+    private async Task ScheduleThinkingAsync(CancellationToken stoppingToken)
     {
-        if (_mind is null)
+        if (_mind is null || _governor is null)
         {
             return;
         }
 
         var timer = new PeriodicTimer(TimeSpan.FromSeconds(2));
 
+        // The queue is a work buffer, not a firehose. Offering everything every tick would refuse
+        // hundreds of requests a minute and make the drop count meaningless — a drop should mean
+        // "something worth doing lost to something worth more", not "the scheduler shouted again".
+        const int TargetQueueDepth = 6;
+
         while (await timer.WaitForNextTickAsync(stoppingToken).ConfigureAwait(false))
         {
-            // Kindling is undroppable and comes first; nothing else runs while any mind is
-            // still unwritten.
-            if (_toKindle.Reader.Count > 0)
+            var room = TargetQueueDepth - _governor.Stats().QueueDepth;
+            if (room <= 0)
             {
                 continue;
             }
 
-            var (colonist, wantsReflection) = Read((colony, _) =>
-            {
-                var candidate = colony.Living
-                    .Where(c => c.Memory.WantsReflection(colony.Day))
-                    .OrderByDescending(c => c.Memory.UnconsolidatedSalience(colony.Day))
-                    .FirstOrDefault();
+            var candidates = Read((colony, _) => colony.Living
+                .Select(c => (Colonist: c, Salience: c.Memory.UnconsolidatedSalience(colony.Day)))
+                .OrderByDescending(x => x.Salience)
+                .Take(room)
+                .ToList());
 
-                if (candidate is not null)
+            foreach (var (colonist, salience) in candidates)
+            {
+                if (salience >= MemoryStore.ReflectionThreshold)
                 {
-                    return (candidate, true);
-                }
-
-                // Nobody has enough unprocessed experience to reflect on, so spend the lane on
-                // someone's idle thought instead. Prefer whoever has gone longest without one.
-                var idle = colony.Living
-                    .OrderBy(c => c.LastThought is null ? 0 : 1)
-                    .ThenBy(_ => _random.Next())
-                    .FirstOrDefault();
-
-                return (idle, false);
-            });
-
-            if (colonist is null)
-            {
-                continue;
-            }
-
-            try
-            {
-                if (wantsReflection)
-                {
-                    var snapshot = Read((colony, _) => colony);
-                    await _mind.ReflectAsync(colonist, snapshot, stoppingToken).ConfigureAwait(false);
-                    _logger.LogInformation("{Designation} reflected.", colonist.Designation);
+                    SubmitReflection(colonist, salience);
                 }
                 else
                 {
-                    var snapshot = Read((colony, _) => colony);
-                    await _mind.ThinkAsync(colonist, snapshot, stoppingToken).ConfigureAwait(false);
+                    SubmitIdleThought(colonist);
                 }
             }
-            catch (OperationCanceledException)
-            {
-                break;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Thinking for {Designation} failed.", colonist.Designation);
-            }
-
-            Broadcast(Snapshot());
         }
+    }
+
+    private void SubmitReflection(Colonist colonist, double salience)
+    {
+        _governor!.Submit(new MindRequest
+        {
+            Call = CallType.Reflection,
+            Priority = CallPriority.Reflection,
+            ColonistId = colonist.Id,
+            Weight = salience,
+            Work = async ct =>
+            {
+                var colony = Read((c, _) => c);
+                var result = await _mind!.ReflectAsync(colonist, colony, ct).ConfigureAwait(false);
+                Broadcast(Snapshot());
+
+                return new MindCallOutcome
+                {
+                    PromptTokens = result.Call?.PromptTokens ?? 0,
+                    CompletionTokens = result.Call?.CompletionTokens ?? 0,
+                    WasFallback = !result.FromModel
+                };
+            }
+        });
+    }
+
+    private void SubmitIdleThought(Colonist colonist)
+    {
+        _governor!.Submit(new MindRequest
+        {
+            Call = CallType.IdleThought,
+            Priority = CallPriority.IdleThought,
+            ColonistId = colonist.Id,
+            Work = async ct =>
+            {
+                var colony = Read((c, _) => c);
+                var (_, call) = await _mind!.ThinkAsync(colonist, colony, ct).ConfigureAwait(false);
+                Broadcast(Snapshot());
+
+                return new MindCallOutcome
+                {
+                    PromptTokens = call?.PromptTokens ?? 0,
+                    CompletionTokens = call?.CompletionTokens ?? 0,
+                    WasFallback = call is null
+                };
+            }
+        });
     }
 
     private void ApplyKindling(Colonist colonist, KindlingResult result)
@@ -293,8 +322,8 @@ public sealed class SimulationHost : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _ = Task.Run(() => KindleLoopAsync(stoppingToken), stoppingToken);
-        _ = Task.Run(() => ThinkLoopAsync(stoppingToken), stoppingToken);
+        _governor?.Start();
+        _ = Task.Run(() => ScheduleThinkingAsync(stoppingToken), stoppingToken);
 
         var timer = new PeriodicTimer(Interval);
         var last = DateTimeOffset.UtcNow;
@@ -344,7 +373,29 @@ public sealed class SimulationHost : BackgroundService
         colony.Living.Count(),
         body.ActionsCompleted,
         ClockSnapshot(),
+        GovernorSnapshot(),
         colony.Living.Select(c => ColonistDto.From(c, colony)).ToList()));
+
+    public GovernorDto? GovernorSnapshot()
+    {
+        if (_governor is null)
+        {
+            return null;
+        }
+
+        var stats = _governor.Stats();
+
+        return new GovernorDto(
+            stats.QueueDepth,
+            stats.TokensPerMinute,
+            stats.TokensInLastMinute,
+            Math.Round(stats.Pressure, 3),
+            stats.Dropped,
+            stats.Served,
+            stats.Fallbacks,
+            stats.CurrentCall,
+            stats.Throttling);
+    }
 
     public ClockDto ClockSnapshot() => new(
         Clock.Speed.ToString(),

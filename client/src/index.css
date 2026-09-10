@@ -880,3 +880,15 @@ button {
   color: var(--muted);
   font-style: italic;
 }
+
+/* ---------- governor readout ---------- */
+
+.readout.is-flag dd {
+  color: var(--flag);
+}
+
+.readout dd .of {
+  font-size: 10px;
+  color: var(--muted);
+  margin-left: 2px;
+}
