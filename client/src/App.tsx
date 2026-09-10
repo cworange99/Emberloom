@@ -99,7 +99,7 @@ export default function App() {
           <div className="readout is-mind" title="Deep-lane calls affordable per colony-day at this speed">
             <dt>Contemplation</dt>
             <dd>
-              {clock.speed === 'Paused' ? '—' : `${clock.callsPerColonyDay.toFixed(1)}/day`}
+              {clock.callsPerColonyDay === null ? '—' : `${clock.callsPerColonyDay.toFixed(1)}/day`}
             </dd>
           </div>
 

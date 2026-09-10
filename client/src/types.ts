@@ -56,7 +56,7 @@ export interface Clock {
   autoSlowOnEvent: boolean
   throttledByGovernor: boolean
   colonyDaysPerRealMinute: number
-  callsPerColonyDay: number
+  callsPerColonyDay: number | null
   sustainedCallsPerMinute: number
 }
 

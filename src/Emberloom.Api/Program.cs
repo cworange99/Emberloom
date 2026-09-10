@@ -29,7 +29,38 @@ var json = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.C
 app.UseCors();
 app.UseWebSockets();
 app.UseDefaultFiles();
-app.UseStaticFiles();
+
+// The static-file middleware refuses content types it does not know, and glTF binary is not in
+// its default map — without this every model 404s while the page itself loads fine.
+var contentTypes = new Microsoft.AspNetCore.StaticFiles.FileExtensionContentTypeProvider();
+contentTypes.Mappings[".glb"] = "model/gltf-binary";
+contentTypes.Mappings[".gltf"] = "model/gltf+json";
+
+app.UseStaticFiles(new StaticFileOptions { ContentTypeProvider = contentTypes });
+
+// The graphics spikes and the art kit are served from outside wwwroot on purpose: the client's
+// `npm run build` empties wwwroot, and hand-written spike pages living in a folder that a build
+// step deletes is a trap I have already walked into once. Both mounts are optional so a published
+// build without them still starts.
+static void MountIfPresent(WebApplication app, string relative, string requestPath,
+    Microsoft.AspNetCore.StaticFiles.IContentTypeProvider types)
+{
+    var root = Path.GetFullPath(Path.Combine(app.Environment.ContentRootPath, "..", "..", relative));
+    if (!Directory.Exists(root))
+    {
+        return;
+    }
+
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(root),
+        RequestPath = requestPath,
+        ContentTypeProvider = types,
+    });
+}
+
+MountIfPresent(app, "spikes", "/spike", contentTypes);
+MountIfPresent(app, Path.Combine("assets", "kit"), "/kit", contentTypes);
 
 var sim = app.Services.GetRequiredService<SimulationHost>();
 

@@ -105,8 +105,23 @@ public sealed record ClockDto(
     bool AutoSlowOnEvent,
     bool ThrottledByGovernor,
     double ColonyDaysPerRealMinute,
-    double CallsPerColonyDay,
-    double SustainedCallsPerMinute);
+    /// Null when paused: contemplation per colony-day is unbounded when no colony-days pass,
+    /// and infinity is not a number JSON can carry (System.Text.Json throws on it, which used
+    /// to turn the pause button into a 500).
+    double? CallsPerColonyDay,
+    double SustainedCallsPerMinute)
+{
+    public static ClockDto From(SimulationClock clock, double sustainedCallsPerMinute) => new(
+        clock.Speed.ToString(),
+        SimulationClock.Label(clock.Speed),
+        clock.AutoSlowOnEvent,
+        clock.ThrottledByGovernor,
+        Math.Round(clock.ColonyDaysPerRealMinute, 3),
+        clock.Speed == GameSpeed.Paused
+            ? null
+            : Math.Round(clock.CallsPerColonyDay(sustainedCallsPerMinute), 2),
+        sustainedCallsPerMinute);
+}
 
 /// <summary>
 /// The governor, exposed. On a game whose whole premise is local AI, how much thinking is

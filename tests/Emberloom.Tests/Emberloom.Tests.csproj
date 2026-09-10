@@ -24,6 +24,9 @@
     <ProjectReference Include="..\..\src\Emberloom.Core\Emberloom.Core.csproj" />
     <ProjectReference Include="..\..\src\Emberloom.Mind\Emberloom.Mind.csproj" />
     <ProjectReference Include="..\..\src\Emberloom.Bench\Emberloom.Bench.csproj" />
+    <!-- The API is referenced for one reason: its DTOs cross a JSON boundary, and a value
+         that is perfectly legal in C# can still be unserialisable. Core cannot see that. -->
+    <ProjectReference Include="..\..\src\Emberloom.Api\Emberloom.Api.csproj" />
   </ItemGroup>
 
 </Project>

@@ -11,9 +11,9 @@ See [DESIGN.md](DESIGN.md) for the full design. Build order and milestone status
 | Milestone | State |
 |---|---|
 | **M0** — benchmark before designing further | **Done, both profiles.** See [`bench/results/`](bench/results/). |
-| **M1** — the body, with no mind at all | **Core done.** Drives, utility scoring, city map, foraging/salvage/building/rest, relationship ledger, episodic capture, event feed, time controls. Zero model calls. HTTP/WebSocket API and React client not yet built. |
-| **M2** — governor and Kindling | **Kindling done**; governor deferred pending the local-vs-hosted decision. Printed colonists get model-written personalities and weights, and the Mind Inspector shows the model trace. |
-| M3 — memory pipeline and Reflection | Not started |
+| **M1** — the body, with no mind at all | **Done.** Drives, utility scoring, city map, foraging/salvage/building/rest, relationship ledger, episodic capture, event feed, time controls — all with zero model calls — behind an HTTP/WebSocket API, with a React client watching it. |
+| **M2** — governor and Kindling | **Done.** Printed colonists get model-written personalities and weights; the budget governor holds a rolling tokens-per-minute ceiling and slows time rather than dropping thinking. |
+| **M3** — memory pipeline and Reflection | **Done.** Episodic memories coalesce, consolidate, and produce beliefs that cite the memories they came from — walkable in the inspector. |
 | M4 — the Mind Inspector | Not started |
 | M5 — dialogue and deliberation | Not started |
 | M6 — player verbs | Not started |
@@ -26,6 +26,10 @@ src/Emberloom.Core    the body — drives, actions, world, memory, relationships
 src/Emberloom.Mind    the mind — Ollama transport, call schemas, token budgets
 src/Emberloom.Bench   M0 benchmark harness
 src/Emberloom.Sim     headless watcher for the body, and the balance sweep
+src/Emberloom.Api     HTTP/WebSocket host; also mounts spikes/ and assets/kit/
+client/               React + TypeScript client, built into the API's wwwroot
+spikes/               the 3D views — hand-written, served at /spike
+assets/               the Kenney CC0 art kits, served at /kit (see assets/README.md)
 tests/Emberloom.Tests including the day-one test that the body runs with no Ollama at all
 ```
 
@@ -120,6 +124,29 @@ The **Contemplation readout** beside the speed control is live from M1 even thou
 spending the budget yet: it reads 9.6 calls per colony-day at 1× and 0.16 at 60×, on the 4.8
 calls/min M0 measured for this machine. That is §6's arithmetic, visible before there is a
 governor to enforce it.
+
+## The 3D views
+
+Two throwaway-but-real pages, served straight from `spikes/` rather than `wwwroot` — the client
+build empties `wwwroot`, and hand-written pages should not live somewhere a build step deletes.
+They read the live colony from `/api/state`; they do not write to it.
+
+- **http://localhost:5223/spike/spike3d.html** — the city. Twelve named places among the infill
+  blocks, the forest coming back through the streets, real day/night lighting. Hovering names a
+  place; clicking a building or a colonist opens that place's interior.
+- **http://localhost:5223/spike/room.html** — one interior, cut away to two walls so nothing stands
+  between the camera and the people. Colonists play an animation matched to what they are actually
+  doing. Arriving from a colonist click marks them with a gold ring and an overhead pin.
+
+Both need the art kits in `assets/kit/`, which are **not in the repo** — see
+[`assets/README.md`](assets/README.md) for what to download and where to put it. Without them the
+pages load and stay empty; with the kits but without each kit's `Textures/` folder, every model
+renders pure white.
+
+Sizing is deliberate and differs between the views. A Kenney character is 0.67 units tall and a
+city house is 1.29, so in the city colonists are scaled 1.2× or they disappear among the buildings;
+in a room, where a chair is 0.47 and a wall 1.29, everything is drawn at true size. That is the
+whole reason the room view exists.
 
 ### Benchmarking a remote machine
 

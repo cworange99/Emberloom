@@ -1,0 +1,591 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>3D spike — What They Left Running</title>
+<style>
+  :root {
+    --ground:#131611; --surface:#191d16; --ink:#e4e8df; --muted:#8b9486;
+    --line:#272c23; --mind:#d9a441; --flag:#e0754f;
+    --mono:'JetBrains Mono',ui-monospace,Consolas,monospace;
+    --display:'Bricolage Grotesque','Segoe UI',system-ui,sans-serif;
+    color-scheme: dark;
+  }
+  * { box-sizing:border-box; }
+  html,body { height:100%; margin:0; background:var(--ground); color:var(--ink); font-family:var(--display); }
+  #app { display:grid; grid-template-rows:auto minmax(0,1fr); height:100%; }
+  header { display:flex; align-items:center; gap:16px; flex-wrap:wrap;
+    padding:9px 16px; background:var(--surface); border-bottom:1px solid var(--line); }
+  h1 { font-size:15px; margin:0; letter-spacing:-.02em; }
+  h1 span { display:block; font-family:var(--mono); font-size:9px; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--muted); font-weight:400; }
+  button, label.tog { font-family:var(--mono); font-size:10px; letter-spacing:.06em;
+    text-transform:uppercase; background:#0c0f09; color:var(--ink);
+    border:1px solid var(--line); border-radius:3px; padding:5px 10px; cursor:pointer; }
+  button[aria-pressed='true'] { background:var(--mind); border-color:var(--mind); color:#191d16; font-weight:700; }
+  .controls { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+  .note { font-family:var(--mono); font-size:10px; color:var(--muted); margin-left:auto; }
+  #view { position:relative; min-height:0; }
+  canvas { display:block; width:100%; height:100%; }
+  #loading { position:absolute; inset:0; display:grid; place-items:center;
+    font-family:var(--mono); font-size:11px; color:var(--muted); pointer-events:none; }
+  #legend { position:absolute; left:12px; bottom:10px; font-family:var(--mono); font-size:9.5px;
+    color:var(--muted); background:rgba(12,15,9,.82); border:1px solid var(--line);
+    border-radius:3px; padding:6px 10px; line-height:1.6; }
+  #legend b { color:var(--ink); }
+  #tip { position:fixed; z-index:5; pointer-events:none; font-family:var(--mono);
+    font-size:10.5px; color:var(--ink); background:rgba(12,15,9,.92);
+    border:1px solid var(--line); border-radius:3px; padding:4px 8px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>3D spike<span>low-poly · throwaway · not wired to the world model</span></h1>
+    <div class="controls">
+      <button id="iso" aria-pressed="true">isometric</button>
+      <button id="persp" aria-pressed="false">perspective</button>
+      <label class="tog"><input type="checkbox" id="night" /> night</label>
+      <label class="tog"><input type="checkbox" id="spin" /> orbit</label>
+      <label class="tog"><input type="checkbox" id="labels" checked /> labels</label>
+    </div>
+    <div class="note" id="status">loading kit…</div>
+  </header>
+  <div id="view">
+    <div id="loading">loading models…</div>
+    <div id="tip" hidden></div>
+    <div id="legend">
+      Art: <b>Kenney City Kit (Commercial) · Mini Forest · Mini Characters</b> — CC0.<br />
+      Drag to orbit · scroll to zoom. Colonists are live from the running colony.<br />
+      <b>Click a building or a colonist</b> to go inside.
+    </div>
+  </div>
+</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.161.0/examples/jsm/"
+} }
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
+
+const view = document.getElementById('view');
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+view.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+
+// --- the city, on a grid ---------------------------------------------------
+// Same twelve places as the real map. Positions are in grid units; the whole
+// point of a modular kit is that everything snaps to this, which is also what
+// the real tile-grid world model will want.
+// Grid unit. Measured, not guessed: a city building is about 1.0 wide and 1.3 tall,
+// so spacing places 4 units apart left them as specks in a field and forced the
+// camera so far back that colonists disappeared. Two units puts buildings on a
+// block with a street between them.
+const U = 2;
+const PLACES = [
+  { id:'plaza',         name:'The Cracked Plaza',  gx: 0, gz: 0, kind:'plaza'  },
+  { id:'loom',          name:'The Loom Floor',     gx:-4, gz: 1, kind:'loom'   },
+  { id:'shelter-east',  name:'East Shelter',       gx: 4, gz:-2, kind:'house'  },
+  { id:'shelter-under', name:'The Underhouse',     gx:-2, gz:-4, kind:'house'  },
+  { id:'orchard',       name:'The Orchard Street', gx: 5, gz: 3, kind:'grove'  },
+  { id:'green-roof',    name:'The Green Roof',     gx: 3, gz: 6, kind:'grove'  },
+  { id:'river-edge',    name:'The River Edge',     gx:-6, gz: 4, kind:'grove'  },
+  { id:'market-hall',   name:'The Market Hall',    gx: 2, gz:-5, kind:'ruin'   },
+  { id:'substation',    name:'The Substation',     gx:-6, gz:-2, kind:'ruin'   },
+  { id:'tower-lobby',   name:'Tower Lobby',        gx: 0, gz: 4, kind:'tower'  },
+  { id:'east-stair',    name:'The East Stairwell', gx:-3, gz: 7, kind:'sealed' },
+  { id:'ninth-floor',   name:'The Ninth Floor',    gx:-5, gz: 9, kind:'sealed' },
+];
+const byId = Object.fromEntries(PLACES.map(p => [p.id, p]));
+
+const LINKS = [
+  ['plaza','loom'],['plaza','shelter-east'],['plaza','shelter-under'],['plaza','orchard'],
+  ['plaza','market-hall'],['plaza','tower-lobby'],['loom','substation'],['loom','river-edge'],
+  ['orchard','green-roof'],['market-hall','shelter-east'],['tower-lobby','green-roof'],
+  ['tower-lobby','east-stair'],['east-stair','ninth-floor'],
+];
+
+// Which model stands for which kind of place. The tower is a skyscraper on
+// purpose: the ninth floor is a plot point, so height has to be visible.
+const MODEL = {
+  loom:   ['/kit/city/building-e.glb'],
+  house:  ['/kit/city/building-a.glb', '/kit/city/building-c.glb'],
+  ruin:   ['/kit/city/building-h.glb', '/kit/city/building-k.glb'],
+  tower:  ['/kit/city/building-skyscraper-b.glb'],
+  sealed: ['/kit/city/building-skyscraper-d.glb'],
+};
+const TREES = ['/kit/forest/tree.glb', '/kit/forest/tree-high.glb', '/kit/forest/plant.glb'];
+const ROCKS = ['/kit/forest/rocks-low.glb', '/kit/forest/stones.glb'];
+const FOLK = ['a','b','c','d','e','f'].flatMap(s =>
+  [`/kit/folk/character-male-${s}.glb`, `/kit/folk/character-female-${s}.glb`]);
+
+// --- lighting --------------------------------------------------------------
+const hemi = new THREE.HemisphereLight(0xdfe8d8, 0x2a331f, 1.0);
+scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xfff2d8, 2.2);
+sun.position.set(18, 26, 12);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+const d = 20;
+Object.assign(sun.shadow.camera, { left:-d, right:d, top:d, bottom:-d, near:1, far:90 });
+scene.add(sun);
+
+// Ground: the forest floor the city is standing in.
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(160, 160),
+  new THREE.MeshLambertMaterial({ color: 0x4a6b3f })
+);
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+// Streets, drawn as slabs along the real adjacencies.
+const roadMat = new THREE.MeshLambertMaterial({ color: 0x5d5f56 });
+LINKS.forEach(([a, b]) => {
+  const A = byId[a], B = byId[b];
+  const ax = A.gx * U, az = A.gz * U, bx = B.gx * U, bz = B.gz * U;
+  const mkRoad = (x1, z1, x2, z2) => {
+    const len = Math.hypot(x2 - x1, z2 - z1) + 0.9;
+    const geo = new THREE.BoxGeometry(len, 0.04, 0.9);
+    const m = new THREE.Mesh(geo, roadMat);
+    m.position.set((x1 + x2) / 2, 0.02, (z1 + z2) / 2);
+    m.rotation.y = -Math.atan2(z2 - z1, x2 - x1);
+    m.receiveShadow = true;
+    scene.add(m);
+  };
+  // Two legs, so streets stay orthogonal like a city rather than cutting across.
+  mkRoad(ax, az, bx, az);
+  mkRoad(bx, az, bx, bz);
+});
+
+// --- loading ---------------------------------------------------------------
+const loader = new GLTFLoader();
+const cache = new Map();
+
+function loadFull(url) {
+  if (!cache.has(url)) {
+    cache.set(url, new Promise((res, rej) => loader.load(url, res, undefined, rej)));
+  }
+  return cache.get(url);
+}
+
+const load = (url) => loadFull(url).then(g => g.scene);
+
+function prepare(obj, { scale = 1, y = 0 } = {}) {
+  const o = obj.clone(true);
+  o.scale.setScalar(scale);
+  o.traverse(n => { if (n.isMesh) { n.castShadow = true; n.receiveShadow = true; } });
+  o.position.y = y;
+  return o;
+}
+
+const rand = (seed) => { const x = Math.sin(seed * 127.1) * 43758.5453; return x - Math.floor(x); };
+
+const labelSprites = [];
+
+function makeLabel(text, colour) {
+  const c = document.createElement('canvas');
+  const ctx = c.getContext('2d');
+  ctx.font = 'bold 34px Consolas, monospace';
+  c.width = ctx.measureText(text).width + 24; c.height = 48;
+  const g = c.getContext('2d');
+  g.font = 'bold 34px Consolas, monospace';
+  g.fillStyle = 'rgba(10,14,8,0.82)';
+  g.fillRect(0, 0, c.width, c.height);
+  g.fillStyle = colour;
+  g.textBaseline = 'middle';
+  g.fillText(text, 12, c.height / 2);
+
+  const tex = new THREE.CanvasTexture(c);
+  tex.minFilter = THREE.LinearFilter;
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false }));
+  sprite.scale.set(c.width / 115, c.height / 115, 1);
+  labelSprites.push(sprite);
+  return sprite;
+}
+
+const colonistGroup = new THREE.Group();
+scene.add(colonistGroup);
+let folkGltfs = [];
+const mixers = [];
+
+async function build() {
+  // Places
+  for (const p of PLACES) {
+    const choices = MODEL[p.kind] ?? MODEL.house;
+    const url = choices[Math.floor(rand(p.gx * 31 + p.gz * 17) * choices.length)];
+    const gltf = await load(url);
+
+    const scale = 1;
+    if (p.kind !== 'grove' && p.kind !== 'plaza') {
+      const m = prepare(gltf, { scale });
+      m.position.set(p.gx * U, 0, p.gz * U);
+      m.rotation.y = Math.floor(rand(p.gx + p.gz * 3) * 4) * Math.PI / 2;
+      scene.add(m);
+      makePickable(m, p);
+    }
+
+    // The plaza is open ground: a paved square with a few parasols still standing,
+    // which is also the one place in the city with room to stand around in.
+    if (p.kind === 'plaza') {
+      const slab = new THREE.Mesh(
+        new THREE.BoxGeometry(3.4, 0.06, 3.4),
+        new THREE.MeshLambertMaterial({ color: 0x6c6f64 }));
+      slab.position.set(p.gx * U, 0.03, p.gz * U);
+      slab.receiveShadow = true;
+      scene.add(slab);
+      makePickable(slab, p);
+
+      const parasols = await Promise.all(
+        ['detail-parasol-a', 'detail-parasol-b'].map(n => load(`/kit/city/${n}.glb`)));
+      for (let i = 0; i < 4; i++) {
+        const u = prepare(parasols[i % parasols.length]);
+        u.position.set(p.gx * U + (rand(i * 4 + 1) - 0.5) * 2.6, 0.06,
+                       p.gz * U + (rand(i * 8 + 3) - 0.5) * 2.6);
+        u.rotation.y = rand(i * 6) * Math.PI * 2;
+        scene.add(u);
+      }
+    }
+
+    // A grove is trees rather than a building.
+    if (p.kind === 'grove') {
+      const tree = await load(TREES[0]);
+      for (let i = 0; i < 6; i++) {
+        const t = prepare(tree, { scale: 0.85 });
+        makePickable(t, p);
+        t.position.set(p.gx * U + (rand(i * 3 + p.gx) - 0.5) * 2.6, 0, p.gz * U + (rand(i * 7 + p.gz) - 0.5) * 2.6);
+        scene.add(t);
+      }
+    }
+
+    // A sealed way gets rubble at its foot — you can see it is shut.
+    if (p.kind === 'sealed') {
+      const rock = await load(ROCKS[0]);
+      for (let i = 0; i < 4; i++) {
+        const r = prepare(rock, { scale: 1.4 });
+        r.position.set(p.gx * U + (rand(i * 5) - 0.5) * 1.8, 0, p.gz * U + 1.1 + (rand(i * 9) - 0.5) * 0.9);
+        scene.add(r);
+      }
+    }
+
+    const label = makeLabel(p.name, p.kind === 'sealed' ? '#e0754f' : '#e8ecdf');
+    // Buildings are 1.3 tall and the towers 4.5; the label rides just above whichever.
+    label.position.set(p.gx * U, p.kind === 'tower' || p.kind === 'sealed' ? 5.4 : 2.3, p.gz * U);
+    scene.add(label);
+  }
+
+  // Infill. Twelve named places alone read as monuments in a field; a city is
+  // mostly buildings nobody has a reason to mention. These are scenery — the
+  // simulation knows nothing about them.
+  const filler = await Promise.all([
+    'building-b', 'building-d', 'building-f', 'building-g', 'building-i',
+    'building-j', 'building-l', 'building-m', 'building-n',
+    'low-detail-building-wide-a', 'low-detail-building-wide-b',
+  ].map(n => load(`/kit/city/${n}.glb`)));
+
+  for (let gx = -8; gx <= 8; gx++) {
+    for (let gz = -7; gz <= 11; gz++) {
+      const x = gx * U, z = gz * U;
+      if (PLACES.some(p => Math.abs(p.gx - gx) <= 1 && Math.abs(p.gz - gz) <= 1)) continue;
+
+      const n = rand(gx * 37 + gz * 91);
+      if (n > 0.42) continue;                       // leave gaps: the forest took some
+
+      // Keep the streets clear so the layout still reads.
+      const onStreet = LINKS.some(([a, b]) => {
+        const A = byId[a], B = byId[b];
+        return (gz === A.gz && gx >= Math.min(A.gx, B.gx) && gx <= Math.max(A.gx, B.gx))
+            || (gx === B.gx && gz >= Math.min(A.gz, B.gz) && gz <= Math.max(A.gz, B.gz));
+      });
+      if (onStreet) continue;
+
+      const m = prepare(filler[Math.floor(n * 1000) % filler.length]);
+      m.position.set(x, 0, z);
+      m.rotation.y = Math.floor(rand(gx + gz * 5) * 4) * Math.PI / 2;
+      scene.add(m);
+    }
+  }
+
+  // The forest, coming back up through everything.
+  const treeModels = await Promise.all(TREES.map(load));
+  // The forest is coming back through the streets, not swallowing them: at 1.68
+  // native a tree already out-tops a house, so keep them under a storey and thin
+  // enough that the city still reads as the subject.
+  for (let i = 0; i < 130; i++) {
+    const x = (rand(i * 1.7) - 0.5) * 40;
+    const z = (rand(i * 2.3 + 5) - 0.5) * 40 + 4;
+    // Keep the named places clear.
+    if (PLACES.some(p => Math.hypot(p.gx * U - x, p.gz * U - z) < 2.2)) continue;
+    const t = prepare(treeModels[i % treeModels.length], { scale: 0.5 + rand(i) * 0.35 });
+    t.position.set(x, 0, z);
+    t.rotation.y = rand(i * 11) * Math.PI * 2;
+    scene.add(t);
+  }
+
+  folkGltfs = await Promise.all(FOLK.map(loadFull));
+  document.getElementById('loading').remove();
+  poll();
+  setInterval(poll, 2000);
+}
+
+// --- colonists -------------------------------------------------------------
+// A character is 0.67 tall and a house 1.29, so a colonist drawn true to size is
+// half a storey — legible, but easy to lose among the infill at this camera
+// distance. A modest lift reads as someone standing outside their own front door;
+// 1.5x turned out to be King Kong against a one-storey shelter, so 1.2x it is —
+// a head and shoulders over the door, well under the eaves, and still a speck
+// beside the tower, which is the point of the tower. The room view draws the same
+// models at true size, so nothing here leaks into that.
+const CITY_FOLK_SCALE = 1.2;
+
+function placeColonists(list) {
+  colonistGroup.clear();
+  mixers.length = 0;
+  pickable = pickable.filter(e => e.kind !== 'colonist');
+
+  // How many are already standing at each place, so two colonists sharing a
+  // doorway do not share a spot.
+  const seen = new Map();
+
+  list.forEach((c) => {
+    const p = byId[c.placeId] ?? byId.plaza;
+    const gltf = folkGltfs[Math.abs(hash(c.id)) % folkGltfs.length];
+    if (!gltf) return;
+
+    const n = seen.get(p.id) ?? 0;
+    seen.set(p.id, n + 1);
+
+    const a = n * 1.9 + Math.abs(hash(p.id)) * 0.001;
+    const person = cloneSkinned(gltf.scene);
+    person.scale.setScalar(CITY_FOLK_SCALE);
+    person.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    person.position.set(p.gx * U + Math.cos(a) * 0.82, 0, p.gz * U + Math.sin(a) * 0.82 + 1.0);
+    person.rotation.y = -a + Math.PI;
+    colonistGroup.add(person);
+
+    // Standing still, eight identical figures read as bollards. One clip each,
+    // started at a different moment, and they read as people busy with something.
+    const clip = gltf.animations.find(x => x.name === (ANIMATION_FOR[c.doing] ?? 'idle'))
+              ?? gltf.animations.find(x => x.name === 'idle');
+    if (clip) {
+      const mixer = new THREE.AnimationMixer(person);
+      mixer.clipAction(clip).play();
+      mixer.setTime(rand(Math.abs(hash(c.id))) * 3);
+      mixers.push(mixer);
+    }
+
+    registerPick(person, {
+      kind: 'colonist', placeId: p.id, who: c.id,
+      label: (c.name ?? c.id) + ' — ' + p.name,
+    });
+  });
+}
+
+// Which clip suits what someone is doing. The same map the room view uses; a
+// colonist swinging at rubble outside the Substation is worth the two lines.
+const ANIMATION_FOR = {
+  Rest: 'sit', Talk: 'emote-yes', Teach: 'interact-right', Forage: 'pick-up',
+  Salvage: 'interact-right', Clear: 'attack-melee-right', Build: 'interact-right',
+  Tend: 'interact-left', Wander: 'walk',
+};
+
+// --- clicking through to the interior ---------------------------------------
+// The city answers "where is everyone"; the room answers "what are they doing".
+// Clicking a building or a colonist is the seam between the two, and it is the
+// cheapest possible version of it: a link carrying a place id. No shared state.
+let pickable = [];
+
+function registerPick(root, entry) {
+  root.traverse(o => { if (o.isMesh) o.userData.pick = entry; });
+  pickable.push({ ...entry, root });
+}
+
+const makePickable = (root, place) =>
+  registerPick(root, { kind: 'place', placeId: place.id, label: place.name });
+
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+const tip = document.getElementById('tip');
+
+function hitAt(event) {
+  const r = renderer.domElement.getBoundingClientRect();
+  pointer.set(((event.clientX - r.left) / r.width) * 2 - 1,
+              -((event.clientY - r.top) / r.height) * 2 + 1);
+  raycaster.setFromCamera(pointer, camera);
+  // Colonists first: someone standing against a wall should win the click over
+  // the wall behind them.
+  const roots = pickable.filter(e => e.kind === 'colonist').map(e => e.root)
+    .concat(pickable.filter(e => e.kind === 'place').map(e => e.root));
+  for (const hit of raycaster.intersectObjects(roots, true)) {
+    if (hit.object.userData.pick) return hit.object.userData.pick;
+  }
+  return null;
+}
+
+renderer.domElement.addEventListener('pointermove', e => {
+  const hit = hitAt(e);
+  renderer.domElement.style.cursor = hit ? 'pointer' : 'default';
+  if (hit) {
+    tip.textContent = hit.kind === 'colonist' ? hit.label : hit.label + ' — look inside';
+    tip.style.left = (e.clientX + 14) + 'px';
+    tip.style.top = (e.clientY + 14) + 'px';
+    tip.hidden = false;
+  } else {
+    tip.hidden = true;
+  }
+});
+
+renderer.domElement.addEventListener('pointerleave', () => { tip.hidden = true; });
+
+// OrbitControls swallows drags, so a click is told from an orbit by how far the
+// pointer travelled rather than by trusting a bare 'click' event.
+let down = null;
+renderer.domElement.addEventListener('pointerdown', e => (down = { x: e.clientX, y: e.clientY }));
+renderer.domElement.addEventListener('pointerup', e => {
+  if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 5) { down = null; return; }
+  down = null;
+  const hit = hitAt(e);
+  if (!hit) return;
+  // Clicking a person carries who it was, so the room opens with them picked out
+  // of the crowd rather than leaving you to work out which one you meant.
+  location.href = 'room.html?place=' + encodeURIComponent(hit.placeId)
+    + (hit.who ? '&who=' + encodeURIComponent(hit.who) : '');
+});
+
+function hash(s) { let h = 0; for (const ch of s) h = (h * 31 + ch.charCodeAt(0)) | 0; return h; }
+
+let nightOverridden = false;
+
+async function poll() {
+  try {
+    const r = await fetch('/api/state');
+    if (!r.ok) throw new Error();
+    const s = await r.json();
+    placeColonists(s.colonists.map(c => ({
+      id: c.id, name: c.displayName, placeId: c.placeId, doing: c.doing })));
+    if (!nightOverridden) setNight(s.isNight);
+    document.getElementById('status').textContent =
+      `live · day ${s.day.toFixed(1)} · ${s.colonists.length} colonists`;
+  } catch {
+    placeColonists(Array.from({ length: 8 }, (_, i) => ({
+      id: `c0${i + 1}`, name: `C-0${i + 1}`, doing: 'Wander',
+      placeId: PLACES[i % PLACES.length].id })));
+    document.getElementById('status').textContent = 'no colony running · demo layout';
+  }
+}
+
+function setNight(on) {
+  document.getElementById('night').checked = on;
+  // Night is real lighting rather than a tint over the top, which is most of
+  // the argument for going 3D at all.
+  sun.intensity = on ? 0.35 : 2.2;
+  sun.color.set(on ? 0x9fb4e8 : 0xfff2d8);
+  hemi.intensity = on ? 0.35 : 1.0;
+  hemi.color.set(on ? 0x2a3350 : 0xdfe8d8);
+  scene.background = new THREE.Color(on ? 0x0d1119 : 0x8fb8d8);
+  scene.fog = new THREE.Fog(on ? 0x0d1119 : 0x8fb8d8, 60, 150);
+}
+
+// --- camera ----------------------------------------------------------------
+// Half-height of the orthographic view, in world units. Small enough that the
+// city fills the frame rather than sitting in a field.
+let FRUSTUM = 9;
+let camera, controls;
+window.frame_ = (f) => { FRUSTUM = f; makeCamera(camera.isOrthographicCamera); resize(); };
+// Debug hook: drop the camera on a named place. Handy while tuning scale.
+window.look_ = (id) => {
+  const p = byId[id]; if (!p) return;
+  const t = new THREE.Vector3(p.gx * U, 0.6, p.gz * U);
+  controls.target.copy(t);
+  camera.position.set(t.x + 8, t.y + 7, t.z + 9);
+  controls.update();
+};
+function makeCamera(isometric) {
+  const w = view.clientWidth, h = view.clientHeight;
+  const target = new THREE.Vector3(0, 0, 4);
+
+  if (isometric) {
+    const f = FRUSTUM, aspect = w / h;
+    camera = new THREE.OrthographicCamera(-f * aspect, f * aspect, f, -f, 0.1, 400);
+  } else {
+    camera = new THREE.PerspectiveCamera(38, w / h, 0.1, 400);
+  }
+
+  camera.position.set(17, 15, 19);
+  if (controls) controls.dispose();
+  controls = new OrbitControls(camera, renderer.domElement);
+  controls.target.copy(target);
+  controls.enableDamping = true;
+  controls.maxPolarAngle = Math.PI / 2.15;
+  controls.update();
+}
+
+function resize() {
+  const w = view.clientWidth, h = view.clientHeight;
+  renderer.setSize(w, h);
+  if (camera.isOrthographicCamera) {
+    const f = FRUSTUM, aspect = w / h;
+    Object.assign(camera, { left: -f * aspect, right: f * aspect, top: f, bottom: -f });
+  } else camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+
+makeCamera(true);
+setNight(false);
+resize();
+addEventListener('resize', resize);
+
+// The pane's size is not settled on the first frame, and a canvas sized from a
+// stale layout stays that size forever. Watching the container is the reliable fix.
+new ResizeObserver(resize).observe(view);
+
+document.getElementById('iso').onclick = () => switchCam(true);
+document.getElementById('persp').onclick = () => switchCam(false);
+function switchCam(iso) {
+  document.getElementById('iso').setAttribute('aria-pressed', String(iso));
+  document.getElementById('persp').setAttribute('aria-pressed', String(!iso));
+  makeCamera(iso); resize();
+}
+document.getElementById('night').onchange = e => { nightOverridden = true; setNight(e.target.checked); };
+document.getElementById('labels').onchange = e =>
+  labelSprites.forEach(s => (s.visible = e.target.checked));
+
+let spinning = false;
+document.getElementById('spin').onchange = e => (spinning = e.target.checked);
+
+const animClock = new THREE.Clock();
+
+function frame() {
+  requestAnimationFrame(frame);
+  const dt = animClock.getDelta();
+  for (const m of mixers) m.update(dt);
+  if (spinning) {
+    const t = performance.now() * 0.00012;
+    camera.position.x = Math.cos(t) * 70;
+    camera.position.z = Math.sin(t) * 70 + 8;
+    camera.lookAt(0, 0, 8);
+  }
+  controls.update();
+  renderer.render(scene, camera);
+}
+frame();
+// Layout settles after the first paint; size once more so the canvas fills the pane.
+requestAnimationFrame(resize);
+build().catch(e => {
+  document.getElementById('loading').textContent = 'failed to load kit: ' + e.message;
+});
+</script>
+</body>
+</html>

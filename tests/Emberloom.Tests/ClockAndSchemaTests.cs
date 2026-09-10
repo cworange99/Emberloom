@@ -45,6 +45,30 @@ public class ClockTests
         Assert.Equal(0, clock.ColonyDaysPerRealMinute);
     }
 
+    /// <summary>
+    /// Contemplation-per-colony-day is unbounded while paused, and CallsPerColonyDay says so with
+    /// PositiveInfinity. That is the honest answer in C# and an unserialisable one in JSON —
+    /// System.Text.Json throws on it — so the pause button used to return a 500 and freeze the
+    /// client on its last state. The DTO carries null instead, and this is the regression guard.
+    /// </summary>
+    [Fact]
+    public void PausedClockStillSerialises()
+    {
+        var clock = new SimulationClock();
+        clock.SetSpeed(GameSpeed.Paused);
+        Assert.True(double.IsPositiveInfinity(clock.CallsPerColonyDay(4.8)));
+
+        var json = System.Text.Json.JsonSerializer.Serialize(Emberloom.Api.ClockDto.From(clock, 4.8));
+        Assert.Contains("\"CallsPerColonyDay\":null", json);
+
+        // And the running case still carries a number, so the guard did not just blank the field.
+        clock.SetSpeed(GameSpeed.Normal);
+        var running = Emberloom.Api.ClockDto.From(clock, 4.8);
+        Assert.NotNull(running.CallsPerColonyDay);
+        Assert.True(running.CallsPerColonyDay > 0);
+        System.Text.Json.JsonSerializer.Serialize(running);
+    }
+
     [Fact]
     public void GovernorCanSlowTheSimulationAndGiveTheSpeedBack()
     {

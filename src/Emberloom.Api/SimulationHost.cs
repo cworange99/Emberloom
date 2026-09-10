@@ -397,14 +397,7 @@ public sealed class SimulationHost : BackgroundService
             stats.Throttling);
     }
 
-    public ClockDto ClockSnapshot() => new(
-        Clock.Speed.ToString(),
-        SimulationClock.Label(Clock.Speed),
-        Clock.AutoSlowOnEvent,
-        Clock.ThrottledByGovernor,
-        Math.Round(Clock.ColonyDaysPerRealMinute, 3),
-        Math.Round(Clock.CallsPerColonyDay(SustainedCallsPerMinute), 2),
-        SustainedCallsPerMinute);
+    public ClockDto ClockSnapshot() => ClockDto.From(Clock, SustainedCallsPerMinute);
 
     // ---- subscribers ------------------------------------------------------
 

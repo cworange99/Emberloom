@@ -320,12 +320,33 @@ verb could be added behind a setting without touching the architecture.
 ## 11. Stack & Morpheus reuse
 
 Headless **.NET 8** simulation service behind HTTP + WebSocket, and a **React/TypeScript** client.
-Persistence is **SQLite + sqlite-vec**: single file, no Docker, no Postgres. Presentation is a
-stylised top-down 2D canvas (PixiJS).
+Persistence is **SQLite + sqlite-vec**: single file, no Docker, no Postgres.
 
-The reasoning over Unity: this game's best screen is a dense reading interface. The de-risking move
-is that **the simulation is headless behind an API from day one**, so the presentation choice stays
-reversible.
+Presentation is **low-poly 3D in Three.js**, on an orthographic isometric camera, built from
+Kenney's CC0 kits. This replaces the original plan of a stylised 2D canvas in PixiJS. The 2D
+version was built and rejected on sight: tiles that do not quite line up read as a worse version
+of a 1987 game rather than a stylised one, and the thing that actually sells a colony — being able
+to see somebody in a room doing something — is exactly what a top-down tile grid hides. Low-poly 3D
+turns out to be *less* work for a better result, because the art is a solved problem the moment you
+stop drawing it yourself, and because real lighting gives you day and night for free.
+
+Two views, and the pair is the point:
+
+- **City.** The whole map, twelve named places among the blocks and the forest coming back through
+  the streets. Answers *where is everyone*. Colonists are drawn a little oversized here (1.2×) or
+  they vanish among the buildings.
+- **Room.** One interior, cut away — two walls only, so nothing stands between the camera and the
+  people. A multi-storey building shows only the floor that matters; the Ninth Floor is somewhere
+  you go, not a level you scroll through. Answers *what are they doing*. Everything is drawn at true
+  size in here, which is what makes the city's fudge affordable.
+
+Clicking a building or a colonist in the city opens that place's room. That link carries a place id
+and nothing else, so the seam between the views holds no state.
+
+The reasoning over Unity: this game's best screen is a dense reading interface, and Three.js sits
+beside one rather than replacing it. The de-risking move is unchanged — **the simulation is headless
+behind an API from day one**, so the presentation choice stays reversible, and swapping PixiJS for
+Three.js without touching a line of `Emberloom.Core` is the proof.
 
 | From Morpheus | Take it? | Notes |
 |---|---|---|
@@ -373,6 +394,7 @@ watchable — on its own.
 | **Time** | Fully player-controlled, with the thinking budget as the natural cost of speed, and forks protected from being skipped. |
 | **Setting** | The Loom in a reclaimed city. Printed minds kept as the mechanic. |
 | **Hardware** | RTX 5070 is the target. The laptop is a development floor; whether it becomes a supported play profile is an M4 decision. |
+| **Presentation** | **Low-poly 3D in Three.js**, decided 9 September 2026 after a 2D tile spike was built and rejected. Kenney CC0 kits now, custom art later if the game earns it. Two views — city and cutaway room — with click-through between them. §11 has the reasoning. |
 | **Inference** | **Hosted**, decided 8 September 2026 — with `Mind:Endpoint` defaulting to `http://127.0.0.1:11434`, so purely local play is the default value rather than a separate build. This costs almost nothing *provided* the golden rule in [CLAUDE.md](CLAUDE.md) holds: every mind call is self-contained, and the server holds no colony state. Retrieval is the likeliest place to break it — embeddings may be computed remotely, but the index stays local. |
 
 ### Deferred, each with a decision point

@@ -25,3 +25,8 @@ Thumbs.db
 
 # Client build output, generated into the API by `npm run build`
 src/Emberloom.Api/wwwroot/
+
+# The Kenney CC0 art kits, ~10MB of GLB. Served from here rather than wwwroot because
+# `npm run build` empties wwwroot. Whether these get committed or fetched by a script is
+# still open — see assets/kit/README.md.
+assets/kit/
