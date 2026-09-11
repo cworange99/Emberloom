@@ -27,10 +27,13 @@ public static class CallBudgets
         // model; 384 clears the longest observed completion.
         [CallType.Kindling] = 384,
 
-        // Design said ~200. Measured: truncated at 200 on every run of every model — the
+        // Design said ~200. Measured at M0: truncated at 200 on every run of every model — the
         // consolidated memory, up to two source-linked beliefs, a relationship note and seven
-        // drift values simply do not fit. This is the cap the design got most wrong.
-        [CallType.Reflection] = 448,
+        // drift values simply do not fit. This is the cap the design got most wrong. Raised to 448
+        // then, and again after M4, when the inspector's trace showed 12 of 92 live reflections on
+        // the laptop stopping at exactly 448 and being thrown away after ~71 s of CPU each. A live
+        // batch of twelve memories writes longer than the benchmark's shapes did.
+        [CallType.Reflection] = 576,
 
         // Design said ~40. Measured 22–39, so 40 is marginal. 64 costs almost nothing on the
         // fast lane and removes the truncation risk entirely.

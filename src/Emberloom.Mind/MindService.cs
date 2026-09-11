@@ -33,6 +33,9 @@ public sealed class MindService : IDisposable
 
     public OllamaClient Client => _client;
 
+    /// <summary>How much a belief's confidence rises when a later reflection arrives at it again.</summary>
+    private const double ReinforcementLift = 0.05;
+
     /// <summary>
     /// Runs a write-back against the colony. Inference happens on the mind's own thread, but what it
     /// writes lands in state the tick loop mutates and the API reads, so the host supplies its lock
@@ -204,12 +207,6 @@ public sealed class MindService : IDisposable
         // vectors first is safe.
         await EmbedAsync(consolidated, beliefs, ct).ConfigureAwait(false);
 
-        var produced = result.FromModel
-            ? Describe(beliefs.Count, batch.Count, result.WeightDrift.Count)
-            : "fallback stub — the mind was unavailable";
-
-        var producedIds = beliefs.Select(b => b.Id).Prepend(consolidated.Id).ToList();
-
         Commit(() =>
         {
             colonist.Memory.Add(consolidated);
@@ -221,9 +218,36 @@ public sealed class MindService : IDisposable
                 memory.Consolidated = true;
             }
 
+            // A claim this mind already holds reinforces the belief it restates instead of sitting
+            // beside it as a second conviction. Measured at M4: one mind in a laptop colony held
+            // "Trust is earned through actions, not just interactions" and "…not just presence" as
+            // two beliefs. What counts as a restatement is calibrated, and deliberately strict — see
+            // BeliefSimilarity. The held belief keeps its
+            // id and wording, so every chain already pointing at it still resolves; it gains the
+            // new sources, a little confidence, and a record of which call came back to it.
+            var formed = new List<Belief>();
+            var reinforced = new List<Belief>();
+
             foreach (var belief in beliefs)
             {
-                colonist.Memory.Add(belief);
+                var held = colonist.Memory.Beliefs.FirstOrDefault(b => BeliefSimilarity.Restates(belief, b));
+
+                if (held is null)
+                {
+                    colonist.Memory.Add(belief);
+                    formed.Add(belief);
+                    continue;
+                }
+
+                var stronger = held with
+                {
+                    SourceMemoryIds = held.SourceMemoryIds.Union(belief.SourceMemoryIds).ToList(),
+                    Confidence = Math.Min(1.0, Math.Max(held.Confidence, belief.Confidence) + ReinforcementLift),
+                    ReinforcedByCallIds = held.ReinforcedByCallIds.Append(callId).ToList()
+                };
+
+                colonist.Memory.Replace(held, stronger);
+                reinforced.Add(stronger);
             }
 
             // Weight drift is the second place a model call permanently changes behaviour, after
@@ -247,15 +271,29 @@ public sealed class MindService : IDisposable
                 }
             }
 
+            var produced = result.FromModel
+                ? Describe(formed.Count, reinforced.Count, batch.Count, result.WeightDrift.Count)
+                : "fallback stub — the mind was unavailable";
+
             colonist.RecordCall(Record(
                 callId, "Reflection", "deep", colony, result.Call, produced,
-                wasFallback: !result.FromModel, producedIds: producedIds));
+                wasFallback: !result.FromModel,
+                producedIds: formed.Concat(reinforced).Select(b => b.Id).Prepend(consolidated.Id).ToList()));
 
-            foreach (var belief in beliefs)
+            foreach (var belief in formed)
             {
                 colony.Log(EventLayer.Mind,
                     $"{colonist.DisplayName} came to believe: “{belief.Claim}”",
                     colonist, notable: true);
+            }
+
+            // Worth a line, not a flag: holding something more firmly is quieter than coming to
+            // believe it.
+            foreach (var belief in reinforced)
+            {
+                colony.Log(EventLayer.Mind,
+                    $"{colonist.DisplayName} holds it more firmly now: “{belief.Claim}”",
+                    colonist);
             }
         });
     }
@@ -293,13 +331,18 @@ public sealed class MindService : IDisposable
         }
     }
 
-    private static string Describe(int beliefs, int sources, int drifted)
+    private static string Describe(int formed, int reinforced, int sources, int drifted)
     {
         var parts = new List<string> { $"1 consolidated memory from {sources} episodic rows" };
 
-        if (beliefs > 0)
+        if (formed > 0)
         {
-            parts.Add($"{beliefs} belief{(beliefs == 1 ? "" : "s")}");
+            parts.Add($"{formed} new belief{(formed == 1 ? "" : "s")}");
+        }
+
+        if (reinforced > 0)
+        {
+            parts.Add($"{reinforced} belief{(reinforced == 1 ? "" : "s")} reinforced");
         }
 
         if (drifted > 0)

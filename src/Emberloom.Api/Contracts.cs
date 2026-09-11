@@ -109,9 +109,14 @@ public sealed record ClockDto(
     /// and infinity is not a number JSON can carry (System.Text.Json throws on it, which used
     /// to turn the pause button into a 500).
     double? CallsPerColonyDay,
-    double SustainedCallsPerMinute)
+    double SustainedCallsPerMinute,
+    bool ThroughputMeasured)
 {
-    public static ClockDto From(SimulationClock clock, double sustainedCallsPerMinute) => new(
+    /// <param name="measured">
+    /// Whether the calls-per-minute figure comes from calls this machine actually served rather
+    /// than the benchmark. The readout says which, because on the laptop they differ by four times.
+    /// </param>
+    public static ClockDto From(SimulationClock clock, double sustainedCallsPerMinute, bool measured = false) => new(
         clock.Speed.ToString(),
         SimulationClock.Label(clock.Speed),
         clock.AutoSlowOnEvent,
@@ -120,7 +125,8 @@ public sealed record ClockDto(
         clock.Speed == GameSpeed.Paused
             ? null
             : Math.Round(clock.CallsPerColonyDay(sustainedCallsPerMinute), 2),
-        sustainedCallsPerMinute);
+        sustainedCallsPerMinute,
+        measured);
 }
 
 /// <summary>
@@ -249,7 +255,9 @@ public sealed record BeliefRowDto(
     int RecallCount,
     bool ContradictsColonyMyth,
     IReadOnlyList<MemoryRowDto> Sources,
-    string? FormedByCallId);
+    string? FormedByCallId,
+    int Reinforcements,
+    string? LastReinforcedByCallId);
 
 public sealed record RelationshipRowDto(string TowardId, string TowardName, double Affinity, double Trust, double Respect, int SharedMemories, string Stage, string? Narrative);
 

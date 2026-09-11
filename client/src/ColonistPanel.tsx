@@ -441,6 +441,7 @@ function BeliefsTab({ detail, links }: { detail: ColonistDetail; links: Links })
                 <>
                   formed d{belief.formedOnDay.toFixed(1)} · confidence {belief.confidence.toFixed(2)}
                   {belief.recallCount > 0 && ` · recalled ${belief.recallCount}×`}
+                  {belief.reinforcements > 0 && ' · reinforced ' + belief.reinforcements + '×'}
                   {belief.contradictsColonyMyth && (
                     <>
                       {' · '}
@@ -451,6 +452,7 @@ function BeliefsTab({ detail, links }: { detail: ColonistDetail; links: Links })
               }
               sources={belief.sources}
               formedBy={belief.formedByCallId}
+              reinforcedBy={belief.lastReinforcedByCallId}
               trace={detail.trace}
               links={links}
               emphasis
@@ -747,6 +749,7 @@ function Chain({
   meta,
   sources,
   formedBy,
+  reinforcedBy = null,
   trace,
   links,
   emphasis = false,
@@ -757,6 +760,7 @@ function Chain({
   meta: ReactNode
   sources: MemoryRow[]
   formedBy: string | null
+  reinforcedBy?: string | null
   trace: TraceRow[]
   links: Links
   emphasis?: boolean
@@ -769,6 +773,7 @@ function Chain({
   }, [focused])
 
   const call = formedBy ? trace.find((row) => row.id === formedBy) : undefined
+  const reinforcing = reinforcedBy ? trace.find((row) => row.id === reinforcedBy) : undefined
 
   return (
     <div className={focused ? 'row is-focused' : 'row'} id={rowDomId(id)}>
@@ -797,6 +802,14 @@ function Chain({
               <JumpLink onClick={() => links.goTo({ tab: 'trace', rowId: call.id })}>
                 formed by {callLabel(call.callType)} d{call.day.toFixed(1)}
                 {call.wasFallback ? ' (fallback)' : ''}
+              </JumpLink>
+            </>
+          )}
+          {reinforcing && (
+            <>
+              {' · '}
+              <JumpLink onClick={() => links.goTo({ tab: 'trace', rowId: reinforcing.id })}>
+                last reinforced d{reinforcing.day.toFixed(1)}
               </JumpLink>
             </>
           )}

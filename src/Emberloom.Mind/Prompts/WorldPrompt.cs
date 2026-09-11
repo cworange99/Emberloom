@@ -58,15 +58,15 @@ public static class WorldPrompt
         }
 
         builder.AppendLine();
-        builder.AppendLine("[Weights]");
-        builder.AppendLine(Weights(colonist.Weights));
+        builder.AppendLine("[What pulls at them]");
+        builder.AppendLine(WeightsInWords(colonist.Weights));
 
         return builder.ToString().TrimEnd();
     }
 
     /// <summary>
-    /// Only the weights that differ from baseline, phrased as a person would notice them. A wall
-    /// of "1.00" for the five ordinary drives teaches the model nothing and costs prompt tokens.
+    /// Only the weights that differ from baseline, as figures. For the trace, which a person reads —
+    /// never for a prompt; see <see cref="WeightsInWords"/>.
     /// </summary>
     public static string Weights(PersonalityWeights weights)
     {
@@ -81,6 +81,34 @@ public static class WorldPrompt
             ? "nothing pulls harder than anything else."
             : string.Join(", ", notable) + " baseline.";
     }
+
+    /// <summary>
+    /// The same weights in words, for prompts. A figure like "safety 1.5x" is something the model
+    /// will hand back as a belief; "safety pulls harder than on most" is something a person could
+    /// say about themselves. Only the drives that differ from baseline: a wall of "ordinary"
+    /// teaches the model nothing and costs prompt tokens.
+    /// </summary>
+    public static string WeightsInWords(PersonalityWeights weights)
+    {
+        var notable = DriveTable.All
+            .Select(d => (Drive: d, Weight: weights[d]))
+            .Where(w => Math.Abs(w.Weight - 1.0) >= 0.15)
+            .OrderByDescending(w => Math.Abs(w.Weight - 1.0))
+            .Select(w => $"{DriveTable.Describe(w.Drive)} {Pull(w.Weight)}")
+            .ToList();
+
+        return notable.Count == 0
+            ? "nothing pulls harder than anything else."
+            : string.Join("; ", notable) + ".";
+    }
+
+    private static string Pull(double weight) => weight switch
+    {
+        >= 1.6 => "pulls far harder than on most",
+        >= 1.15 => "pulls harder than on most",
+        <= 0.5 => "barely registers",
+        _ => "matters less than to most"
+    };
 
     /// <summary>Semi-stable: how this colonist currently reads the people around them.</summary>
     public static string Relationships(

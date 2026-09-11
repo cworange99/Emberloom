@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using Emberloom.Core.Actions;
 using Emberloom.Core.Colonists;
 using Emberloom.Mind;
@@ -101,10 +102,10 @@ public sealed class SimulationHost : BackgroundService
             };
         }
 
-        // Measured at M0 on this machine. From M2 the governor owns this; until then it only
-        // feeds the Contemplation readout, which is worth showing from M1 so the cost of speed
-        // is visible before anything is actually spending it.
-        SustainedCallsPerMinute = configuration.GetValue("Simulation:SustainedCallsPerMinute", 4.8);
+        // The M0 benchmark figure for this machine, and only a starting point: once a few deep
+        // calls have been served, the Contemplation readout uses what they actually took. At M4 the
+        // laptop's live reflections came in at about a quarter of this figure.
+        _benchmarkCallsPerMinute = configuration.GetValue("Simulation:SustainedCallsPerMinute", 4.8);
 
         _random = new Random(seed);
         _colony = ColonyFactory.Create(colonists, _random);
@@ -119,7 +120,18 @@ public sealed class SimulationHost : BackgroundService
 
     public bool MindConfigured => _mind is not null;
 
-    public double SustainedCallsPerMinute { get; }
+    private readonly double _benchmarkCallsPerMinute;
+    private readonly ThroughputMeter _deepCalls = new();
+
+    /// <summary>
+    /// Deep calls this machine serves per minute: measured from the calls actually served, or the
+    /// benchmark figure until there are enough of them to say. The benchmark's call shapes were
+    /// smaller than a live reflection batch, so trusting it made the Contemplation readout about
+    /// four times too generous on the laptop.
+    /// </summary>
+    public double SustainedCallsPerMinute => _deepCalls.CallsPerMinute ?? _benchmarkCallsPerMinute;
+
+    public bool ThroughputMeasured => _deepCalls.CallsPerMinute is not null;
 
     /// <summary>
     /// Everything that reads colony state must hold this. The tick loop mutates it from a
@@ -182,7 +194,15 @@ public sealed class SimulationHost : BackgroundService
                 // logic which threw on an unreachable mind instead; the governor treats a throw as
                 // lost work, so a colonist kindled while Ollama was down got no trace line at all.
                 var colony = Read((c, _) => c);
+                var started = Stopwatch.GetTimestamp();
                 var result = await _mind.KindleAsync(colonist, colony, colonist.Seed, ct: ct).ConfigureAwait(false);
+
+                // Only a call that reached a model counts toward throughput. An unreachable mind
+                // fails in a moment, and counting that would make the machine look fast.
+                if (result.Call is not null)
+                {
+                    _deepCalls.Record(Stopwatch.GetElapsedTime(started));
+                }
 
                 Broadcast(Snapshot());
 
@@ -260,7 +280,16 @@ public sealed class SimulationHost : BackgroundService
             Work = async ct =>
             {
                 var colony = Read((c, _) => c);
+                var started = Stopwatch.GetTimestamp();
                 var result = await _mind!.ReflectAsync(colonist, colony, ct).ConfigureAwait(false);
+
+                // Wall time for the whole reflection, embeddings included: that is how long it
+                // occupies the mind, which is what the readout is asking.
+                if (result.Call is not null)
+                {
+                    _deepCalls.Record(Stopwatch.GetElapsedTime(started));
+                }
+
                 Broadcast(Snapshot());
 
                 return new MindCallOutcome
@@ -373,7 +402,7 @@ public sealed class SimulationHost : BackgroundService
             stats.Throttling);
     }
 
-    public ClockDto ClockSnapshot() => ClockDto.From(Clock, SustainedCallsPerMinute);
+    public ClockDto ClockSnapshot() => ClockDto.From(Clock, SustainedCallsPerMinute, ThroughputMeasured);
 
     // ---- subscribers ------------------------------------------------------
 

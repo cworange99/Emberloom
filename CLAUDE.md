@@ -85,6 +85,19 @@ Do not re-derive these.
   corner (a floor tile spans x 0..1, z −1..0); the city, forest and character kits are centred.
   Treating corner-origin tiles as centred floated walls off the floor and buried rugs inside it.
   Rigged characters also need `SkeletonUtils.clone` — a plain `clone()` collapses them to a point.
+- **Benchmark call shapes understate live ones.** A live batch of twelve memories writes longer
+  and runs slower than the M0 shapes did. At M4, 13% of reflections on the laptop stopped at the
+  448-token cap, and real throughput was a quarter of the benchmark's. Set caps from live traces
+  (the inspector's Trace tab shows completion tokens per call), and let the Contemplation readout
+  measure served calls rather than trust a config figure.
+- **Keep raw numbers out of prompts.** The model reads every figure as something the colonist
+  knows and hands it back as a belief ("Teachers who have a valence of +0.35 with me…").
+  Feelings and weights go in as words.
+- **Embeddings don't separate a paraphrase from a related belief below ~0.92.** On
+  nomic-embed-text, "I am useful" / "My usefulness is proven" scored 0.85, below two genuinely
+  different beliefs about the Loom. Merging duplicate beliefs is tuned for precision: a missed
+  duplicate costs a repeated line, while a wrong merge attaches one belief's evidence to another's
+  words.
 
 ## Conventions
 

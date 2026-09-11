@@ -213,7 +213,9 @@ app.MapGet("/api/colonists/{id}", (string id) => sim.Read<IResult>((colony, body
             b.RecallCount,
             b.ContradictsColonyMyth,
             b.SourceMemoryIds.Select(ResolveSource).ToList(),
-            b.FormedByCallId))
+            b.FormedByCallId,
+            b.ReinforcedByCallIds.Count,
+            b.ReinforcedByCallIds.LastOrDefault()))
         .ToList();
 
     return Results.Ok(new ColonistDetailDto(

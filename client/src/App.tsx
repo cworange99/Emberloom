@@ -103,7 +103,16 @@ export default function App() {
             <dd>{state.actionsCompleted}</dd>
           </div>
           {/* The Contemplation readout from §6: thinking-per-colony-day falls as you accelerate. */}
-          <div className="readout is-mind" title="Deep-lane calls affordable per colony-day at this speed">
+          <div
+            className="readout is-mind"
+            title={
+              'Deep-lane calls affordable per colony-day at this speed, at ' +
+              clock.sustainedCallsPerMinute.toFixed(1) +
+              (clock.throughputMeasured
+                ? ' calls/min, measured from the calls this machine has actually served'
+                : ' calls/min from the benchmark, until enough calls have been served to measure')
+            }
+          >
             <dt>Contemplation</dt>
             <dd>
               {clock.callsPerColonyDay === null ? '—' : `${clock.callsPerColonyDay.toFixed(1)}/day`}

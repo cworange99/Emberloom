@@ -64,11 +64,22 @@ public static class ReflectionCall
     {
         var rows = new StringBuilder();
 
-        foreach (var memory in batch)
+        // No raw numbers. The model reads everything in a prompt as something the colonist knows,
+        // and hands a figure straight back as a belief — measured at M4: "Teachers who have a
+        // valence of +0.35 with me are likely to be effective and caring." So how a thing felt goes
+        // in as words, and the rows are listed in the order they happened rather than dated.
+        static string Felt(double valence) => valence switch
         {
-            rows.AppendLine(
-                $"{memory.Id} d{memory.Day:F1} {colonist.DisplayName} {memory.Describe()} " +
-                $"(valence {memory.Valence:+0.00;-0.00})");
+            >= 0.6 => "it went very well",
+            >= 0.2 => "it went well",
+            > -0.2 => "nothing much either way",
+            > -0.6 => "it went badly",
+            _ => "it went very badly"
+        };
+
+        foreach (var memory in batch.OrderBy(m => m.Tick))
+        {
+            rows.AppendLine($"{memory.Id} {colonist.DisplayName} {memory.Describe()} — {Felt(memory.Valence)}");
         }
 
         return $"""

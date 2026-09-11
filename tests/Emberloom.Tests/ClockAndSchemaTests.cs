@@ -216,7 +216,7 @@ public class CallBudgetTests
     /// </summary>
     [Theory]
     [InlineData(CallType.Kindling, 276)]
-    [InlineData(CallType.Reflection, 200)]
+    [InlineData(CallType.Reflection, 448)] // M0 saw 200; a live colony truncated at 448 after M4
     [InlineData(CallType.Dialogue, 55)]
     [InlineData(CallType.Deliberation, 91)]
     [InlineData(CallType.Coinage, 60)]

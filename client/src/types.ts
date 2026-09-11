@@ -58,6 +58,8 @@ export interface Clock {
   colonyDaysPerRealMinute: number
   callsPerColonyDay: number | null
   sustainedCallsPerMinute: number
+  /** True once the figure comes from calls actually served rather than the benchmark. */
+  throughputMeasured: boolean
 }
 
 export interface Governor {
@@ -187,6 +189,9 @@ export interface BeliefRow {
   contradictsColonyMyth: boolean
   sources: MemoryRow[]
   formedByCallId: string | null
+  /** How many later reflections arrived at this claim again. */
+  reinforcements: number
+  lastReinforcedByCallId: string | null
 }
 
 export interface ColonistDetail {

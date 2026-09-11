@@ -85,6 +85,19 @@ public sealed class MemoryStore
     public void Add(Belief belief) => _beliefs.Add(belief);
 
     /// <summary>
+    /// Swaps a belief for an updated copy of itself, in place. Its id and position are unchanged,
+    /// so every chain already pointing at it still resolves.
+    /// </summary>
+    public void Replace(Belief existing, Belief updated)
+    {
+        var index = _beliefs.FindIndex(b => b.Id == existing.Id);
+        if (index >= 0)
+        {
+            _beliefs[index] = updated;
+        }
+    }
+
+    /// <summary>
     /// The batch a reflection reads: the most salient rows nobody has made sense of yet.
     /// <para>
     /// Twelve rather than eight because the mind has to keep pace with the body. Prompt tokens are

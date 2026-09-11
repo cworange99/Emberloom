@@ -74,7 +74,7 @@ roughly 5×, and the two-speed architecture is what lets one build serve both.
 | Sustained calls/min | **4.5–5.0** *(est 4–6)* | **20.4** *(est ~20)* |
 | Schema failures | 0/18 once caps were fixed | 0/18 |
 | Colonists | 8–12 (untested) | 25–40 (untested) |
-| Role | Development floor | The game as designed |
+| Role | Development floor; plays via hosted inference | The game as designed |
 
 Both profiles are now measured; full reports in [`bench/results/`](bench/results/). The gap came out
 at **4.25x**, close to the estimated 5x. Two things the estimates got wrong in opposite directions:
@@ -86,9 +86,13 @@ than the top of its estimated band.
 **1.3 GB spare**. So the claim holds for a 12B pairing, but a true 14B (~9 GB) alongside a 3B
 would be very tight — 12B is the safer target, not 14B.
 
-**Keep the hooks, defer the work.** Every call type declares a templated fallback in the governor's
-interface — but on the Modest profile those implementations stay thin: a deterministic stub and a
-log line. Building out full phrase banks is an M4 decision, not a now decision.
+**Decided at M4: the laptop does not ship as a local-play profile.** Measured in a 47-day colony
+running on it, real reflections took about 54 s each. That is roughly one call a minute, a quarter
+of what the benchmark's smaller call shapes suggested, so reflection took the whole budget and idle
+thought was never served once. Beliefs formed, and every one traced back to its sources, but the
+3B model's were bland and repetitive. So a laptop plays through hosted inference, which is already
+the plan (§13), and stays the development floor it was meant to be. Fallbacks stay thin: a
+deterministic stub, recorded as a fallback in the trace. No phrase banks.
 
 ---
 
@@ -406,7 +410,7 @@ watchable — on its own.
 | **Agency** | Influence only. Five verbs, no orders. The job queue is designed so direct assignment could be enabled behind a setting later. |
 | **Time** | Fully player-controlled, with the thinking budget as the natural cost of speed, and forks protected from being skipped. |
 | **Setting** | The Loom in a reclaimed city. Printed minds kept as the mechanic. |
-| **Hardware** | RTX 5070 is the target. The laptop is a development floor; whether it becomes a supported play profile is an M4 decision. |
+| **Hardware** | RTX 5070 is the target. The laptop is a development floor, and plays through hosted inference rather than its own mind — decided 10 September 2026 at M4, on the measurements in §2. |
 | **Presentation** | **Low-poly 3D in Three.js**, decided 9 September 2026 after a 2D tile spike was built and rejected. Kenney CC0 kits now, custom art later if the game earns it. Two views — city and cutaway room — with click-through between them. §11 has the reasoning. |
 | **Inference** | **Hosted**, decided 8 September 2026 — with `Mind:Endpoint` defaulting to `http://127.0.0.1:11434`, so purely local play is the default value rather than a separate build. This costs almost nothing *provided* the golden rule in [CLAUDE.md](CLAUDE.md) holds: every mind call is self-contained, and the server holds no colony state. Retrieval is the likeliest place to break it — embeddings may be computed remotely, but the index stays local. |
 
@@ -414,8 +418,6 @@ watchable — on its own.
 
 - **Decided at M0 — which models, and what the real budget is.** Every throughput figure in this
   document is an estimate for the hardware class rather than a measurement.
-- **Decided at M4 — whether the laptop profile ships.** The fallback hooks exist from M2; the
-  implementations stay thin until there's a working inspector to judge against.
 - **Decided at M7 — whether this is a product.** Judgeable only after a long unattended run produces
   a myth worth reading.
 - **Worth checking early — the name.** *What They Left Running* is worth a trademark and storefront

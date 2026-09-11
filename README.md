@@ -14,7 +14,7 @@ See [DESIGN.md](DESIGN.md) for the full design. Build order and milestone status
 | **M1** — the body, with no mind at all | **Done.** Drives, utility scoring, city map, foraging/salvage/building/rest, relationship ledger, episodic capture, event feed, time controls — all with zero model calls — behind an HTTP/WebSocket API, with a React client watching it. |
 | **M2** — governor and Kindling | **Done.** Printed colonists get model-written personalities and weights; the budget governor holds a rolling tokens-per-minute ceiling and slows time rather than dropping thinking. |
 | **M3** — memory pipeline and Reflection | **Done.** Episodic memories coalesce, consolidate, and produce beliefs that cite the memories they came from — walkable in the inspector. |
-| **M4** — the Mind Inspector | **Inspector done** — five tabs, every chain walkable end to end, and the prompt and response of every recent call kept locally. The Modest-profile decision is still open. |
+| **M4** — the Mind Inspector | **Done.** Five tabs, every chain walkable end to end, and the prompt and response of every recent call kept locally. The Modest decision: the laptop plays via hosted inference and stays a development floor. |
 | M5 — dialogue and deliberation | Not started |
 | M6 — player verbs | Not started |
 | M7 — generations | Not started |
@@ -100,6 +100,10 @@ empty — 96 tokens generated, nothing returned. `think: false` fixed all 18. Th
   unparseable. Caps are a correctness constraint, not a budget hint. Revised in
   `CallBudgets`; reflection needed 448 rather than the design's ~200.
 - Ollama returns 500 trying to hold a third model resident on this machine.
+- **Live, at M4**, real reflections averaged ~54 s each (951 tokens in, 328 out). That is about
+  1.1 calls a minute, a quarter of the benchmark figure. 13% of them hit the old 448-token
+  Reflection cap and were thrown away; the cap is now 576. On this evidence the laptop plays
+  through hosted inference and stays a development floor (DESIGN §2).
 
 ## Watching it
 
@@ -120,10 +124,11 @@ The screen shows the city, the event feed colour-coded by which layer produced e
 roster, and a first cut of the Mind Inspector — including the runners-up in each colonist's
 utility scoring, which is the honest version of the design's "chosen over forage (0.31)".
 
-The **Contemplation readout** beside the speed control is live from M1 even though nothing is
-spending the budget yet: it reads 9.6 calls per colony-day at 1× and 0.16 at 60×, on the 4.8
-calls/min M0 measured for this machine. That is §6's arithmetic, visible before there is a
-governor to enforce it.
+The **Contemplation readout** beside the speed control is §6's arithmetic: how many deep calls
+the colony can afford per colony-day at the current speed. It starts from the benchmark figure in
+`appsettings.json`, then switches to a measured one once three deep calls have been served,
+because the two differ a lot. On this laptop the benchmark said 4.8 calls/min and live
+reflections came in at about 1.1. Hover the readout to see which figure it is using.
 
 ## The 3D views
 

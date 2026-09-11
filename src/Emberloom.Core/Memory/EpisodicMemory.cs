@@ -95,6 +95,15 @@ public sealed record Belief
     /// <summary>The Reflection call that formed this, so the inspector can open it. Null on beliefs formed before M4.</summary>
     public string? FormedByCallId { get; init; }
 
+    /// <summary>
+    /// Later reflections that arrived at this claim again. A restatement reinforces the belief it
+    /// repeats rather than sitting beside it: measured at M4, one mind in a laptop colony held
+    /// "Teaching others is essential for the colony's growth and success" and "Teaching others is a
+    /// vital part of our colony's growth" as two separate convictions. See BeliefSimilarity for
+    /// what counts as a restatement, and what deliberately does not.
+    /// </summary>
+    public IReadOnlyList<string> ReinforcedByCallIds { get; init; } = [];
+
     /// <summary>Bumped every time retrieval surfaces this. A belief a mind keeps returning to stays available to it.</summary>
     public int RecallCount { get; set; }
 
