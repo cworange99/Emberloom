@@ -37,6 +37,14 @@ public sealed record CompletionResult
 
     public required string Text { get; init; }
 
+    /// <summary>
+    /// The request as it was sent, kept beside the answer so the inspector can show both. Held
+    /// locally only — the server is asked to remember none of it.
+    /// </summary>
+    public string RequestSystem { get; init; } = string.Empty;
+
+    public string RequestPrompt { get; init; } = string.Empty;
+
     public int PromptTokens { get; init; }
 
     public int CompletionTokens { get; init; }

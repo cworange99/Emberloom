@@ -72,18 +72,6 @@ export interface Governor {
   throttling: boolean
 }
 
-export interface Governor {
-  queueDepth: number
-  tokensPerMinute: number
-  tokensInLastMinute: number
-  pressure: number
-  dropped: number
-  served: number
-  fallbacks: number
-  currentCall: string | null
-  throttling: boolean
-}
-
 export interface ColonyState {
   tick: number
   day: number
@@ -104,11 +92,20 @@ export interface World {
   speeds: string[]
 }
 
+export interface PersonRef {
+  id: string
+  name: string
+}
+
+/** One episodic row — the far end of a chain — with its place and the others in it named. */
 export interface MemoryRow {
   id: string
   day: number
   text: string
   placeId: string
+  placeName: string
+  others: PersonRef[]
+  repeats: number
   valence: number
   intensity: number
   salience: number
@@ -129,11 +126,13 @@ export interface ScoredOption {
   action: string
   placeName: string
   partnerId: string | null
+  partnerName: string | null
   score: number
   chosen: boolean
 }
 
 export interface TraceRow {
+  id: string
   callType: string
   day: number
   model: string
@@ -143,6 +142,29 @@ export interface TraceRow {
   seconds: number
   produced: string
   wasFallback: boolean
+  /** Ids of the beliefs and consolidated memories this call wrote. */
+  producedIds: string[]
+  /** Whether the prompt and response are still held — only the most recent calls keep them. */
+  hasText: boolean
+}
+
+/** What one call sent and got back. Fetched when a trace row is opened. */
+export interface CallText {
+  id: string
+  callType: string
+  day: number
+  model: string
+  system: string | null
+  prompt: string | null
+  response: string | null
+}
+
+export interface CallTypeSummary {
+  callType: string
+  calls: number
+  tokens: number
+  fallbacks: number
+  seconds: number
 }
 
 export interface ConsolidatedRow {
@@ -153,6 +175,7 @@ export interface ConsolidatedRow {
   salience: number
   recallCount: number
   sources: MemoryRow[]
+  formedByCallId: string | null
 }
 
 export interface BeliefRow {
@@ -163,6 +186,7 @@ export interface BeliefRow {
   recallCount: number
   contradictsColonyMyth: boolean
   sources: MemoryRow[]
+  formedByCallId: string | null
 }
 
 export interface ColonistDetail {
@@ -175,4 +199,7 @@ export interface ColonistDetail {
   recentMemories: MemoryRow[]
   relationships: RelationshipRow[]
   considering: ScoredOption[]
+  traceSummary: CallTypeSummary[]
+  /** Every call this mind has made. The trace rows themselves are capped; this is not. */
+  traceTotal: number
 }

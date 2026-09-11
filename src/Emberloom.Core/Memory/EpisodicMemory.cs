@@ -65,6 +65,10 @@ public sealed record ConsolidatedMemory
     public required string Text { get; init; }
     public required double Valence { get; init; }
     public required IReadOnlyList<string> SourceMemoryIds { get; init; }
+
+    /// <summary>The Reflection call that wrote this, so the inspector can open it. Null on rows written before M4.</summary>
+    public string? FormedByCallId { get; init; }
+
     public int RecallCount { get; set; }
     public float[]? Embedding { get; set; }
 
@@ -87,6 +91,9 @@ public sealed record Belief
     public required string Claim { get; init; }
     public required IReadOnlyList<string> SourceMemoryIds { get; init; }
     public required double Confidence { get; init; }
+
+    /// <summary>The Reflection call that formed this, so the inspector can open it. Null on beliefs formed before M4.</summary>
+    public string? FormedByCallId { get; init; }
 
     /// <summary>Bumped every time retrieval surfaces this. A belief a mind keeps returning to stays available to it.</summary>
     public int RecallCount { get; set; }

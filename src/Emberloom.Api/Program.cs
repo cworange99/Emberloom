@@ -4,6 +4,7 @@ using System.Text.Json;
 using Emberloom.Api;
 using Emberloom.Core.Actions;
 using Emberloom.Core.Colonists;
+using Emberloom.Core.Memory;
 using Emberloom.Core.Relationships;
 using Emberloom.Core.Simulation;
 
@@ -86,16 +87,26 @@ app.MapGet("/api/colonists/{id}", (string id) => sim.Read<IResult>((colony, body
         return Results.NotFound();
     }
 
+    // An episodic row with its place and the other people in it named, so the inspector can link
+    // onward from the far end of a chain rather than stopping at an id.
+    MemoryRowDto Row(EpisodicMemory m) => new(
+        m.Id,
+        Math.Round(m.Day, 2),
+        m.Describe(),
+        m.PlaceId,
+        colony.Map.Find(m.PlaceId)?.Name ?? m.PlaceId,
+        m.Actors
+            .Where(a => a != colonist.Id)
+            .Select(a => new PersonRefDto(a, colony.Find(a)?.DisplayName ?? a))
+            .ToList(),
+        m.Repeats,
+        Math.Round(m.Valence, 2),
+        Math.Round(m.Intensity, 2),
+        Math.Round(m.Salience(colony.Day), 3));
+
     var memories = colonist.Memory
-        .MostSalient(colony.Day, 12)
-        .Select(m => new MemoryRowDto(
-            m.Id,
-            Math.Round(m.Day, 2),
-            m.Describe(),
-            m.PlaceId,
-            Math.Round(m.Valence, 2),
-            Math.Round(m.Intensity, 2),
-            Math.Round(m.Salience(colony.Day), 3)))
+        .MostSalient(colony.Day, 20)
+        .Select(Row)
         .ToList();
 
     var relationships = colony.Relationships
@@ -122,12 +133,27 @@ app.MapGet("/api/colonists/{id}", (string id) => sim.Read<IResult>((colony, body
             o.Definition.Kind.ToString(),
             o.Target.Name,
             o.PartnerId,
+            o.PartnerId is null ? null : colony.Find(o.PartnerId)?.DisplayName,
             Math.Round(o.Score, 4),
             i == 0))
         .ToList();
 
-    var trace = colonist.Trace
+    // One snapshot, read once: the mind records calls from its own thread.
+    var calls = colonist.Trace;
+
+    // Newest first. An overnight run makes thousands of calls per colonist and this is polled every
+    // second, so the rows are capped — but only idle thought is. Every call that wrote something
+    // durable is always listed, however old, so every "formed by" link in the inspector resolves.
+    // Idle thought is most of the volume and nothing cites it. The summary totals the lifetime.
+    const int IdleThoughtRows = 150;
+    var idleCutoff = calls.Count(t => t.CallType == "IdleThought") - IdleThoughtRows;
+    var idleSeen = 0;
+
+    var trace = calls
+        .Where(t => t.CallType != "IdleThought" || idleSeen++ >= idleCutoff)
+        .Reverse()
         .Select(t => new TraceRowDto(
+            t.Id,
             t.CallType,
             Math.Round(t.Day, 2),
             t.Model,
@@ -136,8 +162,20 @@ app.MapGet("/api/colonists/{id}", (string id) => sim.Read<IResult>((colony, body
             t.CompletionTokens,
             Math.Round(t.Seconds, 2),
             t.Produced,
-            t.WasFallback))
-        .Reverse()
+            t.WasFallback,
+            t.ProducedIds,
+            t.HasText))
+        .ToList();
+
+    var traceSummary = calls
+        .GroupBy(t => t.CallType)
+        .Select(g => new CallTypeSummaryDto(
+            g.Key,
+            g.Count(),
+            g.Sum(t => t.TotalTokens),
+            g.Count(t => t.WasFallback),
+            Math.Round(g.Sum(t => t.Seconds), 1)))
+        .OrderByDescending(s => s.Calls)
         .ToList();
 
     // The source rows are resolved here rather than in the client so a belief always arrives with
@@ -148,15 +186,8 @@ app.MapGet("/api/colonists/{id}", (string id) => sim.Read<IResult>((colony, body
         var found = colonist.Memory.FindEpisodic(id);
 
         return found is null
-            ? new MemoryRowDto(id, 0, "(pruned — too small to keep)", string.Empty, 0, 0, 0)
-            : new MemoryRowDto(
-                found.Id,
-                Math.Round(found.Day, 2),
-                found.Describe(),
-                found.PlaceId,
-                Math.Round(found.Valence, 2),
-                Math.Round(found.Intensity, 2),
-                Math.Round(found.Salience(colony.Day), 3));
+            ? new MemoryRowDto(id, 0, "(pruned — too small to keep)", string.Empty, string.Empty, [], 0, 0, 0, 0)
+            : Row(found);
     }
 
     var consolidated = colonist.Memory.Consolidated
@@ -168,7 +199,8 @@ app.MapGet("/api/colonists/{id}", (string id) => sim.Read<IResult>((colony, body
             Math.Round(m.Valence, 2),
             Math.Round(m.Salience(colony.Day), 3),
             m.RecallCount,
-            m.SourceMemoryIds.Select(ResolveSource).ToList()))
+            m.SourceMemoryIds.Select(ResolveSource).ToList(),
+            m.FormedByCallId))
         .ToList();
 
     var beliefs = colonist.Memory.Beliefs
@@ -180,7 +212,8 @@ app.MapGet("/api/colonists/{id}", (string id) => sim.Read<IResult>((colony, body
             Math.Round(b.Confidence, 2),
             b.RecallCount,
             b.ContradictsColonyMyth,
-            b.SourceMemoryIds.Select(ResolveSource).ToList()))
+            b.SourceMemoryIds.Select(ResolveSource).ToList(),
+            b.FormedByCallId))
         .ToList();
 
     return Results.Ok(new ColonistDetailDto(
@@ -192,7 +225,24 @@ app.MapGet("/api/colonists/{id}", (string id) => sim.Read<IResult>((colony, body
         beliefs,
         memories,
         relationships,
-        options));
+        options,
+        traceSummary,
+        calls.Count));
+}));
+
+// ---- one call, in full --------------------------------------------------------
+
+// The prompt and response behind one trace row, fetched when the row is opened rather than shipped
+// with every one-second poll of the detail view. Only the most recent calls still hold their text.
+// All of it lives here, on this machine: the inference server was never asked to remember any of it.
+app.MapGet("/api/colonists/{id}/calls/{callId}", (string id, string callId) => sim.Read<IResult>((colony, _) =>
+{
+    var call = colony.Find(id)?.FindCall(callId);
+
+    return call is null
+        ? Results.NotFound()
+        : Results.Ok(new CallTextDto(
+            call.Id, call.CallType, Math.Round(call.Day, 2), call.Model, call.System, call.Prompt, call.Response));
 }));
 
 // ---- time controls ----------------------------------------------------------

@@ -137,6 +137,8 @@ public sealed class OllamaClient : IDisposable
         {
             Model = config.Model,
             Text = payload.Response ?? string.Empty,
+            RequestSystem = request.System ?? string.Empty,
+            RequestPrompt = request.Prompt,
             ThinkingText = payload.Thinking,
             PromptTokens = payload.PromptEvalCount,
             CompletionTokens = payload.EvalCount,

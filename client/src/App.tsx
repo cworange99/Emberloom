@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { CityMap } from './CityMap'
-import { ColonistDetailView, Roster } from './ColonistPanel'
+import { ColonistDetailView, Roster, type InspectorFocus } from './ColonistPanel'
 import { useColony } from './useColony'
 
 const SPEEDS: Array<{ value: string; label: string }> = [
@@ -15,6 +15,7 @@ const SPEEDS: Array<{ value: string; label: string }> = [
 export default function App() {
   const { world, state, events, connected, setSpeed, setAutoSlow, restart } = useColony()
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [focus, setFocus] = useState<InspectorFocus>({ tab: 'now' })
   const [follow, setFollow] = useState(true)
 
   const feedRef = useRef<HTMLDivElement>(null)
@@ -24,6 +25,13 @@ export default function App() {
       feedRef.current.scrollTop = feedRef.current.scrollHeight
     }
   }, [events, follow])
+
+  // Opening a colonist keeps whichever tab was open — comparing two minds' beliefs or traces is
+  // the common case — and drops any row focus, which belonged to the previous mind.
+  const openColonist = (id: string) => {
+    setSelectedId(id)
+    setFocus((current) => ({ tab: current.tab }))
+  }
 
   if (!world || !state) {
     return (
@@ -40,7 +48,7 @@ export default function App() {
       <header className="topbar">
         <div className="brand">
           What They Left Running
-          <span>M2 · kindling</span>
+          <span>M4 · the mind inspector</span>
         </div>
 
         <div className="speeds" role="group" aria-label="Simulation speed">
@@ -94,8 +102,7 @@ export default function App() {
             <dt>Actions</dt>
             <dd>{state.actionsCompleted}</dd>
           </div>
-          {/* The Contemplation readout from §6. Nothing is spending the budget yet, but the
-              arithmetic is real from M1: thinking-per-colony-day falls as you accelerate. */}
+          {/* The Contemplation readout from §6: thinking-per-colony-day falls as you accelerate. */}
           <div className="readout is-mind" title="Deep-lane calls affordable per colony-day at this speed">
             <dt>Contemplation</dt>
             <dd>
@@ -148,7 +155,7 @@ export default function App() {
             colonists={state.colonists}
             isNight={state.isNight}
             selectedId={selectedId}
-            onSelect={setSelectedId}
+            onSelect={openColonist}
           />
 
           <div className="feed">
@@ -179,13 +186,15 @@ export default function App() {
 
         <aside className="right">
           {selectedId ? (
-            <ColonistDetailView id={selectedId} onBack={() => setSelectedId(null)} />
-          ) : (
-            <Roster
-              colonists={state.colonists}
-              selectedId={selectedId}
-              onSelect={setSelectedId}
+            <ColonistDetailView
+              id={selectedId}
+              focus={focus}
+              onFocus={setFocus}
+              onBack={() => setSelectedId(null)}
+              onOpenColonist={openColonist}
             />
+          ) : (
+            <Roster colonists={state.colonists} selectedId={selectedId} onSelect={openColonist} />
           )}
         </aside>
       </div>

@@ -60,7 +60,19 @@ public sealed class SimulationHost : BackgroundService
                     NumCtx = configuration.GetValue("Mind:FastContext", 2048),
                     KeepAlive = "60m"
                 }
-            });
+            })
+            {
+                // Everything the mind writes back lands under the same lock the tick loop and the
+                // API read under. The inference itself stays outside it — holding the colony across
+                // a multi-second call would stall the simulation, which Layer 2 is never allowed to do.
+                Commit = work =>
+                {
+                    lock (_gate)
+                    {
+                        work();
+                    }
+                }
+            };
 
             // The ceiling is real-world tokens per minute, for the machine actually serving. It has
             // to sit ABOVE measured sustained throughput: it exists to stop demand outrunning
@@ -164,18 +176,13 @@ public sealed class SimulationHost : BackgroundService
             Undroppable = true,
             Work = async ct =>
             {
-                // The call happens outside the colony lock — holding it across a multi-second
-                // inference would stall the tick loop, which Layer 2 is never allowed to do.
-                var seed = colonist.Seed;
-                var result = await KindlingCall.ExecuteAsync(
-                    _mind.Client,
-                    new KindlingSeed { Designation = colonist.Designation, Seed = seed },
-                    ct).ConfigureAwait(false);
-
-                lock (_gate)
-                {
-                    ApplyKindling(colonist, result);
-                }
+                // One path for Kindling, shared with the tests: MindService makes the call outside
+                // the colony lock, commits the result under it, and falls back — with a trace line
+                // saying so — when the mind is not there. This used to be a second copy of that
+                // logic which threw on an unreachable mind instead; the governor treats a throw as
+                // lost work, so a colonist kindled while Ollama was down got no trace line at all.
+                var colony = Read((c, _) => c);
+                var result = await _mind.KindleAsync(colonist, colony, colonist.Seed, ct: ct).ConfigureAwait(false);
 
                 Broadcast(Snapshot());
 
@@ -287,37 +294,6 @@ public sealed class SimulationHost : BackgroundService
                 };
             }
         });
-    }
-
-    private void ApplyKindling(Colonist colonist, KindlingResult result)
-    {
-        colonist.Personality = result.Personality;
-        colonist.Weights = result.Weights;
-        colonist.NameCandidates = result.NameCandidates;
-        colonist.IsKindled = result.FromModel;
-
-        colonist.RecordCall(new ModelCallRecord
-        {
-            CallType = "Kindling",
-            Day = _colony.Day,
-            Model = result.Call?.Model ?? "none",
-            Lane = "deep",
-            PromptTokens = result.Call?.PromptTokens ?? 0,
-            CompletionTokens = result.Call?.CompletionTokens ?? 0,
-            Seconds = result.Call?.TotalDuration.TotalSeconds ?? 0,
-            Produced = result.FromModel
-                ? $"personality, {result.NameCandidates.Count} name candidates, seven weights"
-                : "fallback stub — the mind was unavailable",
-            WasFallback = !result.FromModel
-        });
-
-        _colony.Log(
-            result.FromModel ? EventLayer.Mind : EventLayer.World,
-            result.FromModel
-                ? $"{colonist.Designation} woke. {result.SeedSummary}"
-                : $"{colonist.Designation} woke, but nothing was there to write them.",
-            colonist,
-            notable: true);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)

@@ -892,3 +892,247 @@ button {
   color: var(--muted);
   margin-left: 2px;
 }
+
+/* ---------- the mind inspector (M4) ---------- */
+
+.tabs {
+  display: flex;
+  gap: 2px;
+  padding: 0 8px;
+  background: var(--surface-sunk);
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.tabs [role='tab'] {
+  appearance: none;
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  padding: 9px 8px 7px;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.tabs [role='tab']:hover {
+  color: var(--ink);
+}
+
+.tabs [role='tab'][aria-selected='true'] {
+  color: var(--ink);
+  border-bottom-color: var(--mind-layer);
+}
+
+.tabs [role='tab']:focus-visible {
+  outline: 2px solid var(--mind-layer);
+  outline-offset: -2px;
+}
+
+.tab-count {
+  margin-left: 5px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+/* A link inside the inspector. It takes the size and case of wherever it sits — a mono meta line,
+   a serif chain row, a table cell — and only adds the colour and underline that say "go there". */
+.jump {
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: var(--mind-layer);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.jump:hover {
+  color: var(--ink);
+}
+
+.jump:focus-visible {
+  outline: 2px solid var(--mind-layer);
+  outline-offset: 1px;
+  border-radius: 2px;
+}
+
+/* Where a link landed. Static rather than animated: the scroll already draws the eye. */
+.row.is-focused {
+  background: var(--mind-wash);
+  box-shadow: -8px 0 0 var(--mind-wash), -11px 0 0 var(--mind-layer);
+}
+
+.thought {
+  font-family: var(--body);
+  font-size: 15px;
+  font-style: italic;
+  line-height: 1.45;
+  color: var(--ink);
+  margin: 0 0 4px;
+}
+
+.chain-where {
+  display: block;
+  margin-top: 2px;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.row-text .tagline {
+  margin-left: 6px;
+}
+
+.trace-cost {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.row-produced {
+  font-family: var(--body);
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--ink-soft);
+  margin: 2px 0 0;
+}
+
+.trace-summary {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.trace-summary th {
+  text-align: left;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 0 6px 6px 0;
+}
+
+.trace-summary td {
+  padding: 4px 6px 4px 0;
+  border-top: 1px solid var(--line-soft);
+}
+
+.trace-summary th:not(:first-child),
+.trace-summary td:not(:first-child) {
+  text-align: right;
+}
+
+.trace-summary td.neg {
+  color: var(--flag);
+}
+
+.trace-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0 0 8px;
+}
+
+.trace-filter button {
+  appearance: none;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.trace-filter button[aria-pressed='true'] {
+  background: var(--mind-wash);
+  border-color: var(--mind-layer);
+  color: var(--mind-layer);
+  font-weight: 700;
+}
+
+.call-text {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0 2px;
+}
+
+.call-block {
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--surface-sunk);
+  overflow: hidden;
+}
+
+.call-label {
+  appearance: none;
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  background: none;
+  border: 0;
+  padding: 5px 8px;
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  text-align: left;
+  cursor: pointer;
+}
+
+.call-label span {
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.call-block pre {
+  margin: 0;
+  padding: 8px;
+  border-top: 1px solid var(--line-soft);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 320px;
+  overflow: auto;
+  color: var(--ink);
+}
+
+.rel-note td {
+  border-top: 0;
+  padding-top: 0;
+  padding-bottom: 7px;
+  font-family: var(--body);
+  font-size: 12.5px;
+  font-style: italic;
+  line-height: 1.4;
+  color: var(--ink-soft);
+}

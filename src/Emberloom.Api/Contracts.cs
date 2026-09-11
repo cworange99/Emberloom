@@ -158,7 +158,13 @@ public sealed record WorldDto(
     IReadOnlyList<string> DriveNames,
     IReadOnlyList<string> Speeds);
 
+/// <summary>
+/// One row of the Trace tab. The prompt and response are not in here: they are the heavy part, the
+/// detail view polls every second, and nobody reads more than one at a time. A row says whether the
+/// text is still held, and <see cref="CallTextDto"/> carries it when the row is opened.
+/// </summary>
 public sealed record TraceRowDto(
+    string Id,
     string CallType,
     double Day,
     string Model,
@@ -167,7 +173,25 @@ public sealed record TraceRowDto(
     int CompletionTokens,
     double Seconds,
     string Produced,
-    bool WasFallback);
+    bool WasFallback,
+    IReadOnlyList<string> ProducedIds,
+    bool HasText);
+
+/// <summary>What one call sent and got back, for the Trace tab's opened row.</summary>
+public sealed record CallTextDto(
+    string Id,
+    string CallType,
+    double Day,
+    string Model,
+    string? System,
+    string? Prompt,
+    string? Response);
+
+/// <summary>
+/// A colonist's calls totalled by type — the Trace tab's header. Covers the whole lifetime even
+/// though the rows themselves are capped.
+/// </summary>
+public sealed record CallTypeSummaryDto(string CallType, int Calls, int Tokens, int Fallbacks, double Seconds);
 
 public sealed record ColonistDetailDto(
     ColonistDto Colonist,
@@ -178,9 +202,28 @@ public sealed record ColonistDetailDto(
     IReadOnlyList<BeliefRowDto> Beliefs,
     IReadOnlyList<MemoryRowDto> RecentMemories,
     IReadOnlyList<RelationshipRowDto> Relationships,
-    IReadOnlyList<ScoredOptionDto> Considering);
+    IReadOnlyList<ScoredOptionDto> Considering,
+    IReadOnlyList<CallTypeSummaryDto> TraceSummary,
+    int TraceTotal);
 
-public sealed record MemoryRowDto(string Id, double Day, string Text, string PlaceId, double Valence, double Intensity, double Salience);
+/// <summary>
+/// One episodic row, with its place and the other people in it resolved to names. This is the far
+/// end of a belief's chain, and the inspector links onward from it — to the room it happened in and
+/// to the minds of whoever else was there.
+/// </summary>
+public sealed record MemoryRowDto(
+    string Id,
+    double Day,
+    string Text,
+    string PlaceId,
+    string PlaceName,
+    IReadOnlyList<PersonRefDto> Others,
+    int Repeats,
+    double Valence,
+    double Intensity,
+    double Salience);
+
+public sealed record PersonRefDto(string Id, string Name);
 
 /// <summary>A written memory standing in for a batch of episodic rows, with the rows it came from.</summary>
 public sealed record ConsolidatedRowDto(
@@ -190,7 +233,8 @@ public sealed record ConsolidatedRowDto(
     double Valence,
     double Salience,
     int RecallCount,
-    IReadOnlyList<MemoryRowDto> Sources);
+    IReadOnlyList<MemoryRowDto> Sources,
+    string? FormedByCallId);
 
 /// <summary>
 /// A belief and the chain behind it. The source rows travel with it deliberately: a belief the
@@ -204,7 +248,8 @@ public sealed record BeliefRowDto(
     double Confidence,
     int RecallCount,
     bool ContradictsColonyMyth,
-    IReadOnlyList<MemoryRowDto> Sources);
+    IReadOnlyList<MemoryRowDto> Sources,
+    string? FormedByCallId);
 
 public sealed record RelationshipRowDto(string TowardId, string TowardName, double Affinity, double Trust, double Respect, int SharedMemories, string Stage, string? Narrative);
 
@@ -212,4 +257,4 @@ public sealed record RelationshipRowDto(string TowardId, string TowardName, doub
 /// The runners-up in the utility scoring. This is the honest version of the inspector's "chosen
 /// over forage (0.31)" line, and it costs nothing because the scorer already computes them.
 /// </summary>
-public sealed record ScoredOptionDto(string Action, string PlaceName, string? PartnerId, double Score, bool Chosen);
+public sealed record ScoredOptionDto(string Action, string PlaceName, string? PartnerId, string? PartnerName, double Score, bool Chosen);

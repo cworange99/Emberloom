@@ -1,7 +1,34 @@
-import { useEffect, useState } from 'react'
-import type { Colonist, ColonistDetail, MemoryRow } from './types'
+import { Fragment, useEffect, useState, type ReactNode } from 'react'
+import type {
+  BeliefRow,
+  CallText,
+  Colonist,
+  ColonistDetail,
+  MemoryRow,
+  PersonRef,
+  TraceRow,
+} from './types'
 
 const DRIVE_ORDER = ['sustenance', 'rest', 'safety', 'belonging', 'standing', 'meaning', 'wonder']
+
+export type InspectorTab = 'now' | 'memory' | 'beliefs' | 'relationships' | 'trace'
+
+/**
+ * Where the inspector is looking: a tab, and optionally one row on it to bring into view. Held by
+ * the app rather than the inspector, so it survives switching colonists — comparing two minds'
+ * traces should not mean picking the Trace tab again every time.
+ */
+export interface InspectorFocus {
+  tab: InspectorTab
+  rowId?: string
+}
+
+/** What every row needs in order to link somewhere else. */
+interface Links {
+  focus: InspectorFocus
+  goTo: (focus: InspectorFocus) => void
+  openColonist: (id: string) => void
+}
 
 export function DriveBars({
   drives,
@@ -80,16 +107,34 @@ export function Roster({
 }
 
 /**
- * The Mind Inspector. Reads top to bottom as the chain the design promises: the seed the Loom was
- * given, the personality a model wrote from it, the weights the body scores with, what it chose
- * and what it nearly chose instead, the beliefs it has come to hold, and the memories behind each
- * one. The tabbed layout arrives at M4; until then the order carries the argument.
+ * The Mind Inspector — five tabs, per the design: Now, Memory, Beliefs, Relationships, Trace.
+ *
+ * The tabs are where things live; the links are the point. A belief opens onto the memories it came
+ * from, a memory onto the place it happened and the people who were there, and a belief or memory
+ * onto the model call that wrote it — prompt, response and all. Every chain can be walked end to
+ * end, and walked back from the Trace tab to whatever a call produced.
  */
-export function ColonistDetailView({ id, onBack }: { id: string; onBack: () => void }) {
+export function ColonistDetailView({
+  id,
+  focus,
+  onFocus,
+  onBack,
+  onOpenColonist,
+}: {
+  id: string
+  focus: InspectorFocus
+  onFocus: (focus: InspectorFocus) => void
+  onBack: () => void
+  onOpenColonist: (id: string) => void
+}) {
   const [detail, setDetail] = useState<ColonistDetail | null>(null)
 
   useEffect(() => {
     let cancelled = false
+
+    // A different colonist: drop the last one's detail rather than show it under the new name
+    // until the first poll lands.
+    setDetail(null)
 
     const load = async () => {
       try {
@@ -111,6 +156,18 @@ export function ColonistDetailView({ id, onBack }: { id: string; onBack: () => v
     }
   }, [id])
 
+  const loaded = detail !== null
+
+  // Bring a linked row into view. Runs again when the detail first arrives, because a link can open
+  // a colonist whose rows have not rendered yet — but not on every poll, or the panel would keep
+  // yanking the scroll position back to the same row.
+  useEffect(() => {
+    if (!loaded || !focus.rowId) return
+    document
+      .getElementById(rowDomId(focus.rowId))
+      ?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  }, [focus, loaded])
+
   if (!detail) {
     return (
       <>
@@ -125,6 +182,15 @@ export function ColonistDetailView({ id, onBack }: { id: string; onBack: () => v
   }
 
   const { colonist } = detail
+  const links: Links = { focus, goTo: onFocus, openColonist: onOpenColonist }
+
+  const tabs: Array<{ key: InspectorTab; label: string; count?: number }> = [
+    { key: 'now', label: 'Now' },
+    { key: 'memory', label: 'Memory', count: detail.consolidated.length },
+    { key: 'beliefs', label: 'Beliefs', count: detail.beliefs.length },
+    { key: 'relationships', label: 'Ties', count: detail.relationships.length },
+    { key: 'trace', label: 'Trace', count: detail.traceTotal },
+  ]
 
   return (
     <>
@@ -146,180 +212,290 @@ export function ColonistDetailView({ id, onBack }: { id: string; onBack: () => v
           </div>
         </div>
 
-        <section>
-          <h3>Seed — what the Loom was given</h3>
-          <p className="seed">{detail.seed || 'nothing recorded'}</p>
-        </section>
+        <div className="tabs" role="tablist" aria-label="Mind Inspector">
+          {tabs.map((tab) => (
+            <button
+              key={tab.key}
+              role="tab"
+              id={`inspector-tab-${tab.key}`}
+              aria-selected={focus.tab === tab.key}
+              aria-controls="inspector-panel"
+              title={tab.key === 'relationships' ? 'Relationships' : undefined}
+              onClick={() => onFocus({ tab: tab.key })}
+            >
+              {tab.label}
+              {tab.count !== undefined && <span className="tab-count">{tab.count}</span>}
+            </button>
+          ))}
+        </div>
 
-        <section>
-          <h3>
-            Personality{' '}
-            {colonist.isKindled ? (
-              <span className="tagline mind">written by the mind</span>
-            ) : (
-              <span className="tagline stub">fallback stub</span>
+        <div role="tabpanel" id="inspector-panel" aria-labelledby={`inspector-tab-${focus.tab}`}>
+          {focus.tab === 'now' && <NowTab detail={detail} links={links} />}
+          {focus.tab === 'memory' && <MemoryTab detail={detail} links={links} />}
+          {focus.tab === 'beliefs' && <BeliefsTab detail={detail} links={links} />}
+          {focus.tab === 'relationships' && <RelationshipsTab detail={detail} links={links} />}
+          {focus.tab === 'trace' && <TraceTab colonistId={id} detail={detail} links={links} />}
+        </div>
+      </div>
+    </>
+  )
+}
+
+// ---- Now ------------------------------------------------------------------------------------
+
+/** What they are thinking, doing and weighing right now — and who the Loom made them. */
+function NowTab({ detail, links }: { detail: ColonistDetail; links: Links }) {
+  const { colonist } = detail
+
+  // The trace is newest first, so these are the latest of each.
+  const thoughtCall = detail.trace.find((row) => row.callType === 'IdleThought')
+  const kindling = detail.trace.find((row) => row.callType === 'Kindling')
+
+  return (
+    <>
+      <section>
+        <h3>
+          On their mind <span className="tagline mind">idle thought · fast lane</span>
+        </h3>
+        {colonist.thought ? (
+          <>
+            <p className="thought">“{stripQuotes(colonist.thought)}”</p>
+            {thoughtCall && (
+              <p className="row-meta">
+                <JumpLink onClick={() => links.goTo({ tab: 'trace', rowId: thoughtCall.id })}>
+                  thought on d{thoughtCall.day.toFixed(1)} · see the call
+                </JumpLink>
+              </p>
             )}
-          </h3>
-          <p className="personality">{detail.personality}</p>
-          {colonist.nameCandidates.length > 0 && (
-            <p className="row-meta" style={{ marginTop: 10 }}>
-              may one day take the name{' '}
-              {colonist.nameCandidates.map((n, i) => (
-                <span key={n}>
-                  {i > 0 && ' · '}
-                  <b>{n}</b>
-                </span>
-              ))}
-            </p>
+          </>
+        ) : (
+          <p className="empty">Nothing has come to words yet.</p>
+        )}
+      </section>
+
+      <section>
+        <h3>Doing, and what it nearly did instead</h3>
+        <div className="options">
+          {detail.considering.map((option, index) => (
+            <div
+              key={`${option.action}-${option.placeName}-${index}`}
+              className={option.chosen ? 'option is-chosen' : 'option'}
+            >
+              <span>
+                {option.action.toLowerCase()} · {option.placeName}
+                {option.partnerId && (
+                  <>
+                    {' with '}
+                    <PersonLink
+                      person={{ id: option.partnerId, name: option.partnerName ?? option.partnerId }}
+                      links={links}
+                    />
+                  </>
+                )}
+              </span>
+              <span className="option-score">{option.score.toFixed(3)}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section>
+        <h3>Drives</h3>
+        <DriveBars drives={colonist.drives} dominant={colonist.dominantDrive} />
+      </section>
+
+      <section>
+        <h3>Weights — the seam</h3>
+        <DriveBars drives={normaliseWeights(colonist.weights)} />
+        <p className="row-meta" style={{ marginTop: 8 }}>
+          Shown as a share of the 0.2–2.0 range. Written once by Kindling, nudged by Reflection, and
+          read by the body on every tick without further inference.
+        </p>
+      </section>
+
+      <section>
+        <h3>Seed — what the Loom was given</h3>
+        <p className="seed">{detail.seed || 'nothing recorded'}</p>
+      </section>
+
+      <section>
+        <h3>
+          Personality{' '}
+          {colonist.isKindled ? (
+            <span className="tagline mind">written by the mind</span>
+          ) : (
+            <span className="tagline stub">fallback stub</span>
           )}
-        </section>
+        </h3>
+        <p className="personality">{detail.personality}</p>
+        {colonist.nameCandidates.length > 0 && (
+          <p className="row-meta" style={{ marginTop: 10 }}>
+            may one day take the name{' '}
+            {colonist.nameCandidates.map((n, i) => (
+              <span key={n}>
+                {i > 0 && ' · '}
+                <b>{n}</b>
+              </span>
+            ))}
+          </p>
+        )}
+        {kindling && (
+          <p className="row-meta" style={{ marginTop: 6 }}>
+            <JumpLink onClick={() => links.goTo({ tab: 'trace', rowId: kindling.id })}>
+              {kindling.wasFallback ? 'the Kindling call that fell back' : 'the Kindling call that wrote this'}
+            </JumpLink>
+          </p>
+        )}
+      </section>
+    </>
+  )
+}
 
-        <section>
-          <h3>Drives</h3>
-          <DriveBars drives={colonist.drives} dominant={colonist.dominantDrive} />
-        </section>
+// ---- Memory ---------------------------------------------------------------------------------
 
-        <section>
-          <h3>Doing, and what it nearly did instead</h3>
-          <div className="options">
-            {detail.considering.map((option, index) => (
+function MemoryTab({ detail, links }: { detail: ColonistDetail; links: Links }) {
+  const { colonist } = detail
+
+  return (
+    <>
+      <section>
+        <h3>Consolidated — what the days came to</h3>
+        {detail.consolidated.length === 0 ? (
+          <p className="empty">Nothing has been thought about yet.</p>
+        ) : (
+          <div className="rows">
+            {detail.consolidated.map((memory) => (
+              <Chain
+                key={memory.id}
+                id={memory.id}
+                when={`d${memory.day.toFixed(1)}`}
+                text={memory.text}
+                meta={
+                  <>
+                    <Valence value={memory.valence} /> · salience {memory.salience.toFixed(3)}
+                    {memory.recallCount > 0 && ` · recalled ${memory.recallCount}×`}
+                  </>
+                }
+                sources={memory.sources}
+                formedBy={memory.formedByCallId}
+                trace={detail.trace}
+                links={links}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section>
+        <h3>Episodic — most salient</h3>
+        {detail.recentMemories.length === 0 ? (
+          <p className="empty">Nothing has happened to them yet.</p>
+        ) : (
+          <div className="rows">
+            {detail.recentMemories.map((memory) => (
               <div
-                key={`${option.action}-${option.placeName}-${index}`}
-                className={option.chosen ? 'option is-chosen' : 'option'}
+                className={links.focus.rowId === memory.id ? 'row is-focused' : 'row'}
+                id={rowDomId(memory.id)}
+                key={memory.id}
               >
-                <span>
-                  {option.action.toLowerCase()} · {option.placeName}
-                </span>
-                <span className="option-score">{option.score.toFixed(3)}</span>
+                <span className="row-when">d{memory.day.toFixed(1)}</span>
+                <div>
+                  <p className="row-text">{memory.text}</p>
+                  <p className="row-meta">
+                    <Valence value={memory.valence} /> · salience {memory.salience.toFixed(3)} ·{' '}
+                    <Where memory={memory} links={links} />
+                  </p>
+                </div>
               </div>
             ))}
           </div>
-        </section>
+        )}
+        <p className="row-meta" style={{ marginTop: 10 }}>
+          {colonist.memoryCount} rows held ·{' '}
+          {colonist.wantsReflection
+            ? 'enough unprocessed experience to want a reflection'
+            : 'below the reflection threshold'}
+        </p>
+      </section>
+    </>
+  )
+}
 
-        <section>
-          <h3>Weights — the seam</h3>
-          <DriveBars drives={normaliseWeights(colonist.weights)} />
-          <p className="row-meta" style={{ marginTop: 8 }}>
-            Shown as a share of the 0.2–2.0 range. Written once by Kindling, then read by the body on
-            every tick without further inference.
-          </p>
-        </section>
+// ---- Beliefs --------------------------------------------------------------------------------
 
-        <section>
-          <h3>Beliefs — each traceable to its source</h3>
-          {detail.beliefs.length === 0 ? (
-            <p className="empty">
-              Nothing has happened to them that they have made up their mind about.
-            </p>
-          ) : (
-            <div className="rows">
-              {detail.beliefs.map((belief) => (
-                <Chain
-                  key={belief.id}
-                  id={belief.id}
-                  when="held"
-                  text={`“${belief.claim}”`}
-                  meta={
+function BeliefsTab({ detail, links }: { detail: ColonistDetail; links: Links }) {
+  return (
+    <section>
+      <h3>Beliefs — each traceable to its source</h3>
+      {detail.beliefs.length === 0 ? (
+        <p className="empty">Nothing has happened to them that they have made up their mind about.</p>
+      ) : (
+        <div className="rows">
+          {detail.beliefs.map((belief: BeliefRow) => (
+            <Chain
+              key={belief.id}
+              id={belief.id}
+              when="held"
+              text={`“${belief.claim}”`}
+              meta={
+                <>
+                  formed d{belief.formedOnDay.toFixed(1)} · confidence {belief.confidence.toFixed(2)}
+                  {belief.recallCount > 0 && ` · recalled ${belief.recallCount}×`}
+                  {belief.contradictsColonyMyth && (
                     <>
-                      formed d{belief.formedOnDay.toFixed(1)} · confidence{' '}
-                      {belief.confidence.toFixed(2)}
-                      {belief.recallCount > 0 && ` · recalled ${belief.recallCount}×`}
-                      {belief.contradictsColonyMyth && (
-                        <>
-                          {' · '}
-                          <b className="neg">contradicts the colony myth</b>
-                        </>
-                      )}
+                      {' · '}
+                      <b className="neg">contradicts the colony myth</b>
                     </>
-                  }
-                  sources={belief.sources}
-                  emphasis
-                />
-              ))}
-            </div>
-          )}
-        </section>
+                  )}
+                </>
+              }
+              sources={belief.sources}
+              formedBy={belief.formedByCallId}
+              trace={detail.trace}
+              links={links}
+              emphasis
+            />
+          ))}
+        </div>
+      )}
+      <p className="row-meta" style={{ marginTop: 10 }}>
+        A belief that cites a memory which does not exist is discarded before it is ever shown.
+      </p>
+    </section>
+  )
+}
 
-        <section>
-          <h3>Consolidated memory — what the days came to</h3>
-          {detail.consolidated.length === 0 ? (
-            <p className="empty">Nothing has been thought about yet.</p>
-          ) : (
-            <div className="rows">
-              {detail.consolidated.map((memory) => (
-                <Chain
-                  key={memory.id}
-                  id={memory.id}
-                  when={`d${memory.day.toFixed(1)}`}
-                  text={memory.text}
-                  meta={
-                    <>
-                      <span className={memory.valence >= 0 ? 'pos' : 'neg'}>
-                        valence {memory.valence >= 0 ? '+' : ''}
-                        {memory.valence.toFixed(2)}
-                      </span>{' '}
-                      · salience {memory.salience.toFixed(3)}
-                      {memory.recallCount > 0 && ` · recalled ${memory.recallCount}×`}
-                    </>
-                  }
-                  sources={memory.sources}
-                />
-              ))}
-            </div>
-          )}
-        </section>
+// ---- Relationships --------------------------------------------------------------------------
 
-        <section>
-          <h3>Episodic memory — most salient</h3>
-          {detail.recentMemories.length === 0 ? (
-            <p className="empty">Nothing has happened to them yet.</p>
-          ) : (
-            <div className="rows">
-              {detail.recentMemories.map((memory) => (
-                <div className="row" key={memory.id}>
-                  <span className="row-when">d{memory.day.toFixed(1)}</span>
-                  <div>
-                    <p className="row-text">{memory.text}</p>
-                    <p className="row-meta">
-                      <span className={memory.valence >= 0 ? 'pos' : 'neg'}>
-                        valence {memory.valence >= 0 ? '+' : ''}
-                        {memory.valence.toFixed(2)}
-                      </span>{' '}
-                      · salience {memory.salience.toFixed(3)}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-          <p className="row-meta" style={{ marginTop: 10 }}>
-            {colonist.memoryCount} rows held ·{' '}
-            {colonist.wantsReflection
-              ? 'enough unprocessed experience to want a reflection'
-              : 'below the reflection threshold'}
-          </p>
-        </section>
-
-        <section>
-          <h3>Relationship ledger</h3>
-          {detail.relationships.length === 0 ? (
-            <p className="empty">They have not spent time with anyone yet.</p>
-          ) : (
-            <table className="rel-table">
-              <thead>
-                <tr>
-                  <th>Toward</th>
-                  <th>Aff</th>
-                  <th>Trust</th>
-                  <th>Resp</th>
-                  <th>Shared</th>
-                </tr>
-              </thead>
-              <tbody>
-                {detail.relationships.map((relationship) => (
-                  <tr key={relationship.towardId}>
+function RelationshipsTab({ detail, links }: { detail: ColonistDetail; links: Links }) {
+  return (
+    <section>
+      <h3>Relationship ledger — how they read each person</h3>
+      {detail.relationships.length === 0 ? (
+        <p className="empty">They have not spent time with anyone yet.</p>
+      ) : (
+        <>
+          <table className="rel-table">
+            <thead>
+              <tr>
+                <th>Toward</th>
+                <th>Aff</th>
+                <th>Trust</th>
+                <th>Resp</th>
+                <th>Shared</th>
+              </tr>
+            </thead>
+            <tbody>
+              {detail.relationships.map((relationship) => (
+                <Fragment key={relationship.towardId}>
+                  <tr>
                     <td>
-                      <span className="rel-name">{relationship.towardName}</span>
+                      <span className="rel-name">
+                        <PersonLink
+                          person={{ id: relationship.towardId, name: relationship.towardName }}
+                          links={links}
+                        />
+                      </span>
                       <br />
                       <span className="rel-stage">{relationship.stage}</span>
                     </td>
@@ -328,62 +504,241 @@ export function ColonistDetailView({ id, onBack }: { id: string; onBack: () => v
                     <td>{signed(relationship.respect)}</td>
                     <td>{relationship.sharedMemories}</td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </section>
+                  {relationship.narrative && (
+                    <tr className="rel-note">
+                      <td colSpan={5}>“{relationship.narrative}”</td>
+                    </tr>
+                  )}
+                </Fragment>
+              ))}
+            </tbody>
+          </table>
+          <p className="row-meta" style={{ marginTop: 10 }}>
+            One direction only — how {detail.colonist.displayName} reads them, not how they read back.
+            The numbers are what the body runs on; a line in quotes is what Reflection wrote.
+          </p>
+        </>
+      )}
+    </section>
+  )
+}
 
-        <section>
-          <h3>Model trace — every call this mind has made</h3>
-          {detail.trace.length === 0 ? (
-            <p className="empty">
-              No calls yet. Everything above was produced by the body, with no inference at all.
-            </p>
-          ) : (
-            <>
-              <div className="rows">
-                {detail.trace.map((row, index) => (
-                  <div className="row" key={`${row.callType}-${row.day}-${index}`}>
-                    <span className="row-when">d{row.day.toFixed(1)}</span>
-                    <div>
-                      <p className="row-text">
-                        <b>{row.callType}</b>
-                        {row.wasFallback ? (
-                          <span className="tagline stub" style={{ marginLeft: 6 }}>
-                            fallback
-                          </span>
-                        ) : (
-                          <>
-                            {' · '}
-                            {row.model} · {row.promptTokens} in / {row.completionTokens} out ·{' '}
-                            {row.seconds.toFixed(1)}s
-                          </>
-                        )}
-                      </p>
-                      <p className="row-meta">{row.produced}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <p className="row-meta" style={{ marginTop: 10 }}>
-                {colonist.modelCalls} call{colonist.modelCalls === 1 ? '' : 's'} lifetime
-              </p>
-            </>
-          )}
-        </section>
-      </div>
+// ---- Trace ----------------------------------------------------------------------------------
+
+function TraceTab({
+  colonistId,
+  detail,
+  links,
+}: {
+  colonistId: string
+  detail: ColonistDetail
+  links: Links
+}) {
+  const [only, setOnly] = useState('all')
+
+  // A link into the trace names one row; a filter hiding it would make the link look broken.
+  useEffect(() => {
+    if (links.focus.rowId) setOnly('all')
+  }, [links.focus.rowId])
+
+  if (detail.traceTotal === 0) {
+    return (
+      <section>
+        <h3>Every call this mind has made</h3>
+        <p className="empty">
+          No calls yet. Everything in this inspector was produced by the body, with no inference at
+          all.
+        </p>
+      </section>
+    )
+  }
+
+  const rows = only === 'all' ? detail.trace : detail.trace.filter((row) => row.callType === only)
+  const tokens = detail.traceSummary.reduce((sum, s) => sum + s.tokens, 0)
+  const hidden = detail.traceTotal - detail.trace.length
+
+  return (
+    <>
+      <section>
+        <h3>Every call this mind has made</h3>
+        <table className="trace-summary">
+          <thead>
+            <tr>
+              <th>Call</th>
+              <th>Calls</th>
+              <th>Tokens</th>
+              <th>Time</th>
+              <th>Fallback</th>
+            </tr>
+          </thead>
+          <tbody>
+            {detail.traceSummary.map((s) => (
+              <tr key={s.callType}>
+                <td>{callLabel(s.callType)}</td>
+                <td>{s.calls}</td>
+                <td>{s.tokens.toLocaleString()}</td>
+                <td>{s.seconds.toFixed(0)}s</td>
+                <td className={s.fallbacks > 0 ? 'neg' : undefined}>{s.fallbacks}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p className="row-meta" style={{ marginTop: 8 }}>
+          {detail.traceTotal} call{detail.traceTotal === 1 ? '' : 's'} · {tokens.toLocaleString()}{' '}
+          tokens. Prompts and responses are
+          kept for the last 40 calls, on this machine — the inference server remembers nothing.
+        </p>
+      </section>
+
+      <section>
+        <div className="trace-filter" role="group" aria-label="Filter the trace by call type">
+          {['all', ...detail.traceSummary.map((s) => s.callType)].map((type) => (
+            <button key={type} aria-pressed={only === type} onClick={() => setOnly(type)}>
+              {type === 'all' ? 'all' : callLabel(type)}
+            </button>
+          ))}
+        </div>
+        <div className="rows">
+          {rows.map((row) => (
+            <TraceEntry key={row.id} colonistId={colonistId} row={row} links={links} />
+          ))}
+        </div>
+        {hidden > 0 && (
+          <p className="row-meta" style={{ marginTop: 10 }}>
+            Every call that wrote something is listed, with the most recent idle thoughts.{' '}
+            {hidden} older idle thought{hidden === 1 ? ' is' : 's are'} counted above but not listed.
+          </p>
+        )}
+      </section>
     </>
   )
 }
+
+/** One call. Opens to show exactly what was sent and what came back. */
+function TraceEntry({ colonistId, row, links }: { colonistId: string; row: TraceRow; links: Links }) {
+  const focused = links.focus.rowId === row.id
+  const [open, setOpen] = useState(focused && row.hasText)
+  const [text, setText] = useState<CallText | null>(null)
+  const [failed, setFailed] = useState(false)
+
+  useEffect(() => {
+    if (focused && row.hasText) setOpen(true)
+  }, [focused, row.hasText])
+
+  // Fetched on first open rather than with every poll — the text is the heavy part of a call.
+  useEffect(() => {
+    if (!open || text) return
+    let cancelled = false
+
+    fetch(`/api/colonists/${colonistId}/calls/${encodeURIComponent(row.id)}`)
+      .then((response) => (response.ok ? (response.json() as Promise<CallText>) : Promise.reject()))
+      .then((data) => {
+        if (!cancelled) setText(data)
+      })
+      .catch(() => {
+        if (!cancelled) setFailed(true)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [open, text, colonistId, row.id])
+
+  return (
+    <div className={focused ? 'row is-focused' : 'row'} id={rowDomId(row.id)}>
+      <span className="row-when">d{row.day.toFixed(1)}</span>
+      <div>
+        <p className="row-text">
+          <b>{callLabel(row.callType)}</b>
+          {row.wasFallback ? (
+            <span className="tagline stub">fallback</span>
+          ) : (
+            <span className="trace-cost">
+              {' · '}
+              {row.model} · {row.promptTokens} in / {row.completionTokens} out ·{' '}
+              {row.seconds.toFixed(1)}s
+            </span>
+          )}
+        </p>
+        <p className="row-produced">{row.produced}</p>
+        <p className="row-meta">
+          {row.lane} lane
+          {row.producedIds.map((artifact) => (
+            <span key={artifact}>
+              {' · '}
+              <JumpLink onClick={() => links.goTo({ tab: tabFor(artifact), rowId: artifact })}>
+                {artifact.startsWith('b-') ? 'the belief' : 'the memory'}
+              </JumpLink>
+            </span>
+          ))}
+          {' · '}
+          {row.hasText ? (
+            <button
+              className="chain-toggle"
+              onClick={() => setOpen((v) => !v)}
+              aria-expanded={open}
+            >
+              {open ? 'hide' : 'show'} prompt &amp; response
+            </button>
+          ) : row.wasFallback ? (
+            <span>no call reached a model</span>
+          ) : (
+            <span title="Only the most recent 40 calls keep their text">text no longer held</span>
+          )}
+        </p>
+
+        {open && (
+          <div className="call-text">
+            {failed ? (
+              <p className="empty">This call's text could not be loaded.</p>
+            ) : !text ? (
+              <p className="empty">Loading…</p>
+            ) : (
+              <>
+                {text.system && <CallBlock label="System" body={text.system} collapsed />}
+                {text.prompt && <CallBlock label="Prompt" body={text.prompt} />}
+                <CallBlock label="Response" body={pretty(text.response)} />
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function CallBlock({
+  label,
+  body,
+  collapsed: startCollapsed = false,
+}: {
+  label: string
+  body: string
+  collapsed?: boolean
+}) {
+  // The system prompt is the world rules and the personality — long, and the same on every call —
+  // so it starts folded. The prompt and response are what differs, so they start open.
+  const [collapsed, setCollapsed] = useState(startCollapsed)
+
+  return (
+    <div className="call-block">
+      <button className="call-label" onClick={() => setCollapsed((c) => !c)} aria-expanded={!collapsed}>
+        {label} <span>{body.length.toLocaleString()} chars</span>
+      </button>
+      {!collapsed && <pre>{body}</pre>}
+    </div>
+  )
+}
+
+// ---- shared pieces --------------------------------------------------------------------------
 
 /**
  * One row that can be opened to show what produced it.
  *
  * The chain is the whole point of the memory pipeline: a belief is never a free-floating string,
  * it carries the ids of the episodic rows it came from, and those rows are real events from this
- * playthrough rather than anything authored. Collapsed by default so the list stays readable —
- * the claim is what you scan, the chain is what you check.
+ * playthrough rather than anything authored. Collapsed by default so the list stays readable — the
+ * claim is what you scan, the chain is what you check. Opened automatically when a link lands here.
  */
 function Chain({
   id,
@@ -391,19 +746,32 @@ function Chain({
   text,
   meta,
   sources,
+  formedBy,
+  trace,
+  links,
   emphasis = false,
 }: {
   id: string
   when: string
   text: string
-  meta: React.ReactNode
+  meta: ReactNode
   sources: MemoryRow[]
+  formedBy: string | null
+  trace: TraceRow[]
+  links: Links
   emphasis?: boolean
 }) {
-  const [open, setOpen] = useState(false)
+  const focused = links.focus.rowId === id
+  const [open, setOpen] = useState(focused)
+
+  useEffect(() => {
+    if (focused) setOpen(true)
+  }, [focused])
+
+  const call = formedBy ? trace.find((row) => row.id === formedBy) : undefined
 
   return (
-    <div className="row">
+    <div className={focused ? 'row is-focused' : 'row'} id={rowDomId(id)}>
       <span className="row-when">{when}</span>
       <div>
         <p className={emphasis ? 'row-text claim' : 'row-text'}>{text}</p>
@@ -423,6 +791,15 @@ function Chain({
               </button>
             </>
           )}
+          {call && (
+            <>
+              {' · '}
+              <JumpLink onClick={() => links.goTo({ tab: 'trace', rowId: call.id })}>
+                formed by {callLabel(call.callType)} d{call.day.toFixed(1)}
+                {call.wasFallback ? ' (fallback)' : ''}
+              </JumpLink>
+            </>
+          )}
         </p>
 
         {open && (
@@ -432,7 +809,14 @@ function Chain({
                 <span className="chain-when">
                   {source.day > 0 ? `d${source.day.toFixed(1)}` : '—'}
                 </span>
-                <span className="chain-text">{source.text}</span>
+                <span className="chain-text">
+                  {source.text}
+                  {source.day > 0 && (
+                    <span className="chain-where">
+                      <Where memory={source} links={links} />
+                    </span>
+                  )}
+                </span>
                 {source.day > 0 && (
                   <span className={source.valence >= 0 ? 'chain-val pos' : 'chain-val neg'}>
                     {source.valence >= 0 ? '+' : ''}
@@ -446,6 +830,105 @@ function Chain({
       </div>
     </div>
   )
+}
+
+/** Where a memory happened and who else was there — each a link onward. */
+function Where({ memory, links }: { memory: MemoryRow; links: Links }) {
+  return (
+    <>
+      {memory.placeId && (
+        <>
+          at <PlaceLink id={memory.placeId} name={memory.placeName} />
+        </>
+      )}
+      {memory.others.length > 0 && (
+        <>
+          {' · with '}
+          {memory.others.map((person, index) => (
+            <span key={person.id}>
+              {index > 0 && ', '}
+              <PersonLink person={person} links={links} />
+            </span>
+          ))}
+        </>
+      )}
+    </>
+  )
+}
+
+/** Opens another mind in the inspector, on the same tab. */
+function PersonLink({ person, links }: { person: PersonRef; links: Links }) {
+  return (
+    <button
+      className="jump"
+      onClick={() => links.openColonist(person.id)}
+      title={`Open ${person.name} in the inspector`}
+    >
+      {person.name}
+    </button>
+  )
+}
+
+/** Opens the place in the 3D room view, in its own tab — it is a separate page. */
+function PlaceLink({ id, name }: { id: string; name: string }) {
+  return (
+    <a
+      className="jump"
+      href={`/spike/room.html?place=${encodeURIComponent(id)}`}
+      target="_blank"
+      rel="noreferrer"
+      title="Open this place in the room view"
+    >
+      {name} ↗
+    </a>
+  )
+}
+
+function JumpLink({ onClick, children }: { onClick: () => void; children: ReactNode }) {
+  return (
+    <button className="jump" onClick={onClick}>
+      {children} →
+    </button>
+  )
+}
+
+function Valence({ value }: { value: number }) {
+  return (
+    <span className={value >= 0 ? 'pos' : 'neg'}>
+      valence {value >= 0 ? '+' : ''}
+      {value.toFixed(2)}
+    </span>
+  )
+}
+
+const CALL_LABELS: Record<string, string> = { IdleThought: 'Idle thought' }
+
+function callLabel(callType: string) {
+  return CALL_LABELS[callType] ?? callType
+}
+
+function rowDomId(rowId: string) {
+  return `insp-${rowId}`
+}
+
+/** Artifact ids carry their kind: b- is a belief, cm- a consolidated memory. */
+function tabFor(artifactId: string): InspectorTab {
+  return artifactId.startsWith('b-') ? 'beliefs' : 'memory'
+}
+
+/** Small models sometimes quote their own sentence; the inspector adds its own quotes. */
+function stripQuotes(text: string) {
+  return text.replace(/^["“”']+|["“”']+$/g, '').trim()
+}
+
+/** Responses are schema-constrained JSON; indent them so a person can read one. */
+function pretty(body: string | null) {
+  if (!body) return '(empty)'
+  try {
+    return JSON.stringify(JSON.parse(body), null, 2)
+  } catch {
+    return body
+  }
 }
 
 function signed(value: number) {

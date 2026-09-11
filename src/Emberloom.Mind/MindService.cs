@@ -10,9 +10,9 @@ namespace Emberloom.Mind;
 /// Layer 2's entry point. Owns the transport, decides whether the mind is available at all, and
 /// writes every call's outcome back into the body as a durable artifact plus a trace line.
 /// <para>
-/// It does not own a queue or a budget — that is the governor's job, and the governor is M2. What
-/// this class establishes is the seam: a call goes out, something durable comes back, and the body
-/// reads it on every subsequent tick without inference.
+/// It does not own a queue or a budget — that is the governor's job. What this class establishes
+/// is the seam: a call goes out, something durable comes back, and the body reads it on every
+/// subsequent tick without inference.
 /// </para>
 /// </summary>
 public sealed class MindService : IDisposable
@@ -32,6 +32,18 @@ public sealed class MindService : IDisposable
     }
 
     public OllamaClient Client => _client;
+
+    /// <summary>
+    /// Runs a write-back against the colony. Inference happens on the mind's own thread, but what it
+    /// writes lands in state the tick loop mutates and the API reads, so the host supplies its lock
+    /// here. The default runs the work directly, which is right for a single-threaded caller such as
+    /// a test.
+    /// <para>
+    /// Only the write-back goes through this — never the call itself. Holding the colony across a
+    /// multi-second inference would stall the simulation, which Layer 2 is never allowed to do.
+    /// </para>
+    /// </summary>
+    public Action<Action> Commit { get; init; } = static work => work();
 
     /// <summary>
     /// Whether Layer 2 is reachable. Re-checked rather than cached at startup, because the design
@@ -80,7 +92,7 @@ public sealed class MindService : IDisposable
             result = KindlingCall.Fallback(seed);
         }
 
-        Apply(colonist, colony, result);
+        ApplyKindling(colonist, colony, result);
         return result;
     }
 
@@ -89,37 +101,31 @@ public sealed class MindService : IDisposable
     /// the colonist scores every future action against weights a model wrote, with no further
     /// inference.
     /// </summary>
-    private static void Apply(Colonist colonist, Colony colony, KindlingResult result)
+    private void ApplyKindling(Colonist colonist, Colony colony, KindlingResult result)
     {
-        colonist.Personality = result.Personality;
-        colonist.Weights = result.Weights;
-        colonist.NameCandidates = result.NameCandidates;
-        colonist.IsKindled = result.FromModel;
-
+        var names = result.NameCandidates.Count;
         var produced = result.FromModel
-            ? $"personality and weights · {WeightSummary(result)}"
+            ? $"personality, {names} name candidate{(names == 1 ? "" : "s")}, seven weights · {WeightSummary(result)}"
             : "fallback stub — the mind was unavailable";
 
-        colonist.RecordCall(new ModelCallRecord
+        Commit(() =>
         {
-            CallType = "Kindling",
-            Day = colony.Day,
-            Model = result.Call?.Model ?? "none",
-            Lane = "deep",
-            PromptTokens = result.Call?.PromptTokens ?? 0,
-            CompletionTokens = result.Call?.CompletionTokens ?? 0,
-            Seconds = result.Call?.TotalDuration.TotalSeconds ?? 0,
-            Produced = produced,
-            WasFallback = !result.FromModel
-        });
+            colonist.Personality = result.Personality;
+            colonist.Weights = result.Weights;
+            colonist.NameCandidates = result.NameCandidates;
+            colonist.IsKindled = result.FromModel;
 
-        colony.Log(
-            result.FromModel ? EventLayer.Mind : EventLayer.World,
-            result.FromModel
-                ? $"{colonist.Designation} woke. {FirstSentence(result.Personality)}"
-                : $"{colonist.Designation} woke, but nothing was there to write them.",
-            colonist,
-            notable: true);
+            colonist.RecordCall(Record(
+                string.Empty, "Kindling", "deep", colony, result.Call, produced, wasFallback: !result.FromModel));
+
+            colony.Log(
+                result.FromModel ? EventLayer.Mind : EventLayer.World,
+                result.FromModel
+                    ? $"{colonist.Designation} woke. {result.SeedSummary}"
+                    : $"{colonist.Designation} woke, but nothing was there to write them.",
+                colonist,
+                notable: true);
+        });
     }
 
     /// <summary>
@@ -133,7 +139,10 @@ public sealed class MindService : IDisposable
         Colony colony,
         CancellationToken ct = default)
     {
-        var batch = colonist.Memory.ReflectionBatch(colony.Day);
+        // Read under the same lock as the write-back: the tick loop is appending to this store.
+        IReadOnlyList<EpisodicMemory> batch = [];
+        Commit(() => batch = colonist.Memory.ReflectionBatch(colony.Day));
+
         ReflectionResult result;
 
         try
@@ -161,6 +170,11 @@ public sealed class MindService : IDisposable
         ReflectionResult result,
         CancellationToken ct)
     {
+        // Reserved before anything is written, so everything this reflection produces can cite the
+        // call that produced it. That citation is the last link in the inspector's chain: belief,
+        // to the memories it came from, to the exact prompt and response that formed it.
+        var callId = colonist.NextCallId();
+
         var consolidated = new ConsolidatedMemory
         {
             Id = $"cm-{colonist.Id}-{colonist.Memory.Consolidated.Count + 1}",
@@ -168,80 +182,82 @@ public sealed class MindService : IDisposable
             Day = colony.Day,
             Text = result.ConsolidatedText,
             Valence = result.Valence,
-            SourceMemoryIds = result.SourceMemoryIds
+            SourceMemoryIds = result.SourceMemoryIds,
+            FormedByCallId = callId
         };
 
-        colonist.Memory.Add(consolidated);
-
-        // The batch is marked consolidated whether or not a mind was there. Leaving it unmarked
-        // would make the same rows resurface forever and starve everything newer.
-        foreach (var memory in batch)
-        {
-            memory.Consolidated = true;
-        }
-
-        var beliefs = new List<Belief>();
-
-        foreach (var draft in result.Beliefs)
-        {
-            var belief = new Belief
+        var beliefs = result.Beliefs
+            .Select((draft, index) => new Belief
             {
-                Id = $"b-{colonist.Id}-{colonist.Memory.Beliefs.Count + beliefs.Count + 1}",
+                Id = $"b-{colonist.Id}-{colonist.Memory.Beliefs.Count + index + 1}",
                 OwnerId = colonist.Id,
                 FormedOnDay = colony.Day,
                 Claim = draft.Claim,
                 SourceMemoryIds = draft.SourceMemoryIds,
-                Confidence = draft.Confidence
-            };
+                Confidence = draft.Confidence,
+                FormedByCallId = callId
+            })
+            .ToList();
 
-            beliefs.Add(belief);
-            colonist.Memory.Add(belief);
-        }
-
-        // Weight drift is the second place a model call permanently changes behaviour, after
-        // Kindling. It is deliberately small and cumulative rather than a rewrite.
-        foreach (var (drive, amount) in result.WeightDrift)
-        {
-            colonist.Weights.Drift(drive, amount);
-        }
-
-        if (result.RelationshipAbout is { Length: > 0 } about
-            && result.RelationshipReading is { Length: > 0 } reading)
-        {
-            var other = colony.Living.FirstOrDefault(c =>
-                c.Id != colonist.Id
-                && (c.Designation.Equals(about, StringComparison.OrdinalIgnoreCase)
-                    || c.DisplayName.Equals(about, StringComparison.OrdinalIgnoreCase)));
-
-            if (other is not null)
-            {
-                colony.Relationships.Get(colonist.Id, other.Id).Narrative = reading;
-            }
-        }
-
+        // Embedding is a network call, so it happens before the write-back rather than under the
+        // host's lock. Nothing else can see these rows until they are added, so filling in their
+        // vectors first is safe.
         await EmbedAsync(consolidated, beliefs, ct).ConfigureAwait(false);
 
-        colonist.RecordCall(new ModelCallRecord
-        {
-            CallType = "Reflection",
-            Day = colony.Day,
-            Model = result.Call?.Model ?? "none",
-            Lane = "deep",
-            PromptTokens = result.Call?.PromptTokens ?? 0,
-            CompletionTokens = result.Call?.CompletionTokens ?? 0,
-            Seconds = result.Call?.TotalDuration.TotalSeconds ?? 0,
-            Produced = result.FromModel
-                ? Describe(beliefs.Count, batch.Count, result.WeightDrift.Count)
-                : "fallback stub — the mind was unavailable",
-            WasFallback = !result.FromModel
-        });
+        var produced = result.FromModel
+            ? Describe(beliefs.Count, batch.Count, result.WeightDrift.Count)
+            : "fallback stub — the mind was unavailable";
 
-        foreach (var belief in beliefs)
+        var producedIds = beliefs.Select(b => b.Id).Prepend(consolidated.Id).ToList();
+
+        Commit(() =>
         {
-            colony.Log(EventLayer.Mind,
-                $"{colonist.DisplayName} came to believe: “{belief.Claim}”",
-                colonist, notable: true);
-        }
+            colonist.Memory.Add(consolidated);
+
+            // The batch is marked consolidated whether or not a mind was there. Leaving it unmarked
+            // would make the same rows resurface forever and starve everything newer.
+            foreach (var memory in batch)
+            {
+                memory.Consolidated = true;
+            }
+
+            foreach (var belief in beliefs)
+            {
+                colonist.Memory.Add(belief);
+            }
+
+            // Weight drift is the second place a model call permanently changes behaviour, after
+            // Kindling. It is deliberately small and cumulative rather than a rewrite.
+            foreach (var (drive, amount) in result.WeightDrift)
+            {
+                colonist.Weights.Drift(drive, amount);
+            }
+
+            if (result.RelationshipAbout is { Length: > 0 } about
+                && result.RelationshipReading is { Length: > 0 } reading)
+            {
+                var other = colony.Living.FirstOrDefault(c =>
+                    c.Id != colonist.Id
+                    && (c.Designation.Equals(about, StringComparison.OrdinalIgnoreCase)
+                        || c.DisplayName.Equals(about, StringComparison.OrdinalIgnoreCase)));
+
+                if (other is not null)
+                {
+                    colony.Relationships.Get(colonist.Id, other.Id).Narrative = reading;
+                }
+            }
+
+            colonist.RecordCall(Record(
+                callId, "Reflection", "deep", colony, result.Call, produced,
+                wasFallback: !result.FromModel, producedIds: producedIds));
+
+            foreach (var belief in beliefs)
+            {
+                colony.Log(EventLayer.Mind,
+                    $"{colonist.DisplayName} came to believe: “{belief.Claim}”",
+                    colonist, notable: true);
+            }
+        });
     }
 
     /// <summary>
@@ -294,7 +310,12 @@ public sealed class MindService : IDisposable
         return string.Join(", ", parts);
     }
 
-    /// <summary>Idle thought on the fast lane. Writes nothing durable; failure is simply silence.</summary>
+    /// <summary>
+    /// Idle thought on the fast lane. Writes nothing durable, but it is still a call this mind made,
+    /// and the Trace tab's promise is every call — idle thought is most of them. A thought that never
+    /// arrived because there was no mind is silence and leaves no line; a call that came back empty
+    /// still spent tokens, so it does.
+    /// </summary>
     public async Task<(string? Thought, CompletionResult? Call)> ThinkAsync(
         Colonist colonist,
         Colony colony,
@@ -302,23 +323,59 @@ public sealed class MindService : IDisposable
     {
         var (thought, call) = await IdleThoughtCall.ExecuteAsync(_client, colonist, colony, ct).ConfigureAwait(false);
 
-        if (thought is not null)
+        if (call is null)
         {
-            colonist.LastThought = thought;
+            return (null, null);
         }
+
+        Commit(() =>
+        {
+            if (thought is not null)
+            {
+                colonist.LastThought = thought;
+            }
+
+            colonist.RecordCall(Record(
+                string.Empty, "IdleThought", "fast", colony, call,
+                thought is null ? "nothing that came to words" : $"“{thought}”",
+                wasFallback: false));
+        });
 
         return (thought, call);
     }
 
+    /// <summary>
+    /// One trace line. The request and response texts ride along from the completion so the Trace
+    /// tab can show exactly what was asked; they stay on this machine, in the colonist's trace.
+    /// </summary>
+    private static ModelCallRecord Record(
+        string id,
+        string callType,
+        string lane,
+        Colony colony,
+        CompletionResult? call,
+        string produced,
+        bool wasFallback,
+        IReadOnlyList<string>? producedIds = null) => new()
+    {
+        Id = id,
+        CallType = callType,
+        Day = colony.Day,
+        Model = call?.Model ?? "none",
+        Lane = lane,
+        PromptTokens = call?.PromptTokens ?? 0,
+        CompletionTokens = call?.CompletionTokens ?? 0,
+        Seconds = call?.TotalDuration.TotalSeconds ?? 0,
+        Produced = produced,
+        ProducedIds = producedIds ?? Array.Empty<string>(),
+        WasFallback = wasFallback,
+        System = call?.RequestSystem,
+        Prompt = call?.RequestPrompt,
+        Response = call?.Text
+    };
+
     private static string WeightSummary(KindlingResult result) =>
         Prompts.WorldPrompt.Weights(result.Weights);
-
-    private static string FirstSentence(string text)
-    {
-        var trimmed = text.Trim();
-        var stop = trimmed.IndexOf(". ", StringComparison.Ordinal);
-        return stop > 0 ? trimmed[..(stop + 1)] : trimmed;
-    }
 
     public void Dispose()
     {

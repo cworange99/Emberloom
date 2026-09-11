@@ -14,7 +14,7 @@ See [DESIGN.md](DESIGN.md) for the full design. Build order and milestone status
 | **M1** — the body, with no mind at all | **Done.** Drives, utility scoring, city map, foraging/salvage/building/rest, relationship ledger, episodic capture, event feed, time controls — all with zero model calls — behind an HTTP/WebSocket API, with a React client watching it. |
 | **M2** — governor and Kindling | **Done.** Printed colonists get model-written personalities and weights; the budget governor holds a rolling tokens-per-minute ceiling and slows time rather than dropping thinking. |
 | **M3** — memory pipeline and Reflection | **Done.** Episodic memories coalesce, consolidate, and produce beliefs that cite the memories they came from — walkable in the inspector. |
-| M4 — the Mind Inspector | Not started |
+| **M4** — the Mind Inspector | **Inspector done** — five tabs, every chain walkable end to end, and the prompt and response of every recent call kept locally. The Modest-profile decision is still open. |
 | M5 — dialogue and deliberation | Not started |
 | M6 — player verbs | Not started |
 | M7 — generations | Not started |

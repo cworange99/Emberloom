@@ -294,6 +294,19 @@ the game for anyone technical.
 A belief flagged as *contradicting the colony myth* — a colonist who is right and outnumbered — is
 the most interesting thing this system can produce.
 
+**As built at M4.** The links matter more than the tabs. A belief opens onto the episodic rows it
+cites. Each row names the place it happened, which opens in the room view, and the other people in
+it, whose minds open in the inspector on the same tab. Beliefs and consolidated memories both name
+the Reflection call that formed them, and that call opens onto its exact prompt and response. The
+Trace tab runs the chain the other way, from each call to whatever it wrote. Idle thought is in the
+trace too, since it is most of the calls.
+
+The prompt and response are kept for each colonist's 40 most recent calls, on this machine, and
+fetched only when a row is opened. The inference server is asked to remember none of it, so the
+golden rule holds. Calls that wrote something durable are always listed however old, so every
+"formed by" link resolves; only idle thought is capped. The Relationships tab is labelled *Ties* so
+all five tabs fit the panel's width.
+
 ---
 
 ## 10. How you play it

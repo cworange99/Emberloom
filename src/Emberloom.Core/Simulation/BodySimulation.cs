@@ -262,8 +262,8 @@ public sealed class BodySimulation
                 if (student is not null)
                 {
                     _colony.Relationships.Get(student.Id, colonist.Id).Adjust(respect: 0.06, trust: 0.03);
-                    Record(colonist, "taught", student.DisplayName, place.Id, 0.45, 0.5);
-                    Record(student, "was taught by", colonist.DisplayName, place.Id, 0.35, 0.45);
+                    Record(colonist, "taught", student.DisplayName, place.Id, 0.45, 0.5, with: student.Id);
+                    Record(student, "was taught by", colonist.DisplayName, place.Id, 0.35, 0.45, with: colonist.Id);
                 }
 
                 break;
@@ -305,8 +305,8 @@ public sealed class BodySimulation
 
         // In M1 conversation has no content — the ledger moves and both parties remember that it
         // happened. Dialogue proper is M5.
-        Record(colonist, "talked with", partner.DisplayName, place.Id, 0.3, 0.25);
-        Record(partner, "talked with", colonist.DisplayName, place.Id, 0.3, 0.25);
+        Record(colonist, "talked with", partner.DisplayName, place.Id, 0.3, 0.25, with: partner.Id);
+        Record(partner, "talked with", colonist.DisplayName, place.Id, 0.3, 0.25, with: colonist.Id);
     }
 
     private void Injure(Colonist colonist, Place place)
@@ -382,14 +382,18 @@ public sealed class BodySimulation
         string? about,
         string placeId,
         double valence,
-        double intensity)
+        double intensity,
+        string? with = null)
     {
         var memory = new EpisodicMemory
         {
             Id = $"m-{_nextMemoryId++}",
             Tick = _colony.Tick,
             Day = _colony.Day,
-            Actors = [colonist.Id],
+            // The other person, when there is one. The name is already in the text for the mind to
+            // read; the id is what lets the inspector link a memory to the mind of whoever else was
+            // there, and the two can diverge once colonists start taking names.
+            Actors = with is null ? [colonist.Id] : [colonist.Id, with],
             Verb = verb,
             Object = about,
             PlaceId = placeId,

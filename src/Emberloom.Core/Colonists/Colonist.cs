@@ -64,15 +64,53 @@ public sealed class Colonist
     /// <summary>The most recent thing Layer 2 had them think. Null until the fast lane runs in M3.</summary>
     public string? LastThought { get; set; }
 
+    private readonly List<ModelCallRecord> _trace = [];
+    private int _callSequence;
+
+    /// <summary>
+    /// How many of the most recent calls keep their full prompt and response. The text is the heavy
+    /// part of a record — a few KB against a few hundred bytes for everything else — and an overnight
+    /// run makes thousands of calls, so older records keep their measurements and lose the text.
+    /// </summary>
+    public const int TraceTextRetention = 40;
+
     /// <summary>
     /// Every model call this mind has made, newest last. The inspector's Trace tab reads this,
     /// and it is the cheapest convincing thing in the game for anyone technical.
+    /// <para>
+    /// A snapshot rather than the live list: calls are recorded from the mind's thread while the
+    /// API reads from its own, and handing out the list itself would let a read race a write.
+    /// </para>
     /// </summary>
-    public List<ModelCallRecord> Trace { get; } = [];
+    public IReadOnlyList<ModelCallRecord> Trace
+    {
+        get { lock (_trace) { return _trace.ToList(); } }
+    }
 
-    public int ModelCalls => Trace.Count;
+    public int ModelCalls
+    {
+        get { lock (_trace) { return _trace.Count; } }
+    }
 
-    public int TokensSpent => Trace.Sum(t => t.TotalTokens);
+    public int TokensSpent
+    {
+        get { lock (_trace) { return _trace.Sum(t => t.TotalTokens); } }
+    }
+
+    public ModelCallRecord? FindCall(string callId)
+    {
+        lock (_trace) { return _trace.Find(t => t.Id == callId); }
+    }
+
+    /// <summary>
+    /// Reserves an id for a call about to be recorded. Taken before a call's artifacts are written,
+    /// so a belief can cite the call that formed it. A sequence rather than the trace length, so an
+    /// id is never handed out twice however calls interleave.
+    /// </summary>
+    public string NextCallId()
+    {
+        lock (_trace) { return $"{Id}-call-{++_callSequence}"; }
+    }
 
     /// <summary>
     /// True once a mind has written this colonist rather than an archetype standing in. Printed
@@ -83,7 +121,21 @@ public sealed class Colonist
     /// <summary>Names this colonist might take, written at Kindling. They take one by earning it.</summary>
     public IReadOnlyList<string> NameCandidates { get; set; } = [];
 
-    public void RecordCall(ModelCallRecord record) => Trace.Add(record);
+    public void RecordCall(ModelCallRecord record)
+    {
+        lock (_trace)
+        {
+            _trace.Add(string.IsNullOrEmpty(record.Id) ? record with { Id = NextCallId() } : record);
+
+            // Each record added pushes exactly one record out of the retention window, so stripping
+            // that one keeps every older record stripped too.
+            var aged = _trace.Count - TraceTextRetention - 1;
+            if (aged >= 0 && _trace[aged].HasText)
+            {
+                _trace[aged] = _trace[aged] with { System = null, Prompt = null, Response = null };
+            }
+        }
+    }
 
     public double AgeInDays(double currentDay) => currentDay - BornOnDay;
 
