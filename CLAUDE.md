@@ -81,6 +81,10 @@ Do not re-derive these.
   a low weight only defers a drive until it tops out and dominates anyway.
 - **Relief is a rate, proportional to remaining need.** Without proportionality the body has no
   negative feedback and every drive pins at 0 or 1.
+- **Measure a model's origin before placing it.** The Kenney furniture kit puts every origin at a
+  corner (a floor tile spans x 0..1, z −1..0); the city, forest and character kits are centred.
+  Treating corner-origin tiles as centred floated walls off the floor and buried rugs inside it.
+  Rigged characters also need `SkeletonUtils.clone` — a plain `clone()` collapses them to a point.
 
 ## Conventions
 

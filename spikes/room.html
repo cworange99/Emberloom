@@ -122,7 +122,7 @@ const ROOMS = {
       open:['chairDesk','loungeSofa','rugSquare','lampRoundFloor'] },
   'market-hall':   { name:'The Market Hall', w:8, d:7,
       wall:['kitchenCabinet','kitchenFridge','bookcaseClosed'],
-      open:['tableCross','chair','chair','stoolBar','pottedPlant'] },
+      open:['tableCloth','chair','chair','stoolBar','pottedPlant'] },
   'tower-lobby':   { name:'Tower Lobby', w:8, d:6,
       wall:['bookcaseOpen','cabinetTelevision','stairs'],
       open:['loungeSofa','loungeChair','tableCoffee','rugRounded','pottedPlant'] },
@@ -183,15 +183,52 @@ const load = (name, kit = 'room') => {
   return cache.get(url);
 };
 
-function put(gltf, x, y, z, ry = 0, scale = 1) {
+// --- where things go --------------------------------------------------------
+// Measured from the GLBs, not assumed: every model in the furniture kit has its
+// origin at a CORNER, not its centre. A floor tile spans x 0..1 and z -1..0; a wall
+// spans x 0..1 with its 0.05 thickness on the -z side. (The city, forest and
+// character kits are centred — only this one is not.) Placing corner-origin tiles
+// as if they were centred put the left wall half a tile off the floor, the back
+// wall half a tile onto it, the corner post where neither wall ended, and — since
+// the floor is 0.05 thick and a rug 0.01 — every rug inside the floor, with only
+// the part hanging past its edge showing.
+//
+// So the room is laid out by its edges: the floor covers x0..x0+w by z0..z0+d,
+// and structural tiles are placed with the corner arithmetic written out. Props go
+// through place(), which recentres each one on its own footprint first, so it
+// rotates about its middle and its position means what it says.
+const FLOOR_TOP = 0.05;
+
+function put(gltf, x, y, z, ry = 0) {
   if (!gltf) return null;
   const o = gltf.scene.clone(true);
   o.position.set(x, y, z);
   o.rotation.y = ry;
-  o.scale.setScalar(scale);
   o.traverse(n => { if (n.isMesh) { n.castShadow = true; n.receiveShadow = true; } });
   room.add(o);
   return o;
+}
+
+// A prop, centred on (cx, cz) and standing on `floor`. Returns the wrapper with its
+// footprint in userData.size, so callers can keep it clear of walls and edges.
+function place(gltf, cx, cz, { ry = 0, scale = 1, floor = FLOOR_TOP } = {}) {
+  if (!gltf) return null;
+  const model = gltf.scene.clone(true);
+  model.traverse(n => { if (n.isMesh) { n.castShadow = true; n.receiveShadow = true; } });
+  model.updateMatrixWorld(true);
+
+  const box = new THREE.Box3().setFromObject(model);
+  const centre = box.getCenter(new THREE.Vector3());
+  model.position.set(-centre.x, -box.min.y, -centre.z);
+
+  const g = new THREE.Group();
+  g.add(model);
+  g.position.set(cx, floor, cz);
+  g.rotation.y = ry;
+  g.scale.setScalar(scale);
+  g.userData.size = box.getSize(new THREE.Vector3()).multiplyScalar(scale);
+  room.add(g);
+  return g;
 }
 
 const rand = s => { const x = Math.sin(s * 127.1) * 43758.5453; return x - Math.floor(x); };
@@ -207,10 +244,12 @@ async function buildRoom(id) {
 
   const spec = ROOMS[id];
   const { w, d } = spec;
-  const ox = -(w - 1) / 2, oz = -(d - 1) / 2;
+  const x0 = -w / 2, z0 = -d / 2;             // the floor's back-left corner
+  const floor = spec.outdoor ? 0 : FLOOR_TOP;
+  const door = Math.floor(w / 2);             // which back-wall tile is the doorway
 
-  const [floorTile, wall, wallWindow, wallDoorway, wallCorner] = await Promise.all(
-    ['floorFull', 'wall', 'wallWindow', 'wallDoorway', 'wallCorner'].map(n => load(n)));
+  const [floorTile, wall, wallWindow, wallDoorway] = await Promise.all(
+    ['floorFull', 'wall', 'wallWindow', 'wallDoorway'].map(n => load(n)));
 
   if (spec.outdoor) {
     const grass = new THREE.Mesh(
@@ -220,35 +259,63 @@ async function buildRoom(id) {
     grass.receiveShadow = true;
     room.add(grass);
   } else {
-    for (let x = 0; x < w; x++) {
-      for (let z = 0; z < d; z++) put(floorTile, ox + x, 0, oz + z);
+    // Tile (i, j) covers x0+i..x0+i+1 by z0+j..z0+j+1; its origin is the +z corner.
+    for (let i = 0; i < w; i++) {
+      for (let j = 0; j < d; j++) put(floorTile, x0 + i, 0, z0 + j + 1);
     }
   }
 
   if (showWalls && !spec.outdoor) {
     // Only the two far walls. That is the cutaway: you look in over the open
     // corner, and nothing stands between you and what the colonists are doing.
-    for (let x = 0; x < w; x++) {
-      const choice = x === Math.floor(w / 2) ? wallDoorway
-        : (rand(x * 3 + 1) > 0.72 ? wallWindow : wall);
-      put(choice, ox + x, 0, oz - 0.5);
+    // Both walls stand on the floor's edge with their thickness outside it, and
+    // their inner face towards the room.
+
+    // Back wall, along z = z0. Unrotated, a wall's face is at local z = 0.
+    for (let i = 0; i < w; i++) {
+      const choice = i === door ? wallDoorway
+        : (rand(i * 3 + 1) > 0.72 ? wallWindow : wall);
+      put(choice, x0 + i, 0, z0);
     }
-    for (let z = 0; z < d; z++) {
-      const choice = rand(z * 7 + 2) > 0.72 ? wallWindow : wall;
-      put(choice, ox - 0.5, 0, oz + z, Math.PI / 2);
+
+    // Left wall, along x = x0. A quarter turn maps local x 0..1 onto z -1..0, so
+    // tile j is anchored at its +z end.
+    for (let j = 0; j < d; j++) {
+      const choice = rand(j * 7 + 2) > 0.72 ? wallWindow : wall;
+      put(choice, x0, 0, z0 + j + 1, Math.PI / 2);
     }
-    put(wallCorner, ox - 0.5, 0, oz - 0.5);
+
+    // With both walls flush to the floor, the only gap left is the 0.05 square
+    // where their thicknesses would meet. The kit's corner piece is 0.55 across and
+    // made for a different layout; a sliver of plain wall fills the gap exactly and
+    // matches it, where the corner piece stood out as a second post.
+    const post = put(wall, x0 - 0.05, 0, z0);
+    if (post) post.scale.x = 0.05;
   }
 
-  // Props against the back wall, evenly spread rather than stacked in a corner.
+  // Props against the back wall, one per tile, skipping the doorway so nothing
+  // blocks it, and spread evenly across what is left.
   const wallProps = await Promise.all((spec.wall ?? []).map(n => load(n)));
-  wallProps.forEach((p, i) => {
-    const step = (w - 1) / Math.max(wallProps.length, 1);
-    put(p, ox + 0.4 + i * step, 0, oz + 0.35, 0);
+  const slots = [...Array(w).keys()].filter(i => i !== door);
+  wallProps.forEach((p, k) => {
+    if (!p) return;
+    const slot = slots[Math.min(slots.length - 1,
+      Math.round((k + 0.5) * slots.length / wallProps.length - 0.5))];
+    const g = place(p, x0 + slot + 0.5, 0, { floor });
+    // Back against the wall: centre sits half its own depth out from the face.
+    g.position.z = z0 + g.userData.size.z / 2 + 0.03;
   });
 
   // And the rest out on the floor, kept clear of the middle so people are visible.
   const openProps = await Promise.all((spec.open ?? []).map(n => load(n)));
+
+  // Keep a prop's whole footprint on the floor, whatever way round it ended up.
+  const keepOnFloor = (g, margin = 0.1) => {
+    if (!g) return;
+    const half = Math.max(g.userData.size.x, g.userData.size.z) / 2 + margin;
+    g.position.x = Math.min(x0 + w - half, Math.max(x0 + half, g.position.x));
+    g.position.z = Math.min(z0 + d - half, Math.max(z0 + half, g.position.z));
+  };
 
   if (spec.outdoor) {
     // Outdoors there is no wall to line things up against, so scenery is scattered
@@ -256,25 +323,28 @@ async function buildRoom(id) {
     for (let i = 0; i < 22; i++) {
       const a = rand(i * 5 + 1) * Math.PI * 2;
       const r = 1.3 + rand(i * 9 + 2) * (Math.min(w, d) / 2 - 0.6);
-      put(openProps[i % openProps.length], Math.cos(a) * r, 0, Math.sin(a) * r + 0.4,
-        rand(i * 11) * Math.PI * 2, 0.7 + rand(i * 3) * 0.5);
+      place(openProps[i % openProps.length], Math.cos(a) * r, Math.sin(a) * r,
+        { ry: rand(i * 11) * Math.PI * 2, scale: 0.7 + rand(i * 3) * 0.5, floor });
     }
   } else {
     openProps.forEach((p, i) => {
       const a = (i / Math.max(openProps.length, 1)) * Math.PI * 2;
-      put(p, Math.cos(a) * (w / 2.9), 0, Math.sin(a) * (d / 2.9) + 0.4,
-        Math.floor(rand(i * 11) * 4) * Math.PI / 2);
+      const g = place(p, Math.cos(a) * (w / 2.9), Math.sin(a) * (d / 2.9) + 0.4,
+        { ry: Math.floor(rand(i * 11) * 4) * Math.PI / 2, floor });
+      keepOnFloor(g);
     });
   }
 
   if (spec.ruined && !spec.outdoor) {
     const plant = await load('pottedPlant');
     for (let i = 0; i < 4; i++) {
-      put(plant, ox + rand(i) * (w - 1), 0, oz + 1 + rand(i * 3) * (d - 2), rand(i * 7) * 6);
+      const g = place(plant, x0 + 0.5 + rand(i) * (w - 1), z0 + 1 + rand(i * 3) * (d - 2),
+        { ry: rand(i * 7) * 6, floor });
+      keepOnFloor(g);
     }
   }
 
-  placeColonists();
+  placeColonists(floor);
 }
 
 // --- colonists -------------------------------------------------------------
@@ -293,7 +363,7 @@ const ANIMATION_FOR = {
   Wander: 'walk',
 };
 
-function placeColonists() {
+function placeColonists(floor = FLOOR_TOP) {
   const spec = ROOMS[currentPlace];
   const here = liveColonists.filter(c => c.placeId === currentPlace);
 
@@ -303,7 +373,7 @@ function placeColonists() {
 
     const a = (i / Math.max(here.length, 1)) * Math.PI * 2 + 0.6;
     const person = cloneSkinned(gltf.scene);
-    person.position.set(Math.cos(a) * (spec.w / 5), 0, Math.sin(a) * (spec.d / 5) + 0.3);
+    person.position.set(Math.cos(a) * (spec.w / 5), floor, Math.sin(a) * (spec.d / 5) + 0.3);
     person.rotation.y = -a + Math.PI;
     person.scale.setScalar(FOLK_SCALE);
 
@@ -317,12 +387,12 @@ function placeColonists() {
       const ring = new THREE.Mesh(new THREE.RingGeometry(0.46, 0.58, 32), gold());
       ring.rotation.x = -Math.PI / 2;
       // Floor tiles are 0.05 thick; anything lower is buried inside them.
-      ring.position.set(person.position.x, 0.07, person.position.z);
+      ring.position.set(person.position.x, floor + 0.02, person.position.z);
       room.add(ring);
 
       const pin = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.26, 4), gold());
       pin.rotation.x = Math.PI;                       // point down, at the head
-      pin.position.set(person.position.x, 0.67 * FOLK_SCALE + 0.3, person.position.z);
+      pin.position.set(person.position.x, floor + 0.67 * FOLK_SCALE + 0.3, person.position.z);
       pin.userData.bob = pin.position.y;
       focusMarkers.push(pin);
       room.add(pin);
