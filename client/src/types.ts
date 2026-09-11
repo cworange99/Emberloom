@@ -86,6 +86,16 @@ export interface ColonyState {
   clock: Clock
   governor: Governor | null
   colonists: Colonist[]
+  /** The parts of each place that change as the colony runs. The map itself arrives once, in World. */
+  places: PlaceState[]
+}
+
+export interface PlaceState {
+  id: string
+  isBlocked: boolean
+  isExplored: boolean
+  clearingProgress: number
+  salvageRemaining: number
 }
 
 export interface World {

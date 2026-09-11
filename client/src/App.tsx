@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { CityMap } from './CityMap'
+import { CityView } from './CityView'
 import { ColonistDetailView, Roster, type InspectorFocus } from './ColonistPanel'
 import { useColony } from './useColony'
 
@@ -48,7 +48,7 @@ export default function App() {
       <header className="topbar">
         <div className="brand">
           What They Left Running
-          <span>M4 · the mind inspector</span>
+          <span>M4.5 · the view</span>
         </div>
 
         <div className="speeds" role="group" aria-label="Simulation speed">
@@ -159,8 +159,9 @@ export default function App() {
 
       <div className="columns">
         <div className="left">
-          <CityMap
+          <CityView
             places={world.places}
+            placeStates={state.places}
             colonists={state.colonists}
             isNight={state.isNight}
             selectedId={selectedId}

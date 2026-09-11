@@ -379,7 +379,8 @@ public sealed class SimulationHost : BackgroundService
         body.ActionsCompleted,
         ClockSnapshot(),
         GovernorSnapshot(),
-        colony.Living.Select(c => ColonistDto.From(c, colony)).ToList()));
+        colony.Living.Select(c => ColonistDto.From(c, colony)).ToList(),
+        colony.Map.Places.Select(PlaceStateDto.From).ToList()));
 
     public GovernorDto? GovernorSnapshot()
     {

@@ -156,7 +156,28 @@ public sealed record ColonyStateDto(
     int ActionsCompleted,
     ClockDto Clock,
     GovernorDto? Governor,
-    IReadOnlyList<ColonistDto> Colonists);
+    IReadOnlyList<ColonistDto> Colonists,
+    IReadOnlyList<PlaceStateDto> Places);
+
+/// <summary>
+/// The parts of a place that change while the colony runs. The map itself is sent once, at connect
+/// (<see cref="WorldDto"/>); these ride along with every state push. Before M4.5 they did not, so a
+/// stairwell being cleared or a ruin running out of salvage never showed until the page reloaded.
+/// </summary>
+public sealed record PlaceStateDto(
+    string Id,
+    bool IsBlocked,
+    bool IsExplored,
+    double ClearingProgress,
+    int SalvageRemaining)
+{
+    public static PlaceStateDto From(Place place) => new(
+        place.Id,
+        place.IsBlocked,
+        place.IsExplored,
+        Math.Round(place.ClearingProgress, 3),
+        place.SalvageRemaining);
+}
 
 /// <summary>Sent once when a client connects, so it does not have to rebuild the map every frame.</summary>
 public sealed record WorldDto(

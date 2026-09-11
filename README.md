@@ -15,6 +15,7 @@ See [DESIGN.md](DESIGN.md) for the full design. Build order and milestone status
 | **M2** — governor and Kindling | **Done.** Printed colonists get model-written personalities and weights; the budget governor holds a rolling tokens-per-minute ceiling and slows time rather than dropping thinking. |
 | **M3** — memory pipeline and Reflection | **Done.** Episodic memories coalesce, consolidate, and produce beliefs that cite the memories they came from — walkable in the inspector. |
 | **M4** — the Mind Inspector | **Done.** Five tabs, every chain walkable end to end, and the prompt and response of every recent call kept locally. The Modest decision: the laptop plays via hosted inference and stays a development floor. |
+| **M4.5** — the view | **In progress.** The 3D city and rooms from the graphics spike, becoming the app's real presentation. |
 | M5 — dialogue and deliberation | Not started |
 | M6 — player verbs | Not started |
 | M7 — generations | Not started |
@@ -132,9 +133,14 @@ reflections came in at about 1.1. Hover the readout to see which figure it is us
 
 ## The 3D views
 
-Two throwaway-but-real pages, served straight from `spikes/` rather than `wwwroot` — the client
-build empties `wwwroot`, and hand-written pages should not live somewhere a build step deletes.
-They read the live colony from `/api/state`; they do not write to it.
+From M4.5 the city is the app's main view: `client/src/city/`, laid out from the world model's own
+place positions and live over the socket. Click a colonist to read their mind; click a building to
+look inside. The room view is still the standalone page below until M4.5's second step brings it
+into the app, and the spike city page is superseded by the app.
+
+The spike pages are served straight from `spikes/` rather than `wwwroot` — the client build empties
+`wwwroot`, and hand-written pages should not live somewhere a build step deletes. They read the live
+colony from `/api/state`; they do not write to it.
 
 - **http://localhost:5223/spike/spike3d.html** — the city. Twelve named places among the infill
   blocks, the forest coming back through the streets, real day/night lighting. Hovering names a

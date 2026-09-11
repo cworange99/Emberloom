@@ -229,21 +229,6 @@ button {
 
 /* ---------- map ---------- */
 
-.map {
-  position: relative;
-  min-height: 0;
-  overflow: hidden;
-  background:
-    radial-gradient(ellipse at 30% 20%, color-mix(in srgb, var(--body-wash) 70%, transparent), transparent 60%),
-    var(--ground);
-}
-
-.map svg {
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-
 .map-legend {
   position: absolute;
   left: 12px;
@@ -1135,4 +1120,103 @@ button {
   font-style: italic;
   line-height: 1.4;
   color: var(--ink-soft);
+}
+
+/* ---------- the city (M4.5) ----------
+   The 3D scene has its own sky and ground, lit by the colony's day and night rather than the page
+   theme, so its overlays use fixed dark-glass colours that read against both. */
+
+.city {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+  background: #8fb8d8;
+}
+
+.city canvas {
+  display: block;
+}
+
+.city-loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  background: var(--ground);
+}
+
+.city-labels {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.city-label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  visibility: hidden;
+  white-space: nowrap;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.05em;
+  line-height: 1.35;
+  text-align: center;
+  color: #e8ecdf;
+  background: rgba(12, 15, 9, 0.78);
+  border-radius: 2px;
+  padding: 2px 6px;
+  will-change: transform;
+}
+
+.city-label small {
+  display: block;
+  font-size: 8.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #d9a441;
+}
+
+.city-label.is-sealed small {
+  color: #e0754f;
+}
+
+.city-label.is-colonist {
+  background: #d9a441;
+  color: #191d16;
+  font-weight: 700;
+}
+
+.city-tip {
+  position: absolute;
+  z-index: 3;
+  pointer-events: none;
+  white-space: nowrap;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: #e8ecdf;
+  background: rgba(12, 15, 9, 0.92);
+  border: 1px solid #272c23;
+  border-radius: 3px;
+  padding: 4px 8px;
+}
+
+.city-notice {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100% - 24px);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--flag);
+  background: var(--flag-wash);
+  border: 1px solid color-mix(in srgb, var(--flag) 40%, transparent);
+  border-radius: 3px;
+  padding: 5px 10px;
 }
