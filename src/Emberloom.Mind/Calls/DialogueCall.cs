@@ -96,10 +96,11 @@ public static class DialogueCall
 
             [Task]
             Write what {speaker.DisplayName} says, then what {listener.DisplayName} says back. Two lines,
-            one sentence each, each starting with the speaker's name and a colon:
+            each one short sentence of under twenty words, each starting with the speaker's name and a colon:
             {speaker.DisplayName}: ...
             {listener.DisplayName}: ...
             Something one of them would actually say about their life here, in their own voice.
+            Only mention places, people and things named above; nothing else exists here.
             No stage directions, no quotation marks.
             """;
     }

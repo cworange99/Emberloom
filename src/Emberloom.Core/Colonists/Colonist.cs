@@ -124,6 +124,14 @@ public sealed class Colonist
     /// </summary>
     public bool IsKindled { get; set; }
 
+    /// <summary>
+    /// True while a Kindling call for this colonist is queued or running. Not the same as
+    /// <see cref="IsKindled"/> being false: a colonist whose Kindling fell back is done waiting,
+    /// and a colony with no mind never waits at all. Forks hold off while anyone is waiting, so
+    /// nobody argues a turning point before they are someone.
+    /// </summary>
+    public bool AwaitingKindling { get; set; }
+
     /// <summary>Names this colonist might take, written at Kindling. They take one by earning it.</summary>
     public IReadOnlyList<string> NameCandidates { get; set; } = [];
 

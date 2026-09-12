@@ -1,5 +1,6 @@
 using Emberloom.Core.Colonists;
 using Emberloom.Core.Events;
+using Emberloom.Core.Forks;
 using Emberloom.Core.Memory;
 using Emberloom.Mind.Calls;
 using Emberloom.Mind.Ollama;
@@ -385,6 +386,60 @@ public sealed class MindService : IDisposable
         });
 
         return (thought, call);
+    }
+
+    /// <summary>
+    /// One council member's say at a fork: their stance, why, the line they say aloud, and how
+    /// firmly. The body tallies the votes and applies the outcome; this only casts one.
+    /// </summary>
+    public async Task<DeliberationResult> DeliberateAsync(
+        Colonist colonist,
+        Colony colony,
+        Fork fork,
+        CancellationToken ct = default)
+    {
+        DeliberationResult result;
+
+        try
+        {
+            result = await DeliberationCall.ExecuteAsync(_client, colonist, colony, fork, ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            result = DeliberationCall.Fallback(colonist, fork);
+        }
+
+        var vote = result.Vote;
+        var stance = DeliberationCall.Word(vote.Stance);
+        var produced = $"{stance}, conviction {vote.Conviction:F2} — “{vote.Line}”";
+
+        Commit(() =>
+        {
+            var callId = colonist.NextCallId();
+            colonist.RecordCall(Record(
+                callId, "Deliberation", "deep", colony, result.Call, produced, wasFallback: !result.FromModel));
+
+            // A vote that arrives after the fork was decided is refused: the colony has moved on,
+            // and it is not heard. The call is still on the record above.
+            if (!fork.Cast(colonist.Id, vote with { CallId = callId }))
+            {
+                return;
+            }
+
+            colony.Log(
+                result.FromModel ? EventLayer.Mind : EventLayer.World,
+                $"{colonist.DisplayName}, {stance}: “{vote.Line}”",
+                colonist,
+                placeId: fork.PlaceId,
+                notable: true,
+                quote: vote.Line);
+        });
+
+        return result;
     }
 
     /// <summary>

@@ -13,7 +13,10 @@ public enum ActionKind
     Talk,
     Teach,
     Tend,
-    Wander
+    Wander,
+
+    /// <summary>Sitting on a council at a fork. Offered only to the council, and only while it sits.</summary>
+    Deliberate
 }
 
 /// <summary>
@@ -177,6 +180,19 @@ public static class ActionCatalog
         Verb = "wandered at",
         Relief = Relief((Drive.Wonder, 0.10), (Drive.Rest, 0.20), (Drive.Meaning, 0.10)),
         DurationTicks = 14
+    };
+
+    /// <summary>
+    /// Sitting on a council at the plaza while a fork is open. Not in <see cref="All"/>: the scorer
+    /// offers it only to the council, and only while the fork is undecided.
+    /// </summary>
+    public static readonly ActionDefinition Deliberate = new()
+    {
+        Kind = ActionKind.Deliberate,
+        Verb = "argued at",
+        Relief = Relief((Drive.Belonging, 1.20), (Drive.Standing, 1.40), (Drive.Meaning, 0.60)),
+        Places = [PlaceKind.Plaza],
+        DurationTicks = 30
     };
 
     public static readonly IReadOnlyList<ActionDefinition> All =

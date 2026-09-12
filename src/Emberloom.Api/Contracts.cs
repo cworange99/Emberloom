@@ -166,7 +166,64 @@ public sealed record ColonyStateDto(
     ClockDto Clock,
     GovernorDto? Governor,
     IReadOnlyList<ColonistDto> Colonists,
-    IReadOnlyList<PlaceStateDto> Places);
+    IReadOnlyList<PlaceStateDto> Places,
+    ForkDto? Fork);
+
+/// <summary>
+/// The fork the colony is deciding, or the one it has just decided — shown as a banner over the
+/// main view, with each council member's say as it comes in.
+/// </summary>
+public sealed record ForkDto(
+    string Id,
+    string Question,
+    string Proposal,
+    double OpenedOnDay,
+    bool IsOpen,
+    bool? Carried,
+    IReadOnlyList<CouncilSeatDto> Council)
+{
+    /// <summary>How long a decided fork stays up, in colony days, so its outcome can be read.</summary>
+    private const double ShowOutcomeDays = 0.5;
+
+    public static ForkDto? From(Colony colony)
+    {
+        var fork = colony.OpenFork
+            ?? colony.ForkHistory.LastOrDefault(f => colony.Day - (f.ResolvedOnDay ?? 0) < ShowOutcomeDays);
+
+        if (fork is null)
+        {
+            return null;
+        }
+
+        return new ForkDto(
+            fork.Id,
+            fork.Question,
+            fork.Proposal,
+            Math.Round(fork.OpenedOnDay, 2),
+            fork.IsOpen,
+            fork.Carried,
+            fork.Participants.Select(id =>
+            {
+                fork.Votes.TryGetValue(id, out var vote);
+                return new CouncilSeatDto(
+                    id,
+                    colony.Find(id)?.DisplayName ?? id,
+                    vote?.Stance.ToString().ToLowerInvariant(),
+                    vote is null ? null : Math.Round(vote.Conviction, 2),
+                    vote?.Line,
+                    vote?.WasFallback ?? false);
+            }).ToList());
+    }
+}
+
+/// <summary>One seat on a council: who, and — once they have spoken — where they stand and what they said.</summary>
+public sealed record CouncilSeatDto(
+    string Id,
+    string Name,
+    string? Stance,
+    double? Conviction,
+    string? Line,
+    bool WasFallback);
 
 /// <summary>
 /// The parts of a place that change while the colony runs. The map itself is sent once, at connect

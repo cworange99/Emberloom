@@ -102,6 +102,10 @@ public static class WorldPrompt
             : string.Join("; ", notable) + ".";
     }
 
+    /// <summary>One drive's pull on this colonist, in words, including when it is ordinary.</summary>
+    public static string PullOn(PersonalityWeights weights, Drive drive) =>
+        Math.Abs(weights[drive] - 1.0) < 0.15 ? "about as much as on anyone" : Pull(weights[drive]);
+
     private static string Pull(double weight) => weight switch
     {
         >= 1.6 => "pulls far harder than on most",

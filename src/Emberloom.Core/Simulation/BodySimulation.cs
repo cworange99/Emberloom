@@ -2,6 +2,7 @@ using Emberloom.Core.Actions;
 using Emberloom.Core.Colonists;
 using Emberloom.Core.Drives;
 using Emberloom.Core.Events;
+using Emberloom.Core.Forks;
 using Emberloom.Core.Memory;
 using Emberloom.Core.World;
 
@@ -47,11 +48,18 @@ public sealed class BodySimulation
     /// </summary>
     public event Action<Colonist, Colonist, Place>? ConversationStarted;
 
+    /// <summary>A fork has opened. The host asks each council member's mind where they stand.</summary>
+    public event Action<Fork>? ForkOpened;
+
+    /// <summary>A fork has been decided — with the newly printed mind, when that is what was decided.</summary>
+    public event Action<Fork, Colonist?>? ForkResolved;
+
     public void Tick()
     {
         _colony.Tick++;
 
         AdvanceWorld();
+        AdvanceForks();
 
         foreach (var colonist in _colony.Living.ToList())
         {
@@ -200,6 +208,7 @@ public sealed class BodySimulation
                         $"{colonist.DisplayName} broke through into {place.Name}.",
                         colonist, place.Id, notable: true);
                     Record(colonist, "opened the way into", place.Name, place.Id, 0.85, 0.95);
+                    ForkRules.HoldTheWayUp(_colony, place);
                 }
 
                 break;
@@ -354,6 +363,134 @@ public sealed class BodySimulation
             witness.Drives.Aggravate(Drive.Safety, 0.20);
             Record(witness, "saw", $"{colonist.DisplayName} hurt at {place.Name}", place.Id, -0.55, 0.75);
             _colony.Relationships.Get(witness.Id, colonist.Id).Adjust(affinity: 0.01);
+        }
+    }
+
+    /// <summary>
+    /// Opens a fork when the colony faces one, and decides it once the council has spoken — or,
+    /// with no minds working on it, once it has waited long enough, in which case anyone who never
+    /// answered is counted by where they stand. Checked every tick because it is cheap; a new fork
+    /// is looked for once a colony-hour.
+    /// </summary>
+    private void AdvanceForks()
+    {
+        if (_colony.OpenFork is { } open)
+        {
+            var timedOut = open.AwaitingMinds == 0 && _colony.Day - open.OpenedOnDay >= ForkRules.TimeoutDays;
+            if (open.AllVoted || timedOut)
+            {
+                ResolveFork(open);
+            }
+
+            return;
+        }
+
+        if (_colony.Tick % 10 != 0)
+        {
+            return;
+        }
+
+        var fork = ForkRules.Detect(_colony);
+        if (fork is null)
+        {
+            return;
+        }
+
+        _colony.OpenFork = fork;
+        _colony.Log(EventLayer.World, $"The colony is deciding: {fork.Question}", placeId: fork.PlaceId, notable: true);
+        ForkOpened?.Invoke(fork);
+    }
+
+    private void ResolveFork(Fork fork)
+    {
+        // Anyone the deadline caught without a say is counted by where they stand, and marked as
+        // such, so the trace and the banner both show it was not their mind speaking.
+        foreach (var id in fork.Participants.Where(id => !fork.Votes.ContainsKey(id)).ToList())
+        {
+            if (_colony.Find(id) is { } missing)
+            {
+                fork.Cast(id, ForkRules.FallbackVote(fork.Kind, missing));
+            }
+        }
+
+        var (yes, no) = fork.Tally();
+
+        // A tie leaves things as they are. Changing what the colony does should take a majority.
+        var carried = yes > no;
+
+        fork.Decide(carried, _colony.Day);
+        _colony.OpenFork = null;
+        _colony.ForkHistory.Add(fork);
+
+        Colonist? printed = null;
+
+        switch (fork.Kind)
+        {
+            case ForkKind.Print when carried:
+                printed = ColonyFactory.Print(_colony, _random);
+                break;
+
+            case ForkKind.Print:
+                _colony.PutOff(ForkKind.Print, _colony.Day + ForkRules.PrintAskAgainDays);
+                break;
+
+            case ForkKind.Ascend when carried && fork.SubjectPlaceId is { } above:
+                _colony.ForbiddenPlaces.Remove(above);
+                break;
+
+            case ForkKind.Ascend:
+                _colony.PutOff(ForkKind.Ascend, _colony.Day + ForkRules.AscendAskAgainDays);
+                break;
+        }
+
+        var votes = fork.Votes.Values.ToList();
+        _colony.Log(EventLayer.World,
+            $"Decided: {(carried ? "yes" : "no")}, to “{fork.Question}” — " +
+            $"{votes.Count(v => v.Stance == Stance.For)} for, {votes.Count(v => v.Stance == Stance.Against)} against.",
+            placeId: fork.PlaceId, notable: true);
+
+        RememberTheFork(fork, carried);
+        ForkResolved?.Invoke(fork, printed);
+    }
+
+    /// <summary>
+    /// What a fork does to the people who argued it. Winning a vote is Standing and being overruled
+    /// is Belonging — both straight from the design's drive table — and everyone who took a side
+    /// remembers it, which is how a vote becomes something a mind later reflects on.
+    /// </summary>
+    private void RememberTheFork(Fork fork, bool carried)
+    {
+        var sides = fork.Votes
+            .Where(v => v.Value.Stance != Stance.Abstain)
+            .Select(v => (Colonist: _colony.Find(v.Key), v.Value.Stance))
+            .Where(x => x.Colonist is not null)
+            .Select(x => (Colonist: x.Colonist!, x.Stance, Won: (x.Stance == Stance.For) == carried))
+            .ToList();
+
+        foreach (var (colonist, stance, won) in sides)
+        {
+            var side = stance == Stance.For ? "for" : "against";
+
+            if (won)
+            {
+                colonist.Drives.Relieve(new DriveVector(new Dictionary<Drive, double> { [Drive.Standing] = 0.5 }));
+                Record(colonist, $"argued {side} it, and the colony agreed:", fork.Question, fork.PlaceId, 0.55, 0.8);
+            }
+            else
+            {
+                colonist.Drives.Aggravate(Drive.Belonging, 0.25);
+                Record(colonist, $"argued {side} it, and was overruled:", fork.Question, fork.PlaceId, -0.45, 0.8);
+            }
+        }
+
+        // Standing on the same side draws people together; on opposite sides, a little apart.
+        for (var i = 0; i < sides.Count; i++)
+        {
+            for (var j = i + 1; j < sides.Count; j++)
+            {
+                var sameSide = sides[i].Stance == sides[j].Stance;
+                _colony.Relationships.Mutual(sides[i].Colonist.Id, sides[j].Colonist.Id, affinity: sameSide ? 0.04 : -0.02);
+            }
         }
     }
 

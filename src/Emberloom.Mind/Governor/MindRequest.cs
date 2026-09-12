@@ -13,11 +13,17 @@ public enum CallPriority
     Coinage = 1,
     OffScreenDialogue = 2,
     Reflection = 3,
-    Kindling = 4,
-    Deliberation = 5,
 
-    /// <summary>Whatever the player is looking at right now. Outranks everything.</summary>
-    PlayerFocus = 6
+    /// <summary>
+    /// Whatever the player is looking at right now. Outranks everything the colony could skip, but
+    /// not the two calls it cannot. Live at M5 it sat above them, and watched chatter at the plaza
+    /// held eight colonists' Kindling back for three colony days — they argued their first fork
+    /// before they had personalities.
+    /// </summary>
+    PlayerFocus = 4,
+
+    Kindling = 5,
+    Deliberation = 6
 }
 
 public sealed record MindCallOutcome

@@ -76,6 +76,7 @@ const ANIMATION_FOR: Record<string, string> = {
   Clear: 'attack-melee-right',
   Build: 'interact-right',
   Tend: 'interact-left',
+  Deliberate: 'emote-yes',
 }
 
 export const animationFor = (doing: string | null) => (doing && ANIMATION_FOR[doing]) || 'idle'

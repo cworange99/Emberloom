@@ -90,6 +90,29 @@ export interface ColonyState {
   colonists: Colonist[]
   /** The parts of each place that change as the colony runs. The map itself arrives once, in World. */
   places: PlaceState[]
+  /** The fork the colony is deciding, or the one it has just decided. */
+  fork: ForkState | null
+}
+
+/** One seat on a council. Stance, line and conviction arrive once that member has spoken. */
+export interface CouncilSeat {
+  id: string
+  name: string
+  stance: 'for' | 'against' | 'abstain' | null
+  conviction: number | null
+  line: string | null
+  /** True when no mind answered and the colonist was counted by where their weights stand. */
+  wasFallback: boolean
+}
+
+export interface ForkState {
+  id: string
+  question: string
+  proposal: string
+  openedOnDay: number
+  isOpen: boolean
+  carried: boolean | null
+  council: CouncilSeat[]
 }
 
 export interface PlaceState {

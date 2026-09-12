@@ -39,6 +39,13 @@ public sealed class UtilityScorer
     /// </summary>
     private const double CommitmentBonus = 0.9;
 
+    /// <summary>
+    /// How strongly a council member is drawn to the plaza while their fork sits. Strong — this is
+    /// the one place the colony's business outranks a colonist's own — but still a score, so a
+    /// member who is starving eats first.
+    /// </summary>
+    private const double CouncilPull = 4.0;
+
     private readonly Random _random;
 
     public UtilityScorer(Random random)
@@ -67,7 +74,9 @@ public sealed class UtilityScorer
             .Where(p => p.IsBlocked)
             .Distinct();
 
-        foreach (var place in reachable.Concat(frontier).Distinct())
+        // A floor the colony has not agreed to go to is off everyone's list, however much they want
+        // it. That is what a fork's "no" means, and what "not yet" means before it is asked.
+        foreach (var place in reachable.Concat(frontier).Distinct().Where(p => !colony.ForbiddenPlaces.Contains(p.Id)))
         {
             foreach (var definition in ActionCatalog.All)
             {
@@ -88,6 +97,14 @@ public sealed class UtilityScorer
                     results.Add(Evaluate(colonist, colony, definition, place, partner: null));
                 }
             }
+        }
+
+        if (colony.OpenFork is { } fork
+            && fork.Participants.Contains(colonist.Id)
+            && colony.Map.Find(fork.PlaceId) is { } hall)
+        {
+            var sitting = Evaluate(colonist, colony, ActionCatalog.Deliberate, hall, partner: null);
+            results.Add(sitting with { Score = sitting.Score * CouncilPull });
         }
 
         results.Sort((a, b) => b.Score.CompareTo(a.Score));

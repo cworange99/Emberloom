@@ -10,6 +10,7 @@ using Emberloom.Core.Memory;
 using Emberloom.Core.Events;
 using Emberloom.Core.Simulation;
 using Emberloom.Core.World;
+using Emberloom.Core.Forks;
 
 namespace Emberloom.Api;
 
@@ -195,7 +196,7 @@ public sealed class SimulationHost : BackgroundService
             return;
         }
 
-        _governor.Submit(new MindRequest
+        var submitted = _governor.Submit(new MindRequest
         {
             Call = CallType.Kindling,
             Priority = CallPriority.Kindling,
@@ -203,32 +204,45 @@ public sealed class SimulationHost : BackgroundService
             Undroppable = true,
             Work = async ct =>
             {
-                // One path for Kindling, shared with the tests: MindService makes the call outside
-                // the colony lock, commits the result under it, and falls back — with a trace line
-                // saying so — when the mind is not there. This used to be a second copy of that
-                // logic which threw on an unreachable mind instead; the governor treats a throw as
-                // lost work, so a colonist kindled while Ollama was down got no trace line at all.
-                var colony = Read((c, _) => c);
-                var started = Stopwatch.GetTimestamp();
-                var result = await _mind.KindleAsync(colonist, colony, colonist.Seed, ct: ct).ConfigureAwait(false);
-
-                // Only a call that reached a model counts toward throughput. An unreachable mind
-                // fails in a moment, and counting that would make the machine look fast.
-                if (result.Call is not null)
+                try
                 {
-                    _deepCalls.Record(Stopwatch.GetElapsedTime(started));
+                    // One path for Kindling, shared with the tests: MindService makes the call
+                    // outside the colony lock, commits the result under it, and falls back — with
+                    // a trace line saying so — when the mind is not there. This used to be a second
+                    // copy of that logic which threw on an unreachable mind instead; the governor
+                    // treats a throw as lost work, so a colonist kindled while Ollama was down got
+                    // no trace line at all.
+                    var colony = Read((c, _) => c);
+                    var started = Stopwatch.GetTimestamp();
+                    var result = await _mind.KindleAsync(colonist, colony, colonist.Seed, ct: ct).ConfigureAwait(false);
+
+                    // Only a call that reached a model counts toward throughput. An unreachable
+                    // mind fails in a moment, and counting that would make the machine look fast.
+                    if (result.Call is not null)
+                    {
+                        _deepCalls.Record(Stopwatch.GetElapsedTime(started));
+                    }
+
+                    return new MindCallOutcome
+                    {
+                        PromptTokens = result.Call?.PromptTokens ?? 0,
+                        CompletionTokens = result.Call?.CompletionTokens ?? 0,
+                        WasFallback = !result.FromModel
+                    };
                 }
-
-                Broadcast(Snapshot());
-
-                return new MindCallOutcome
+                finally
                 {
-                    PromptTokens = result.Call?.PromptTokens ?? 0,
-                    CompletionTokens = result.Call?.CompletionTokens ?? 0,
-                    WasFallback = !result.FromModel
-                };
+                    // Done waiting whatever happened, or a failed call would hold every fork off.
+                    Read((_, _) => colonist.AwaitingKindling = false);
+                    Broadcast(Snapshot());
+                }
             }
         });
+
+        if (submitted)
+        {
+            colonist.AwaitingKindling = true;
+        }
     }
 
     /// <summary>
@@ -317,7 +331,93 @@ public sealed class SimulationHost : BackgroundService
         });
     }
 
-    private void AttachBody() => _body.ConversationStarted += SubmitDialogue;
+    private void AttachBody()
+    {
+        _body.ConversationStarted += SubmitDialogue;
+        _body.ForkOpened += OnForkOpened;
+        _body.ForkResolved += OnForkResolved;
+    }
+
+    /// <summary>
+    /// A fork has opened: drop to 1x if the player asked for that, and ask each council member's
+    /// mind where they stand. Deliberation is undroppable — if the governor cannot serve it at this
+    /// speed, the simulation slows itself until it can. Called from inside the tick, under the lock.
+    /// </summary>
+    private void OnForkOpened(Fork fork)
+    {
+        Clock.SlowForEvent();
+
+        // With no mind configured there is nobody to ask, and the body decides on where everyone
+        // stands once the fork times out.
+        if (_mind is null || _governor is null)
+        {
+            return;
+        }
+
+        for (var seat = 0; seat < fork.Participants.Count; seat++)
+        {
+            if (_colony.Find(fork.Participants[seat]) is { } member)
+            {
+                // Asked in council order: the first seat is served first, so each later member
+                // hears what the earlier ones said.
+                SubmitDeliberation(member, fork, weight: fork.Participants.Count - seat);
+            }
+        }
+    }
+
+    private void SubmitDeliberation(Colonist member, Fork fork, double weight)
+    {
+        var submitted = _governor!.Submit(new MindRequest
+        {
+            Call = CallType.Deliberation,
+            Priority = CallPriority.Deliberation,
+            ColonistId = member.Id,
+            Undroppable = true,
+            Weight = weight,
+            Work = async ct =>
+            {
+                try
+                {
+                    var colony = Read((c, _) => c);
+                    var started = Stopwatch.GetTimestamp();
+                    var result = await _mind!.DeliberateAsync(member, colony, fork, ct).ConfigureAwait(false);
+
+                    if (result.Call is not null)
+                    {
+                        _deepCalls.Record(Stopwatch.GetElapsedTime(started));
+                    }
+
+                    return new MindCallOutcome
+                    {
+                        PromptTokens = result.Call?.PromptTokens ?? 0,
+                        CompletionTokens = result.Call?.CompletionTokens ?? 0,
+                        WasFallback = !result.FromModel
+                    };
+                }
+                finally
+                {
+                    // Whatever happened, this member is no longer being waited on. The fork only
+                    // times out when nobody is — see Fork.AwaitingMinds.
+                    Read((_, _) => --fork.AwaitingMinds);
+                    Broadcast(Snapshot());
+                }
+            }
+        });
+
+        if (submitted)
+        {
+            fork.AwaitingMinds++;
+        }
+    }
+
+    /// <summary>A newly printed mind needs writing. Kindling is undroppable, like the vote that made it.</summary>
+    private void OnForkResolved(Fork fork, Colonist? printed)
+    {
+        if (printed is not null)
+        {
+            SubmitKindling(printed);
+        }
+    }
 
     public void SetView(string? placeId, string? colonistId) => _view = new ViewFocus(placeId, colonistId);
 
@@ -347,10 +447,20 @@ public sealed class SimulationHost : BackgroundService
             return;
         }
 
+        // While the colony is deciding, the council's say is its vote, not small talk. And watched
+        // chatter loses its jump: the council sits at the plaza, so every conversation there counts
+        // as watched, and live at M5 that queued them ahead of the fork's own deliberations.
+        var fork = _colony.OpenFork;
+        if (fork is not null && (fork.Participants.Contains(speaker.Id) || fork.Participants.Contains(listener.Id)))
+        {
+            return;
+        }
+
         var view = _view;
-        var watched = view.ColonistId == speaker.Id
-                      || view.ColonistId == listener.Id
-                      || view.PlaceId == place.Id;
+        var watched = fork is null
+                      && (view.ColonistId == speaker.Id
+                          || view.ColonistId == listener.Id
+                          || view.PlaceId == place.Id);
 
         var submitted = _governor.Submit(new MindRequest
         {
@@ -456,7 +566,8 @@ public sealed class SimulationHost : BackgroundService
         ClockSnapshot(),
         GovernorSnapshot(),
         colony.Living.Select(c => ColonistDto.From(c, colony)).ToList(),
-        colony.Map.Places.Select(PlaceStateDto.From).ToList()));
+        colony.Map.Places.Select(PlaceStateDto.From).ToList(),
+        ForkDto.From(colony)));
 
     public GovernorDto? GovernorSnapshot()
     {

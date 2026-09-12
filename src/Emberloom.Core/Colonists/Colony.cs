@@ -1,4 +1,5 @@
 using Emberloom.Core.Events;
+using Emberloom.Core.Forks;
 using Emberloom.Core.Relationships;
 using Emberloom.Core.World;
 
@@ -50,6 +51,25 @@ public sealed class Colony
 
     /// <summary>Maker-artifacts recovered. Each is findable exactly once, anywhere in the city.</summary>
     public int ArtifactsRecovered { get; set; }
+
+    /// <summary>The question the colony is deciding right now, if any. One at a time.</summary>
+    public Fork? OpenFork { get; set; }
+
+    /// <summary>Every fork decided so far, oldest first — the colony's turning points.</summary>
+    public List<Fork> ForkHistory { get; } = [];
+
+    /// <summary>
+    /// Places the colony has not agreed to go. A floor above a newly cleared stairwell starts here
+    /// and stays until a fork says otherwise; nobody's utility score reaches past it.
+    /// </summary>
+    public HashSet<string> ForbiddenPlaces { get; } = [];
+
+    private readonly Dictionary<ForkKind, double> _askAgainOn = [];
+
+    /// <summary>The day a question the colony said no to may be raised again.</summary>
+    public double AskAgainOn(ForkKind kind) => _askAgainOn.GetValueOrDefault(kind);
+
+    public void PutOff(ForkKind kind, double until) => _askAgainOn[kind] = until;
 
     public IReadOnlyList<Colonist> Colonists => _colonists;
 

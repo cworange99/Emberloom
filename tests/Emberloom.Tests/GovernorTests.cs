@@ -285,6 +285,11 @@ public class GovernorTests
         // Anything the player is looking at outranks everything else.
         Assert.Equal(CallPriority.PlayerFocus, MindRequest.PriorityFor(CallType.Dialogue, playerIsWatching: true));
 
+        // What the player watches jumps everything skippable, but never the undroppables.
+        Assert.True(CallPriority.PlayerFocus > CallPriority.Reflection);
+        Assert.True(CallPriority.Kindling > CallPriority.PlayerFocus);
+        Assert.True(CallPriority.Deliberation > CallPriority.PlayerFocus);
+
         Assert.True(MindRequest.IsUndroppable(CallType.Kindling));
         Assert.True(MindRequest.IsUndroppable(CallType.Deliberation));
         Assert.False(MindRequest.IsUndroppable(CallType.Reflection));

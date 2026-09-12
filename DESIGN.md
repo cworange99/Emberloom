@@ -225,11 +225,15 @@ are dropped, not queued forever.
 
 **How it prioritises**, highest first:
 
-1. Anything the player is looking at right now
-2. **Deliberation at a fork — undroppable**
-3. **Kindling a new mind — undroppable**
+1. **Deliberation at a fork — undroppable**
+2. **Kindling a new mind — undroppable**
+3. Anything the player is looking at right now
 4. Reflection, ordered by accumulated salience
 5. Coinage, off-screen dialogue, idle thought
+
+*Revised at M5.* What the player is watching was first, above the undroppables. Live, watched
+chatter at the plaza held the whole colony's Kindling back for three colony days, and the first
+fork was argued by colonists who did not have personalities yet.
 
 ### Time is the player's, and it costs thought
 
@@ -241,6 +245,19 @@ automatically as you speed up. So surface it: a **Contemplation readout** beside
 > **The one place time bends for function.** Kindling and Deliberation are **undroppable**. If the
 > queue can't serve them at the current speed, **the simulation slows itself** until it can. Pair it
 > with an *auto-slow on event* toggle that drops to 1× when a Deliberation fires.
+
+**As built at M5.** The body flags two forks: *Print* (the Loom holds more than a print costs, with
+a margin; Belonging against Safety) and *Ascend* (a stairwell has been cleared, and the floor
+above is closed to everyone until the colony decides; Wonder against Safety). The council is five
+colonists, not the whole colony, because each seat is one deep call: the five whose weights on the
+fork's two drives sit furthest from ordinary, since an indifferent council does not argue. They are
+asked in order, and each prompt carries what the earlier ones said. That is still stateless: the
+argument travels in the request, not in a server-side thread. Votes are weighted by conviction. A
+tie keeps the status quo, and a "no" puts the question off for some days. The fork waits for every
+mind it asked, however long that takes at speed. Its three-day timeout only matters for a colony
+with no mind, which still gets its turning points, decided on each member's weights and marked as
+fallbacks. Winning a vote relieves Standing, being overruled aggravates Belonging, and everyone who
+took a side remembers it.
 
 Expose the governor itself as a live readout: queue depth, tokens/min, calls dropped, current lane.
 

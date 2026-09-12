@@ -1390,3 +1390,96 @@ button {
   border-bottom: 0;
   border-top-color: #f4f1e6;
 }
+
+/* ---------- forks (M5) ----------
+   The colony deciding something, over the main view. Brass-edged while it sits — the mind's
+   colour, since every seat is a mind speaking — and quieter once decided. */
+
+.fork {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  z-index: 3;
+  width: min(360px, calc(100% - 24px));
+  max-height: calc(100% - 20px);
+  overflow-y: auto;
+  font-family: var(--mono);
+  color: #e8ecdf;
+  background: rgba(12, 15, 9, 0.9);
+  border: 1px solid #d9a441;
+  border-radius: 4px;
+  padding: 10px 12px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+
+.fork.is-decided {
+  border-color: #3a4234;
+}
+
+.fork-kicker {
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #d9a441;
+}
+
+.fork h3 {
+  margin: 3px 0 2px;
+  font-family: var(--display);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.fork-meta {
+  margin: 0 0 8px;
+  font-size: 9.5px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #8b9486;
+}
+
+.fork-council {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 7px;
+}
+
+.fork-council li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 8px;
+  align-items: baseline;
+  font-size: 10.5px;
+}
+
+.fork-council .jump {
+  color: #e8ecdf;
+  font-weight: 700;
+}
+
+.fork-stance {
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #8b9486;
+}
+
+.fork-council li.is-for .fork-stance {
+  color: #6fbf92;
+}
+
+.fork-council li.is-against .fork-stance {
+  color: #e0754f;
+}
+
+.fork-council q {
+  grid-column: 1 / -1;
+  font-family: var(--body);
+  font-size: 12.5px;
+  font-style: italic;
+  line-height: 1.35;
+  color: #d8dcd0;
+}

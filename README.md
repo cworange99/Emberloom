@@ -16,7 +16,7 @@ See [DESIGN.md](DESIGN.md) for the full design. Build order and milestone status
 | **M3** — memory pipeline and Reflection | **Done.** Episodic memories coalesce, consolidate, and produce beliefs that cite the memories they came from — walkable in the inspector. |
 | **M4** — the Mind Inspector | **Done.** Five tabs, every chain walkable end to end, and the prompt and response of every recent call kept locally. The Modest decision: the laptop plays via hosted inference and stays a development floor. |
 | **M4.5** — the view | **Done.** The 3D city is the main view and rooms open beside the inspector, both live over the socket. The art kits ship by fetch script or installer rather than the repository: decided, and built when packaging comes. |
-| M5 — dialogue and deliberation | Not started |
+| **M5** — dialogue and deliberation | **Done.** Colonists speak when they meet, in bubbles over both views, and the words go into their memories. The colony faces two genuine forks — whether to let the Loom print, and whether to go up to a floor nobody has reached — and a council of five decides each one with argued, conviction-weighted votes. |
 | M6 — player verbs | Not started |
 | M7 — generations | Not started |
 
@@ -129,6 +129,19 @@ the colony can afford per colony-day at the current speed. It starts from the be
 `appsettings.json`, then switches to a measured one once three deep calls have been served,
 because the two differ a lot. On this laptop the benchmark said 4.8 calls/min and live
 reflections came in at about 1.1. Hover the readout to see which figure it is using.
+
+**Speech.** When two colonists start talking, one Dialogue call writes both lines, and they appear
+as bubbles over the pair in whichever view shows them. A conversation you are watching — its place
+open, or one of the pair selected — jumps the queue. Lines go into both colonists' memories of the
+conversation, so a later reflection can quote them.
+
+**Forks.** Twice the colony has to decide something together: when the Loom has charge to spare
+(*do we print another mind?*) and when a stairwell is cleared (*do we go up?* — nobody may, until
+it is decided). A council of five, the colonists who feel it most either way, is drawn to the
+plaza, and each one's mind writes a stance, a reason and a line aloud; later speakers hear the
+earlier ones. A banner over the view shows the argument as it happens. Votes are weighted by
+conviction and a tie changes nothing. With no mind at all the fork still gets decided after three
+colony-days, on where each member's personality leans, and the banner says no mind answered.
 
 ## The 3D views
 

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { CityView } from './CityView'
 import { RoomView } from './RoomView'
+import { ForkBanner } from './ForkBanner'
 import { ColonistDetailView, Roster, type InspectorFocus } from './ColonistPanel'
 import { useColony } from './useColony'
 
@@ -91,7 +92,7 @@ export default function App() {
       <header className="topbar">
         <div className="brand">
           What They Left Running
-          <span>M4.5 · the view</span>
+          <span>M5 · dialogue and deliberation</span>
         </div>
 
         <div className="speeds" role="group" aria-label="Simulation speed">
@@ -230,6 +231,7 @@ export default function App() {
                 speech={speech}
               />
             )}
+            {state.fork && <ForkBanner fork={state.fork} onSelect={openColonist} />}
           </div>
 
           <div className="feed">
