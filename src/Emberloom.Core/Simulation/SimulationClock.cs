@@ -45,44 +45,75 @@ public sealed class SimulationClock
 
     private GameSpeed _speedBeforeThrottle = GameSpeed.Normal;
 
+    /// <summary>
+    /// The player changes speed from an HTTP thread and the governor throttles and releases from its
+    /// own. Every change of speed goes through this lock, so a throttle that starts just as the
+    /// player pauses cannot save the old speed after the pause has landed and put it back later —
+    /// which would look like the game un-pausing itself.
+    /// </summary>
+    private readonly object _gate = new();
+
     public event Action<GameSpeed>? SpeedChanged;
 
+    /// <summary>
+    /// The player's choice, and it always wins. It ends any governor throttle outright and forgets
+    /// the speed the throttle saved, so a later release cannot overrule it.
+    /// </summary>
     public void SetSpeed(GameSpeed speed)
     {
-        if (Speed == speed)
+        lock (_gate)
         {
-            return;
+            // "No change" only when there is no throttle to end. Choosing 1x while throttled used to
+            // count as no change — the throttle was already holding 1x — so the throttle stayed and
+            // put back the faster speed on release, overruling what the player had just picked.
+            if (Speed == speed && !ThrottledByGovernor)
+            {
+                return;
+            }
+
+            Speed = speed;
+            _speedBeforeThrottle = speed;
+            ThrottledByGovernor = false;
         }
 
-        Speed = speed;
-        ThrottledByGovernor = false;
         SpeedChanged?.Invoke(speed);
     }
 
     /// <summary>Called by the governor when an undroppable call cannot be served fast enough.</summary>
     public void ThrottleForThought()
     {
-        if (ThrottledByGovernor || Speed <= GameSpeed.Normal)
+        lock (_gate)
         {
-            return;
+            if (ThrottledByGovernor || Speed <= GameSpeed.Normal)
+            {
+                return;
+            }
+
+            _speedBeforeThrottle = Speed;
+            Speed = GameSpeed.Normal;
+            ThrottledByGovernor = true;
         }
 
-        _speedBeforeThrottle = Speed;
-        Speed = GameSpeed.Normal;
-        ThrottledByGovernor = true;
-        SpeedChanged?.Invoke(Speed);
+        SpeedChanged?.Invoke(GameSpeed.Normal);
     }
 
     public void ReleaseThrottle()
     {
-        if (!ThrottledByGovernor)
+        GameSpeed restored;
+
+        lock (_gate)
         {
-            return;
+            if (!ThrottledByGovernor)
+            {
+                return;
+            }
+
+            restored = _speedBeforeThrottle;
+            Speed = restored;
+            ThrottledByGovernor = false;
         }
 
-        Speed = _speedBeforeThrottle;
-        ThrottledByGovernor = false;
-        SpeedChanged?.Invoke(Speed);
+        SpeedChanged?.Invoke(restored);
     }
 
     /// <summary>Auto-slow when a Deliberation fires. Distinct from a governor throttle.</summary>

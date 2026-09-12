@@ -46,6 +46,44 @@ public class ClockTests
     }
 
     /// <summary>
+    /// Pausing while the governor has the game throttled is the player's call, and releasing the
+    /// throttle later must not overrule it by putting back the speed the throttle saved.
+    /// </summary>
+    [Fact]
+    public void APauseDuringAThrottleOutlastsTheRelease()
+    {
+        var clock = new SimulationClock();
+        clock.SetSpeed(GameSpeed.Faster);
+        clock.ThrottleForThought();
+        Assert.Equal(GameSpeed.Normal, clock.Speed);
+
+        clock.SetSpeed(GameSpeed.Paused);
+        clock.ReleaseThrottle();
+
+        Assert.Equal(GameSpeed.Paused, clock.Speed);
+        Assert.False(clock.ThrottledByGovernor);
+    }
+
+    /// <summary>
+    /// The same for choosing 1x during a throttle, which is the speed the throttle is already
+    /// holding. That used to be ignored as "no change", leaving the throttle in place to restore
+    /// 10x when it released.
+    /// </summary>
+    [Fact]
+    public void ChoosingOneTimesDuringAThrottleIsKept()
+    {
+        var clock = new SimulationClock();
+        clock.SetSpeed(GameSpeed.Faster);
+        clock.ThrottleForThought();
+
+        clock.SetSpeed(GameSpeed.Normal);
+        clock.ReleaseThrottle();
+
+        Assert.Equal(GameSpeed.Normal, clock.Speed);
+        Assert.False(clock.ThrottledByGovernor);
+    }
+
+    /// <summary>
     /// Contemplation-per-colony-day is unbounded while paused, and CallsPerColonyDay says so with
     /// PositiveInfinity. That is the honest answer in C# and an unserialisable one in JSON —
     /// System.Text.Json throws on it — so the pause button used to return a 500 and freeze the
