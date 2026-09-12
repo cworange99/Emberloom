@@ -28,6 +28,7 @@ interface Links {
   focus: InspectorFocus
   goTo: (focus: InspectorFocus) => void
   openColonist: (id: string) => void
+  openPlace: (id: string) => void
 }
 
 export function DriveBars({
@@ -120,12 +121,16 @@ export function ColonistDetailView({
   onFocus,
   onBack,
   onOpenColonist,
+  onOpenPlace,
+  placeNames,
 }: {
   id: string
   focus: InspectorFocus
   onFocus: (focus: InspectorFocus) => void
   onBack: () => void
   onOpenColonist: (id: string) => void
+  onOpenPlace: (id: string) => void
+  placeNames: ReadonlyMap<string, string>
 }) {
   const [detail, setDetail] = useState<ColonistDetail | null>(null)
 
@@ -182,7 +187,7 @@ export function ColonistDetailView({
   }
 
   const { colonist } = detail
-  const links: Links = { focus, goTo: onFocus, openColonist: onOpenColonist }
+  const links: Links = { focus, goTo: onFocus, openColonist: onOpenColonist, openPlace: onOpenPlace }
 
   const tabs: Array<{ key: InspectorTab; label: string; count?: number }> = [
     { key: 'now', label: 'Now' },
@@ -207,7 +212,12 @@ export function ColonistDetailView({
           <div>
             <h2>{colonist.displayName}</h2>
             <p>
-              {colonist.lineage} · day {colonist.ageDays.toFixed(0)} · {colonist.mood}
+              {colonist.lineage} · day {colonist.ageDays.toFixed(0)} · {colonist.mood} · at{' '}
+              <PlaceLink
+                id={colonist.placeId}
+                name={placeNames.get(colonist.placeId) ?? colonist.placeId}
+                links={links}
+              />
             </p>
           </div>
         </div>
@@ -851,7 +861,7 @@ function Where({ memory, links }: { memory: MemoryRow; links: Links }) {
     <>
       {memory.placeId && (
         <>
-          at <PlaceLink id={memory.placeId} name={memory.placeName} />
+          at <PlaceLink id={memory.placeId} name={memory.placeName} links={links} />
         </>
       )}
       {memory.others.length > 0 && (
@@ -882,18 +892,12 @@ function PersonLink({ person, links }: { person: PersonRef; links: Links }) {
   )
 }
 
-/** Opens the place in the 3D room view, in its own tab — it is a separate page. */
-function PlaceLink({ id, name }: { id: string; name: string }) {
+/** Opens the place's room in the main view, beside the inspector. */
+function PlaceLink({ id, name, links }: { id: string; name: string; links: Links }) {
   return (
-    <a
-      className="jump"
-      href={`/spike/room.html?place=${encodeURIComponent(id)}`}
-      target="_blank"
-      rel="noreferrer"
-      title="Open this place in the room view"
-    >
-      {name} ↗
-    </a>
+    <button className="jump" onClick={() => links.openPlace(id)} title={`Look inside ${name}`}>
+      {name}
+    </button>
   )
 }
 

@@ -3,9 +3,14 @@
 The low-poly kits the 3D views are built from. All Kenney, all CC0 — no attribution
 required, though `LICENSE-kenney.txt` travels with each kit anyway.
 
-`assets/kit/` is **not committed yet** (see `.gitignore`). It is about 10MB of GLB, and
-whether that belongs in the repo or behind a fetch script is still an open question. Until
-that is settled, a fresh clone needs the kits placed by hand.
+`assets/kit/` is deliberately **not in the repository** (see `.gitignore`) — decided 11 September
+2026. It is about 10 MB of GLB, and the kits will reach a machine by a fetch script or the game's
+installer instead. Until one of those exists, a fresh clone needs the kits placed by hand;
+without them the 3D views draw placeholders and say so.
+
+The Kenney kits are the development art. They may ship, but the look is not final. Every art
+choice lives in `client/src/city/art.ts` (the city) and `client/src/city/rooms.ts` (interiors),
+so moving to a different kit is an edit to those tables rather than to the scenes.
 
 ## What goes where
 

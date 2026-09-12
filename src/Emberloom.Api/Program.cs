@@ -39,10 +39,9 @@ contentTypes.Mappings[".gltf"] = "model/gltf+json";
 
 app.UseStaticFiles(new StaticFileOptions { ContentTypeProvider = contentTypes });
 
-// The graphics spikes and the art kit are served from outside wwwroot on purpose: the client's
-// `npm run build` empties wwwroot, and hand-written spike pages living in a folder that a build
-// step deletes is a trap I have already walked into once. Both mounts are optional so a published
-// build without them still starts.
+// The art kit is served from outside wwwroot on purpose: the client's `npm run build` empties
+// wwwroot, and anything put there by hand goes with the next build. The mount is optional, so a
+// build without the kit still starts — the 3D views draw placeholders and say why.
 static void MountIfPresent(WebApplication app, string relative, string requestPath,
     Microsoft.AspNetCore.StaticFiles.IContentTypeProvider types)
 {
@@ -60,7 +59,6 @@ static void MountIfPresent(WebApplication app, string relative, string requestPa
     });
 }
 
-MountIfPresent(app, "spikes", "/spike", contentTypes);
 MountIfPresent(app, Path.Combine("assets", "kit"), "/kit", contentTypes);
 
 var sim = app.Services.GetRequiredService<SimulationHost>();

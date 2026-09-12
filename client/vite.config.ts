@@ -12,9 +12,8 @@ export default defineConfig({
     proxy: {
       '/api': { target: api, changeOrigin: true },
       '/ws': { target: api.replace(/^http/, 'ws'), ws: true },
-      // The 3D spikes and their art kit are served by the API from outside wwwroot. Without these
-      // the inspector's place links open a 404 in dev mode.
-      '/spike': { target: api, changeOrigin: true },
+      // The art kit is served by the API from outside wwwroot; without this the 3D views load no
+      // models in dev mode.
       '/kit': { target: api, changeOrigin: true },
     },
   },

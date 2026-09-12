@@ -27,6 +27,6 @@ Thumbs.db
 src/Emberloom.Api/wwwroot/
 
 # The Kenney CC0 art kits, ~10MB of GLB. Served from here rather than wwwroot because
-# `npm run build` empties wwwroot. Whether these get committed or fetched by a script is
-# still open — see assets/kit/README.md.
+# `npm run build` empties wwwroot. Kept out of the repository on purpose: they reach a machine
+# by fetch script or installer. See assets/README.md.
 assets/kit/

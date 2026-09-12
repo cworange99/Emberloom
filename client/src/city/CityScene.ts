@@ -1,8 +1,8 @@
 import * as THREE from 'three'
-import { GLTFLoader, type GLTF } from 'three/addons/loaders/GLTFLoader.js'
+import type { GLTF } from 'three/addons/loaders/GLTFLoader.js'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
-import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js'
 import type { Colonist, Place } from '../types'
+import { KitLoader, hash, makeFigure, playClip, rand, type Figure } from './kit'
 import {
   CITY_FOLK_SCALE,
   FOLK,
@@ -13,7 +13,6 @@ import {
   TREES,
   animationFor,
   artFor,
-  kitUrl,
 } from './art'
 
 export type CityPick = { kind: 'colonist'; id: string } | { kind: 'place'; id: string }
@@ -26,12 +25,7 @@ export type CityPick = { kind: 'colonist'; id: string } | { kind: 'place'; id: s
 const WALK_SPEED = 1.6
 const MAX_WALK_SECONDS = 2.5
 
-interface Walker {
-  root: THREE.Object3D
-  mixer: THREE.AnimationMixer | null
-  clips: THREE.AnimationClip[]
-  action: THREE.AnimationAction | null
-  clip: string | null
+interface Walker extends Figure {
   placeId: string
   path: THREE.Vector3[]
   speed: number
@@ -47,17 +41,6 @@ interface Bounds {
 }
 
 type Segment = [THREE.Vector3, THREE.Vector3]
-
-const rand = (seed: number) => {
-  const x = Math.sin(seed * 127.1) * 43758.5453
-  return x - Math.floor(x)
-}
-
-const hash = (text: string) => {
-  let h = 0
-  for (const ch of text) h = (h * 31 + ch.charCodeAt(0)) | 0
-  return Math.abs(h)
-}
 
 /**
  * The reclaimed city, in low-poly 3D: the graphics spike made permanent.
@@ -75,8 +58,7 @@ export class CityScene {
   private readonly controls: OrbitControls
   private readonly hemi = new THREE.HemisphereLight(0xdfe8d8, 0x2a331f, 1.0)
   private readonly sun = new THREE.DirectionalLight(0xfff2d8, 2.2)
-  private readonly loader = new GLTFLoader()
-  private readonly cache = new Map<string, Promise<GLTF | null>>()
+  private readonly kit = new KitLoader()
   private readonly clock = new THREE.Clock()
   private readonly raycaster = new THREE.Raycaster()
   private readonly observer: ResizeObserver
@@ -95,10 +77,11 @@ export class CityScene {
   private pending: Colonist[] | null = null
   private selectedId: string | null = null
   private frustum = 9
-  private missingKit = false
   private ready = false
   private disposed = false
   private frame = 0
+  private active = true
+  private running = false
 
   private readonly host: HTMLElement
 
@@ -160,24 +143,24 @@ export class CityScene {
     // Every model at once, rather than one await per building.
     await Promise.all(
       [...INFILL, ...TREES, ...ROCKS, ...PARASOLS, ...FOLK, ...places.flatMap(modelsFor)].map((m) =>
-        this.load(m),
+        this.kit.load(m),
       ),
     )
-    if (this.disposed) return { missingKit: this.missingKit }
+    if (this.disposed) return { missingKit: this.kit.missing }
 
     this.buildGround()
     const streets = this.buildStreets(places)
     await this.buildPlaces(places)
     await this.buildInfill(bounds, streets)
     await this.buildForest(bounds, streets)
-    this.folk = await Promise.all(FOLK.map((m) => this.load(m)))
-    if (this.disposed) return { missingKit: this.missingKit }
+    this.folk = await Promise.all(FOLK.map((m) => this.kit.load(m)))
+    if (this.disposed) return { missingKit: this.kit.missing }
 
     this.fit(bounds)
     this.ready = true
 
     if (this.pending) this.setColonists(this.pending, this.selectedId)
-    return { missingKit: this.missingKit }
+    return { missingKit: this.kit.missing }
   }
 
   // ---- live updates ------------------------------------------------------------------------
@@ -240,6 +223,15 @@ export class CityScene {
     this.hemi.color.set(on ? 0x2a3350 : 0xdfe8d8)
     this.scene.background = new THREE.Color(on ? 0x0d1119 : 0x8fb8d8)
     this.scene.fog = new THREE.Fog(on ? 0x0d1119 : 0x8fb8d8, 60, 150)
+  }
+
+  /** Stops drawing while another view is showing, and picks up where it left off. */
+  setActive(active: boolean) {
+    this.active = active
+    if (active && !this.running && !this.disposed) {
+      this.clock.getDelta()
+      this.loop()
+    }
   }
 
   /** Rubble stands at a sealed place until the colony clears it. */
@@ -349,7 +341,7 @@ export class CityScene {
 
       if (art.form === 'building') {
         const model = art.models[hash(place.id) % art.models.length]
-        const building = await this.instance(model, () =>
+        const building = await this.kit.instance(model, () =>
           this.fallbackBox(model.includes('skyscraper') ? 4.5 : 1.3),
         )
         building.rotation.y = (hash(`${place.id}:turn`) % 4) * (Math.PI / 2)
@@ -357,7 +349,7 @@ export class CityScene {
       } else if (art.form === 'grove') {
         // A grove is trees rather than a building.
         for (let i = 0; i < 6; i++) {
-          const tree = await this.instance(TREES[0], () => this.fallbackTree())
+          const tree = await this.kit.instance(TREES[0], () => this.fallbackTree())
           tree.scale.setScalar(0.85)
           tree.position.set((rand(i * 3 + place.x) - 0.5) * 2.6, 0, (rand(i * 7 + place.y) - 0.5) * 2.6)
           group.add(tree)
@@ -373,7 +365,7 @@ export class CityScene {
         group.add(slab)
 
         for (let i = 0; i < 4; i++) {
-          const parasol = await this.instance(PARASOLS[i % PARASOLS.length], () => new THREE.Group())
+          const parasol = await this.kit.instance(PARASOLS[i % PARASOLS.length], () => new THREE.Group())
           parasol.position.set((rand(i * 4 + 1) - 0.5) * 2.6, 0.06, (rand(i * 8 + 3) - 0.5) * 2.6)
           parasol.rotation.y = rand(i * 6) * Math.PI * 2
           group.add(parasol)
@@ -384,7 +376,7 @@ export class CityScene {
       if (place.isBlocked) {
         const rocks = new THREE.Group()
         for (let i = 0; i < 4; i++) {
-          const rock = await this.instance(ROCKS[0], () => this.fallbackRock())
+          const rock = await this.kit.instance(ROCKS[0], () => this.fallbackRock())
           rock.scale.setScalar(1.2)
           rock.position.set((rand(i * 5) - 0.5) * 1.8, 0, 1.1 + (rand(i * 9) - 0.5) * 0.9)
           rocks.add(rock)
@@ -415,7 +407,7 @@ export class CityScene {
         if (n > 0.42) continue // leave gaps: the forest took some
         if (this.near(x, z, 1.7) || nearStreet(x, z, streets, 0.95)) continue
 
-        const building = await this.instance(INFILL[Math.floor(n * 1000) % INFILL.length], () =>
+        const building = await this.kit.instance(INFILL[Math.floor(n * 1000) % INFILL.length], () =>
           this.fallbackBox(1.1),
         )
         building.position.set(x, 0, z)
@@ -435,7 +427,7 @@ export class CityScene {
       const z = bounds.minZ - 3 + rand(i * 2.3 + 5) * depth
       if (this.near(x, z, 1.6) || nearStreet(x, z, streets, 0.7)) continue
 
-      const tree = await this.instance(TREES[i % TREES.length], () => this.fallbackTree())
+      const tree = await this.kit.instance(TREES[i % TREES.length], () => this.fallbackTree())
       tree.scale.setScalar(0.5 + rand(i) * 0.35)
       tree.position.set(x, 0, z)
       tree.rotation.y = rand(i * 11) * Math.PI * 2
@@ -464,27 +456,16 @@ export class CityScene {
   // ---- colonists ---------------------------------------------------------------------------
 
   private spawn(colonist: Colonist, position: THREE.Vector3): Walker {
+    // The same model the room view draws them with, chosen the same way — one person, both views.
     const gltf = this.folk.length > 0 ? this.folk[hash(colonist.id) % this.folk.length] : null
+    const figure = makeFigure(gltf, CITY_FOLK_SCALE)
+    figure.root.position.copy(position)
 
-    // Rigged characters need SkeletonUtils.clone: a plain clone() keeps the mesh but not its
-    // skeleton binding, and the colonist renders collapsed into a point.
-    const root = gltf ? cloneSkinned(gltf.scene) : this.fallbackFigure()
-    root.scale.setScalar(CITY_FOLK_SCALE)
-    root.position.copy(position)
-    root.traverse((node) => {
-      node.castShadow = true
-      node.receiveShadow = true
-    })
-
-    this.scene.add(root)
-    this.markPickable(root, { kind: 'colonist', id: colonist.id })
+    this.scene.add(figure.root)
+    this.markPickable(figure.root, { kind: 'colonist', id: colonist.id })
 
     const walker: Walker = {
-      root,
-      mixer: gltf ? new THREE.AnimationMixer(root) : null,
-      clips: gltf?.animations ?? [],
-      action: null,
-      clip: null,
+      ...figure,
       placeId: colonist.placeId,
       path: [],
       speed: WALK_SPEED,
@@ -494,24 +475,6 @@ export class CityScene {
 
     this.walkers.set(colonist.id, walker)
     return walker
-  }
-
-  private play(walker: Walker, name: string, seed: number) {
-    if (walker.clip === name || !walker.mixer) return
-
-    const clip =
-      walker.clips.find((c) => c.name === name) ?? walker.clips.find((c) => c.name === 'idle')
-    if (!clip) return
-
-    const next = walker.mixer.clipAction(clip)
-    next.reset().fadeIn(0.2).play()
-    walker.action?.fadeOut(0.2)
-
-    // Started at a different moment each, or eight colonists breathe in unison.
-    if (walker.clip === null) next.time = rand(seed) * clip.duration
-
-    walker.action = next
-    walker.clip = name
   }
 
   private step(id: string, walker: Walker, dt: number) {
@@ -533,12 +496,12 @@ export class CityScene {
       }
 
       if (distance > 1e-4) walker.root.rotation.y = Math.atan2(dx, dz)
-      this.play(walker, 'walk', hash(id))
+      playClip(walker, 'walk', hash(id))
     } else {
       // Facing out from the place, which is toward the camera for the slots in front of it.
       const centre = this.centres.get(walker.placeId)
       if (centre) walker.root.rotation.y = Math.atan2(position.x - centre.x, position.z - centre.z)
-      this.play(walker, walker.travelling ? 'idle' : animationFor(walker.doing), hash(id))
+      playClip(walker, walker.travelling ? 'idle' : animationFor(walker.doing), hash(id))
     }
 
     walker.mixer?.update(dt)
@@ -552,7 +515,11 @@ export class CityScene {
   // ---- the frame ---------------------------------------------------------------------------
 
   private loop = () => {
-    if (this.disposed) return
+    if (this.disposed || !this.active) {
+      this.running = false
+      return
+    }
+    this.running = true
     this.frame = requestAnimationFrame(this.loop)
 
     const dt = Math.min(this.clock.getDelta(), 0.1)
@@ -610,30 +577,6 @@ export class CityScene {
 
   // ---- helpers -----------------------------------------------------------------------------
 
-  private load(model: string): Promise<GLTF | null> {
-    let promise = this.cache.get(model)
-    if (!promise) {
-      // A missing model resolves to null rather than rejecting: a fresh clone without the art kit
-      // still gets a working city, drawn in placeholders, instead of an empty panel.
-      promise = this.loader.loadAsync(kitUrl(model)).catch(() => {
-        this.missingKit = true
-        return null
-      })
-      this.cache.set(model, promise)
-    }
-    return promise
-  }
-
-  private async instance(model: string, fallback: () => THREE.Object3D): Promise<THREE.Object3D> {
-    const gltf = await this.load(model)
-    const object = gltf ? gltf.scene.clone(true) : fallback()
-    object.traverse((node) => {
-      node.castShadow = true
-      node.receiveShadow = true
-    })
-    return object
-  }
-
   /** The fixed corner of the L between two places, the same whichever way it is walked. */
   private corner(aId: string, bId: string): THREE.Vector3 | null {
     const [first, second] = [aId, bId].sort()
@@ -674,15 +617,6 @@ export class CityScene {
   private fallbackRock(): THREE.Object3D {
     const mesh = new THREE.Mesh(new THREE.DodecahedronGeometry(0.2), this.fallbackMaterial)
     mesh.position.y = 0.12
-    return new THREE.Group().add(mesh)
-  }
-
-  private fallbackFigure(): THREE.Object3D {
-    const mesh = new THREE.Mesh(
-      new THREE.CapsuleGeometry(0.12, 0.34, 4, 8),
-      new THREE.MeshLambertMaterial({ color: 0x6fbf92 }),
-    )
-    mesh.position.y = 0.29
     return new THREE.Group().add(mesh)
   }
 }

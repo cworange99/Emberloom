@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react'
 import type { Colonist, Place, PlaceState } from './types'
 import type { CityScene } from './city/CityScene'
-import { roomUrl } from './city/art'
 
 interface Props {
   places: Place[]
@@ -10,6 +9,9 @@ interface Props {
   isNight: boolean
   selectedId: string | null
   onSelect: (id: string) => void
+  onOpenPlace: (id: string) => void
+  /** False while a room is showing; the scene stops drawing and keeps its camera. */
+  active: boolean
 }
 
 /**
@@ -19,7 +21,16 @@ interface Props {
  * The scene itself is loaded lazily: Three.js is most of the bundle, and the roster, feed and
  * inspector should not wait on it.
  */
-export function CityView({ places, placeStates, colonists, isNight, selectedId, onSelect }: Props) {
+export function CityView({
+  places,
+  placeStates,
+  colonists,
+  isNight,
+  selectedId,
+  onSelect,
+  onOpenPlace,
+  active,
+}: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
   const sceneRef = useRef<CityScene | null>(null)
   const downRef = useRef<{ x: number; y: number } | null>(null)
@@ -66,6 +77,10 @@ export function CityView({ places, placeStates, colonists, isNight, selectedId, 
   }, [ready, isNight])
 
   useEffect(() => {
+    if (ready) sceneRef.current?.setActive(active)
+  }, [ready, active])
+
+  useEffect(() => {
     if (ready) sceneRef.current?.setSealed(new Map([...live].map(([id, s]) => [id, s.isBlocked])))
   }, [ready, live])
 
@@ -82,7 +97,7 @@ export function CityView({ places, placeStates, colonists, isNight, selectedId, 
     }
 
     const place = placeById.get(hit.id)
-    return place ? `${place.name} — look inside ↗` : null
+    return place ? `${place.name} — look inside` : null
   }
 
   const onPointerMove = (event: PointerEvent<HTMLDivElement>) => {
@@ -105,7 +120,7 @@ export function CityView({ places, placeStates, colonists, isNight, selectedId, 
 
     const hit = sceneRef.current?.pick(event.clientX, event.clientY)
     if (hit?.kind === 'colonist') onSelect(hit.id)
-    else if (hit?.kind === 'place') window.open(roomUrl(hit.id), '_blank', 'noopener')
+    else if (hit?.kind === 'place') onOpenPlace(hit.id)
   }
 
   const selected = colonists.find((c) => c.id === selectedId)
@@ -114,6 +129,7 @@ export function CityView({ places, placeStates, colonists, isNight, selectedId, 
     <div
       className="city"
       ref={hostRef}
+      hidden={!active}
       role="img"
       aria-label="The reclaimed city in 3D. Colonists are shown where they are standing; the roster lists them too."
       onPointerMove={onPointerMove}

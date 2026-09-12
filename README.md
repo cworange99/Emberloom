@@ -15,7 +15,7 @@ See [DESIGN.md](DESIGN.md) for the full design. Build order and milestone status
 | **M2** — governor and Kindling | **Done.** Printed colonists get model-written personalities and weights; the budget governor holds a rolling tokens-per-minute ceiling and slows time rather than dropping thinking. |
 | **M3** — memory pipeline and Reflection | **Done.** Episodic memories coalesce, consolidate, and produce beliefs that cite the memories they came from — walkable in the inspector. |
 | **M4** — the Mind Inspector | **Done.** Five tabs, every chain walkable end to end, and the prompt and response of every recent call kept locally. The Modest decision: the laptop plays via hosted inference and stays a development floor. |
-| **M4.5** — the view | **In progress.** The 3D city and rooms from the graphics spike, becoming the app's real presentation. |
+| **M4.5** — the view | **Done.** The 3D city is the main view and rooms open beside the inspector, both live over the socket. The art kits ship by fetch script or installer rather than the repository: decided, and built when packaging comes. |
 | M5 — dialogue and deliberation | Not started |
 | M6 — player verbs | Not started |
 | M7 — generations | Not started |
@@ -27,9 +27,8 @@ src/Emberloom.Core    the body — drives, actions, world, memory, relationships
 src/Emberloom.Mind    the mind — Ollama transport, call schemas, token budgets
 src/Emberloom.Bench   M0 benchmark harness
 src/Emberloom.Sim     headless watcher for the body, and the balance sweep
-src/Emberloom.Api     HTTP/WebSocket host; also mounts spikes/ and assets/kit/
+src/Emberloom.Api     HTTP/WebSocket host; also mounts assets/kit/ at /kit
 client/               React + TypeScript client, built into the API's wwwroot
-spikes/               the 3D views — hand-written, served at /spike
 assets/               the Kenney CC0 art kits, served at /kit (see assets/README.md)
 tests/Emberloom.Tests including the day-one test that the body runs with no Ollama at all
 ```
@@ -133,26 +132,21 @@ reflections came in at about 1.1. Hover the readout to see which figure it is us
 
 ## The 3D views
 
-From M4.5 the city is the app's main view: `client/src/city/`, laid out from the world model's own
-place positions and live over the socket. Click a colonist to read their mind; click a building to
-look inside. The room view is still the standalone page below until M4.5's second step brings it
-into the app, and the spike city page is superseded by the app.
+The main view is the colony itself, in low-poly 3D (`client/src/city/`):
 
-The spike pages are served straight from `spikes/` rather than `wwwroot` — the client build empties
-`wwwroot`, and hand-written pages should not live somewhere a build step deletes. They read the live
-colony from `/api/state`; they do not write to it.
+- **The city** is laid out from the world model's own place positions, live over the socket, and
+  colonists walk the streets between places. Click a colonist to read their mind; click a building
+  to go inside.
+- **A room** is one place's interior, cut away to two walls so nothing stands between the camera
+  and the people. Colonists walk in through the door and out again, and each plays an animation
+  for what they are doing. Click one to read their mind. **← city** goes back, and so does the
+  browser's back button.
 
-- **http://localhost:5223/spike/spike3d.html** — the city. Twelve named places among the infill
-  blocks, the forest coming back through the streets, real day/night lighting. Hovering names a
-  place; clicking a building or a colonist opens that place's interior.
-- **http://localhost:5223/spike/room.html** — one interior, cut away to two walls so nothing stands
-  between the camera and the people. Colonists play an animation matched to what they are actually
-  doing. Arriving from a colonist click marks them with a gold ring and an overhead pin.
+The inspector's place links open rooms too, so a belief leads to the memory behind it and on to
+the room where it happened.
 
-Both need the art kits in `assets/kit/`, which are **not in the repo** — see
-[`assets/README.md`](assets/README.md) for what to download and where to put it. Without them the
-pages load and stay empty; with the kits but without each kit's `Textures/` folder, every model
-renders pure white.
+Both need the art kits in `assets/kit/`, which are deliberately **not in the repository** — see
+[`assets/README.md`](assets/README.md). Without them the views draw placeholders and say so.
 
 Sizing is deliberate and differs between the views. A Kenney character is 0.67 units tall and a
 city house is 1.29, so in the city colonists are scaled 1.2× or they disappear among the buildings;

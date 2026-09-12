@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { CityView } from './CityView'
+import { RoomView } from './RoomView'
 import { ColonistDetailView, Roster, type InspectorFocus } from './ColonistPanel'
 import { useColony } from './useColony'
 
@@ -17,6 +18,22 @@ export default function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [focus, setFocus] = useState<InspectorFocus>({ tab: 'now' })
   const [follow, setFollow] = useState(true)
+  const [view, setView] = useState<View>(() => viewFromHash())
+
+  // The view lives in the URL hash, so the browser's back button leaves a room and a reload stays
+  // in it.
+  useEffect(() => {
+    const onHashChange = () => setView(viewFromHash())
+    window.addEventListener('hashchange', onHashChange)
+    return () => window.removeEventListener('hashchange', onHashChange)
+  }, [])
+
+  // The room view is mounted the first time a room is opened, then kept: going back to the city
+  // and in again should not rebuild a scene from nothing.
+  const [roomOpened, setRoomOpened] = useState(view.kind === 'room')
+  useEffect(() => {
+    if (view.kind === 'room') setRoomOpened(true)
+  }, [view])
 
   const feedRef = useRef<HTMLDivElement>(null)
 
@@ -32,6 +49,19 @@ export default function App() {
     setSelectedId(id)
     setFocus((current) => ({ tab: current.tab }))
   }
+
+  const openRoom = (placeId: string) => {
+    window.location.hash = 'room=' + encodeURIComponent(placeId)
+  }
+
+  const showCity = () => {
+    window.location.hash = ''
+  }
+
+  const placeNames = useMemo(
+    () => new Map((world?.places ?? []).map((p) => [p.id, p.name])),
+    [world],
+  )
 
   if (!world || !state) {
     return (
@@ -159,14 +189,33 @@ export default function App() {
 
       <div className="columns">
         <div className="left">
-          <CityView
-            places={world.places}
-            placeStates={state.places}
-            colonists={state.colonists}
-            isNight={state.isNight}
-            selectedId={selectedId}
-            onSelect={openColonist}
-          />
+          {/* The city and a room share the main view. Both stay built, and only the one showing
+              draws, so switching between them is instant and keeps each camera where it was. */}
+          <div className="stage">
+            <CityView
+              places={world.places}
+              placeStates={state.places}
+              colonists={state.colonists}
+              isNight={state.isNight}
+              selectedId={selectedId}
+              onSelect={openColonist}
+              onOpenPlace={openRoom}
+              active={view.kind === 'city'}
+            />
+            {roomOpened && (
+              <RoomView
+                placeId={view.kind === 'room' ? view.placeId : null}
+                places={world.places}
+                colonists={state.colonists}
+                isNight={state.isNight}
+                selectedId={selectedId}
+                active={view.kind === 'room'}
+                onSelect={openColonist}
+                onOpenPlace={openRoom}
+                onBack={showCity}
+              />
+            )}
+          </div>
 
           <div className="feed">
             <div className="feed-head">
@@ -202,6 +251,8 @@ export default function App() {
               onFocus={setFocus}
               onBack={() => setSelectedId(null)}
               onOpenColonist={openColonist}
+              onOpenPlace={openRoom}
+              placeNames={placeNames}
             />
           ) : (
             <Roster colonists={state.colonists} selectedId={selectedId} onSelect={openColonist} />
@@ -210,6 +261,13 @@ export default function App() {
       </div>
     </div>
   )
+}
+
+type View = { kind: 'city' } | { kind: 'room'; placeId: string }
+
+function viewFromHash(): View {
+  const match = /^#room=(.+)$/.exec(window.location.hash)
+  return match ? { kind: 'room', placeId: decodeURIComponent(match[1]) } : { kind: 'city' }
 }
 
 function formatTimeOfDay(fraction: number) {

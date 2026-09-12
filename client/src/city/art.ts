@@ -80,8 +80,3 @@ const ANIMATION_FOR: Record<string, string> = {
 
 export const animationFor = (doing: string | null) => (doing && ANIMATION_FOR[doing]) || 'idle'
 
-/**
- * A place's interior. Until M4.5's second step brings the room view into the app, this is the
- * standalone room page, opened in its own tab.
- */
-export const roomUrl = (placeId: string) => `/spike/room.html?place=${encodeURIComponent(placeId)}`
