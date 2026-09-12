@@ -264,6 +264,15 @@ app.MapPost("/api/auto-slow", (AutoSlowRequest request) =>
     return Results.Ok(sim.ClockSnapshot());
 });
 
+// What the player is looking at — the room open in the main view, and the colonist in the
+// inspector. It decides which conversations are written first. This is the client telling its own
+// server what is on screen; none of it goes anywhere near the inference server.
+app.MapPost("/api/view", (ViewRequest request) =>
+{
+    sim.SetView(request.PlaceId, request.ColonistId);
+    return Results.NoContent();
+});
+
 app.MapPost("/api/restart", (RestartRequest request) =>
 {
     sim.Restart(Math.Clamp(request.Colonists ?? 8, 1, 60), request.Seed ?? Random.Shared.Next());
@@ -333,3 +342,4 @@ static async Task Send(WebSocket socket, object message, JsonSerializerOptions o
 internal sealed record SpeedRequest(string Speed);
 internal sealed record AutoSlowRequest(bool Enabled);
 internal sealed record RestartRequest(int? Colonists, int? Seed);
+internal sealed record ViewRequest(string? PlaceId, string? ColonistId);

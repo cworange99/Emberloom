@@ -48,6 +48,8 @@ export interface ColonyEvent {
   colonistId: string | null
   placeId: string | null
   notable: boolean
+  /** Set when this line is someone speaking. The views show it over their head. */
+  quote: string | null
 }
 
 export interface Clock {

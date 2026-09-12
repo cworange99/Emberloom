@@ -41,6 +41,12 @@ public sealed class BodySimulation
     /// </summary>
     public event Action<Colonist, EpisodicMemory>? MemoryRecorded;
 
+    /// <summary>
+    /// Two colonists have started talking. The body knows that it is happening and moves the
+    /// ledger; what they actually say is the mind's to write, and the host asks for it here.
+    /// </summary>
+    public event Action<Colonist, Colonist, Place>? ConversationStarted;
+
     public void Tick()
     {
         _colony.Tick++;
@@ -199,6 +205,14 @@ public sealed class BodySimulation
                 break;
 
             case ActionKind.Talk or ActionKind.Teach when current.PartnerId is not null:
+                if (current.Definition.Kind == ActionKind.Talk
+                    && current.TicksElapsed == 1
+                    && _colony.Find(current.PartnerId) is { IsAlive: true } partner
+                    && partner.PlaceId == colonist.PlaceId)
+                {
+                    ConversationStarted?.Invoke(colonist, partner, place);
+                }
+
                 if (_colony.Tick % 6 == 0)
                 {
                     Converse(colonist, current);
@@ -303,10 +317,23 @@ public sealed class BodySimulation
             return;
         }
 
-        // In M1 conversation has no content — the ledger moves and both parties remember that it
-        // happened. Dialogue proper is M5.
+        // The ledger moves and both remember that it happened. What was said comes from the mind
+        // (Dialogue) and is attached to these memories — now, or whenever it arrives.
         Record(colonist, "talked with", partner.DisplayName, place.Id, 0.3, 0.25, with: partner.Id);
         Record(partner, "talked with", colonist.DisplayName, place.Id, 0.3, 0.25, with: colonist.Id);
+
+        // Words that arrived before the conversation was remembered: the mind answered faster than
+        // the body finished talking. They belong on the memories just written.
+        HearPendingWords(colonist, partner);
+        HearPendingWords(partner, colonist);
+    }
+
+    private void HearPendingWords(Colonist colonist, Colonist other)
+    {
+        if (colonist.PendingWords.Remove(other.Id, out var words))
+        {
+            colonist.Memory.AttachWords(other.Id, words, _colony.Day);
+        }
     }
 
     private void Injure(Colonist colonist, Place place)

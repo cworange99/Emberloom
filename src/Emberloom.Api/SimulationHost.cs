@@ -9,6 +9,7 @@ using Emberloom.Mind.Ollama;
 using Emberloom.Core.Memory;
 using Emberloom.Core.Events;
 using Emberloom.Core.Simulation;
+using Emberloom.Core.World;
 
 namespace Emberloom.Api;
 
@@ -33,6 +34,17 @@ public sealed class SimulationHost : BackgroundService
 
     private readonly MindService? _mind;
     private readonly MindGovernor? _governor;
+
+    /// <summary>
+    /// What the player is looking at: the room open in the main view, and the colonist in the
+    /// inspector. A conversation there is written before one nobody is watching.
+    /// </summary>
+    private sealed record ViewFocus(string? PlaceId, string? ColonistId);
+
+    private volatile ViewFocus _view = new(null, null);
+
+    /// <summary>When each pair last had words written for them, in colony days. See SubmitDialogue.</summary>
+    private readonly Dictionary<string, double> _lastDialogue = [];
 
     public SimulationHost(ILogger<SimulationHost> logger, IConfiguration configuration)
     {
@@ -110,6 +122,7 @@ public sealed class SimulationHost : BackgroundService
         _random = new Random(seed);
         _colony = ColonyFactory.Create(colonists, _random);
         _body = new BodySimulation(_colony, _random);
+        AttachBody();
         Clock = new SimulationClock();
 
         _colony.Feed.Appended += OnEvent;
@@ -154,6 +167,8 @@ public sealed class SimulationHost : BackgroundService
             _random = new Random(seed);
             _colony = ColonyFactory.Create(colonists, _random);
             _body = new BodySimulation(_colony, _random);
+            AttachBody();
+            _lastDialogue.Clear();
             _colony.Feed.Appended += OnEvent;
         }
 
@@ -300,6 +315,67 @@ public sealed class SimulationHost : BackgroundService
                 };
             }
         });
+    }
+
+    private void AttachBody() => _body.ConversationStarted += SubmitDialogue;
+
+    public void SetView(string? placeId, string? colonistId) => _view = new ViewFocus(placeId, colonistId);
+
+    /// <summary>
+    /// Two colonists have started talking; ask the mind what they say. Called from inside the
+    /// tick, under the colony lock.
+    /// <para>
+    /// One exchange per pair per half colony-day. Talk is the commonest thing colonists do, and a
+    /// line for every conversation would spend the whole budget on small talk. A conversation the
+    /// player is watching goes to the front of the queue — the design's first priority — and one
+    /// nobody is watching waits behind reflection.
+    /// </para>
+    /// </summary>
+    private void SubmitDialogue(Colonist speaker, Colonist listener, Place place)
+    {
+        if (_mind is null || _governor is null)
+        {
+            return;
+        }
+
+        var pair = string.CompareOrdinal(speaker.Id, listener.Id) < 0
+            ? $"{speaker.Id}|{listener.Id}"
+            : $"{listener.Id}|{speaker.Id}";
+
+        if (_lastDialogue.TryGetValue(pair, out var last) && _colony.Day - last < 0.5)
+        {
+            return;
+        }
+
+        var view = _view;
+        var watched = view.ColonistId == speaker.Id
+                      || view.ColonistId == listener.Id
+                      || view.PlaceId == place.Id;
+
+        var submitted = _governor.Submit(new MindRequest
+        {
+            Call = CallType.Dialogue,
+            Priority = MindRequest.PriorityFor(CallType.Dialogue, playerIsWatching: watched),
+            ColonistId = speaker.Id,
+            Work = async ct =>
+            {
+                var colony = Read((c, _) => c);
+                var result = await _mind.DialogueAsync(speaker, listener, colony, ct).ConfigureAwait(false);
+                Broadcast(Snapshot());
+
+                return new MindCallOutcome
+                {
+                    PromptTokens = result.Call?.PromptTokens ?? 0,
+                    CompletionTokens = result.Call?.CompletionTokens ?? 0,
+                    WasFallback = !result.FromModel
+                };
+            }
+        });
+
+        if (submitted)
+        {
+            _lastDialogue[pair] = _colony.Day;
+        }
     }
 
     private void SubmitIdleThought(Colonist colonist)

@@ -89,10 +89,19 @@ public sealed record ColonistDto(
         DriveTable.Describe(colonist.Drives.Dominant(colonist.Weights)));
 }
 
-public sealed record EventDto(long Tick, double Day, string Layer, string Text, string? ColonistId, string? PlaceId, bool Notable)
+/// <summary>One line of the feed. <c>Quote</c> is set when the line is someone speaking; the views show it over their head.</summary>
+public sealed record EventDto(
+    long Tick,
+    double Day,
+    string Layer,
+    string Text,
+    string? ColonistId,
+    string? PlaceId,
+    bool Notable,
+    string? Quote)
 {
     public static EventDto From(ColonyEvent e) =>
-        new(e.Tick, Math.Round(e.Day, 3), e.Layer.ToString().ToLowerInvariant(), e.Text, e.ColonistId, e.PlaceId, e.IsNotable);
+        new(e.Tick, Math.Round(e.Day, 3), e.Layer.ToString().ToLowerInvariant(), e.Text, e.ColonistId, e.PlaceId, e.IsNotable, e.Quote);
 }
 
 /// <summary>

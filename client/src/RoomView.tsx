@@ -14,6 +14,8 @@ interface Props {
   onSelect: (id: string) => void
   onOpenPlace: (id: string) => void
   onBack: () => void
+  /** Lines being spoken right now, by colonist id — shown over the speaker's head. */
+  speech: ReadonlyMap<string, string>
 }
 
 /**
@@ -30,6 +32,7 @@ export function RoomView({
   onSelect,
   onOpenPlace,
   onBack,
+  speech,
 }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
   const sceneRef = useRef<RoomScene | null>(null)
@@ -181,6 +184,17 @@ export function RoomView({
               {colonist.displayName}
             </div>
           ))}
+          {occupants
+            .filter((colonist) => speech.has(colonist.id))
+            .map((colonist) => (
+              <div
+                key={`speech:${colonist.id}`}
+                ref={(element) => sceneRef.current?.setLabel(`speech:${colonist.id}`, element)}
+                className="speech"
+              >
+                {speech.get(colonist.id)}
+              </div>
+            ))}
         </div>
       )}
 

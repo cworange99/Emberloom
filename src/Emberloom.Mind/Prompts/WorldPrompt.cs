@@ -156,6 +156,14 @@ public static class WorldPrompt
         _ => "barely known"
     };
 
+    /// <summary>How one colonist reads another, in words: the stage, and whatever Reflection wrote about them.</summary>
+    public static string Reading(Relationship? relationship) =>
+        relationship is null
+            ? "barely known"
+            : string.IsNullOrWhiteSpace(relationship.Narrative)
+                ? Describe(relationship)
+                : $"{Describe(relationship)}. {relationship.Narrative}";
+
     /// <summary>The whole stable-to-semi-stable prefix, in cache order.</summary>
     public static string SystemFor(Colonist colonist, Colony colony)
     {

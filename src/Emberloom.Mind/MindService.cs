@@ -388,6 +388,78 @@ public sealed class MindService : IDisposable
     }
 
     /// <summary>
+    /// Two colonists talking: what one says and the other's reply. The words go into the feed, over
+    /// the speakers' heads, and onto both of their memories of the conversation — so when they next
+    /// reflect, they reflect on what was actually said.
+    /// </summary>
+    public async Task<DialogueResult> DialogueAsync(
+        Colonist speaker,
+        Colonist listener,
+        Colony colony,
+        CancellationToken ct = default)
+    {
+        DialogueResult result;
+
+        try
+        {
+            result = await DialogueCall.ExecuteAsync(_client, speaker, listener, colony, ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            result = DialogueCall.Fallback(speaker, listener);
+        }
+
+        string NameOf(string id) => id == speaker.Id ? speaker.DisplayName : listener.DisplayName;
+        var exchange = string.Join(" / ", result.Lines.Select(l => $"{NameOf(l.SpeakerId)}: “{l.Text}”"));
+
+        Commit(() =>
+        {
+            // One exchange with two minds in it, so it goes in both traces.
+            foreach (var participant in new[] { speaker, listener })
+            {
+                participant.RecordCall(Record(
+                    string.Empty, "Dialogue", "deep", colony, result.Call, exchange, wasFallback: !result.FromModel));
+            }
+
+            foreach (var line in result.Lines)
+            {
+                var by = line.SpeakerId == speaker.Id ? speaker : listener;
+                var to = ReferenceEquals(by, speaker) ? listener : speaker;
+
+                // Stock lines are not two minds talking, so they go out as the world's, not the mind's.
+                colony.Log(
+                    result.FromModel ? EventLayer.Mind : EventLayer.World,
+                    $"{by.DisplayName} to {to.DisplayName}: “{line.Text}”",
+                    by,
+                    quote: line.Text);
+            }
+
+            // Only real words are remembered. A colony running on stubs should not reflect on its
+            // own stock lines as though someone had meant them.
+            if (result.FromModel)
+            {
+                Remember(speaker, listener, exchange, colony.Day);
+                Remember(listener, speaker, exchange, colony.Day);
+            }
+        });
+
+        return result;
+    }
+
+    /// <summary>Puts the words on the conversation's memory, or holds them until the body writes it.</summary>
+    private static void Remember(Colonist colonist, Colonist other, string words, double day)
+    {
+        if (!colonist.Memory.AttachWords(other.Id, words, day))
+        {
+            colonist.PendingWords[other.Id] = words;
+        }
+    }
+
+    /// <summary>
     /// One trace line. The request and response texts ride along from the completion so the Trace
     /// tab can show exactly what was asked; they stay on this machine, in the colonist's trace.
     /// </summary>

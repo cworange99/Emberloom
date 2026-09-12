@@ -3,6 +3,9 @@ import type { ColonyEvent, ColonyState, World } from './types'
 
 const MAX_EVENTS = 600
 
+/** How long a spoken line stays over the speaker's head, in real time. */
+const SPEECH_MS = 7000
+
 type Message =
   | { type: 'world'; payload: World }
   | { type: 'state'; payload: ColonyState }
@@ -18,6 +21,10 @@ export function useColony() {
   const [state, setState] = useState<ColonyState | null>(null)
   const [events, setEvents] = useState<ColonyEvent[]>([])
   const [connected, setConnected] = useState(false)
+  const [speech, setSpeech] = useState<ReadonlyMap<string, string>>(() => new Map())
+
+  const dayRef = useRef(0)
+  const speaking = useRef(new Map<string, { text: string; until: number }>())
 
   const socketRef = useRef<WebSocket | null>(null)
   const retryRef = useRef<number | null>(null)
@@ -40,8 +47,18 @@ export function useColony() {
         if (message.type === 'world') {
           setWorld(message.payload)
         } else if (message.type === 'state') {
+          dayRef.current = message.payload.day
           setState(message.payload)
         } else {
+          const spoken = message.payload
+
+          // A line spoken just now shows over the speaker's head for a few seconds. The backlog
+          // sent on connect is old news, so only lines from the last stretch of colony time count.
+          if (spoken.quote && spoken.colonistId && dayRef.current - spoken.day < 0.1) {
+            speaking.current.set(spoken.colonistId, { text: spoken.quote, until: Date.now() + SPEECH_MS })
+            setSpeech(new Map([...speaking.current].map(([id, s]) => [id, s.text])))
+          }
+
           setEvents((previous) => {
             const next = [...previous, message.payload]
             return next.length > MAX_EVENTS ? next.slice(next.length - MAX_EVENTS) : next
@@ -69,6 +86,23 @@ export function useColony() {
     }
   }, [])
 
+  // Speech fades: drop any line whose few seconds are up.
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      const now = Date.now()
+      let changed = false
+      for (const [id, s] of speaking.current) {
+        if (s.until <= now) {
+          speaking.current.delete(id)
+          changed = true
+        }
+      }
+      if (changed) setSpeech(new Map([...speaking.current].map(([id, s]) => [id, s.text])))
+    }, 500)
+
+    return () => window.clearInterval(timer)
+  }, [])
+
   const setSpeed = useCallback(async (speed: string) => {
     await fetch('/api/speed', {
       method: 'POST',
@@ -94,5 +128,5 @@ export function useColony() {
     })
   }, [])
 
-  return { world, state, events, connected, setSpeed, setAutoSlow, restart }
+  return { world, state, events, connected, speech, setSpeed, setAutoSlow, restart }
 }

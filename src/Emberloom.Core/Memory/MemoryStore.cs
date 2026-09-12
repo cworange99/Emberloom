@@ -118,6 +118,25 @@ public sealed class MemoryStore
     public EpisodicMemory? FindEpisodic(string id) => _episodic.FirstOrDefault(m => m.Id == id);
 
     /// <summary>
+    /// Puts what was said onto the conversation it was said in: the latest "talked with" memory
+    /// about <paramref name="otherId"/> from the last day. False when there is none yet — the mind
+    /// can answer before the body has finished the conversation that prompted it.
+    /// </summary>
+    public bool AttachWords(string otherId, string words, double currentDay)
+    {
+        var memory = _episodic.FindLast(m =>
+            m.Verb == "talked with" && m.Actors.Contains(otherId) && currentDay - m.Day <= 1.0);
+
+        if (memory is null)
+        {
+            return false;
+        }
+
+        memory.Words = words;
+        return true;
+    }
+
+    /// <summary>
     /// Drops the least salient rows once the store outgrows its soft cap. Consolidated rows are
     /// dropped first — their meaning is already recorded a tier up, so the detail is expendable.
     /// </summary>

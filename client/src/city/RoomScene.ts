@@ -500,7 +500,10 @@ export class RoomScene {
     const height = this.host.clientHeight
 
     for (const [key, element] of this.labels) {
-      const occupant = this.occupants.get(key.slice('colonist:'.length))
+      // 'colonist:<id>' for a name, 'speech:<id>' for a line being spoken — speech sits just above.
+      const occupant = this.occupants.get(key.slice(key.indexOf(':') + 1))
+      const lift = key.startsWith('speech:') ? 24 : 0
+
       if (!occupant) {
         element.style.visibility = 'hidden'
         continue
@@ -511,7 +514,7 @@ export class RoomScene {
       anchor.project(this.camera)
 
       const x = ((anchor.x + 1) / 2) * width
-      const y = ((1 - anchor.y) / 2) * height
+      const y = ((1 - anchor.y) / 2) * height - lift
       element.style.visibility = anchor.z > 1 ? 'hidden' : 'visible'
       element.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) translate(-50%, -100%)`
     }

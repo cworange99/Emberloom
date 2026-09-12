@@ -62,7 +62,13 @@ public sealed class Colony
 
     public void Add(Colonist colonist) => _colonists.Add(colonist);
 
-    public void Log(EventLayer layer, string text, Colonist? colonist = null, string? placeId = null, bool notable = false) =>
+    public void Log(
+        EventLayer layer,
+        string text,
+        Colonist? colonist = null,
+        string? placeId = null,
+        bool notable = false,
+        string? quote = null) =>
         Feed.Append(new ColonyEvent
         {
             Tick = Tick,
@@ -71,6 +77,7 @@ public sealed class Colony
             Text = text,
             ColonistId = colonist?.Id,
             PlaceId = placeId ?? colonist?.PlaceId,
-            IsNotable = notable
+            IsNotable = notable,
+            Quote = quote
         });
 }

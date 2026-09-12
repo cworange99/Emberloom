@@ -48,9 +48,17 @@ public sealed record EpisodicMemory
         return Intensity * Math.Abs(Valence) * recency * recallBonus;
     }
 
+    /// <summary>
+    /// What was said, when this is a conversation the mind gave words to. Written by Dialogue, so a
+    /// later Reflection reads what two colonists actually said to each other, not only that they
+    /// talked.
+    /// </summary>
+    public string? Words { get; set; }
+
     public string Describe() =>
         (Object is null ? Verb : $"{Verb} {Object}")
-        + (Repeats > 0 ? $" ({Repeats + 1} times)" : string.Empty);
+        + (Repeats > 0 ? $" ({Repeats + 1} times)" : string.Empty)
+        + (Words is null ? string.Empty : $" — {Words}");
 }
 
 /// <summary>

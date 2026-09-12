@@ -539,8 +539,13 @@ export class CityScene {
     for (const [key, element] of this.labels) {
       let anchor: THREE.Vector3 | null = null
 
-      if (key.startsWith('colonist:')) {
-        const walker = this.walkers.get(key.slice('colonist:'.length))
+      // Keys are 'colonist:<id>' for a name, 'speech:<id>' for a line being spoken, and a plain
+      // place id for a place's label. Speech sits a little above the name, so both can show.
+      const person = key.startsWith('colonist:') || key.startsWith('speech:')
+      const lift = key.startsWith('speech:') ? 24 : 0
+
+      if (person) {
+        const walker = this.walkers.get(key.slice(key.indexOf(':') + 1))
         if (walker) {
           anchor = this.projected.copy(walker.root.position)
           anchor.y = 0.67 * CITY_FOLK_SCALE + 0.3
@@ -557,7 +562,7 @@ export class CityScene {
 
       anchor.project(this.camera)
       const x = ((anchor.x + 1) / 2) * width
-      const y = ((1 - anchor.y) / 2) * height
+      const y = ((1 - anchor.y) / 2) * height - lift
       element.style.visibility = anchor.z > 1 ? 'hidden' : 'visible'
       element.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) translate(-50%, -100%)`
     }

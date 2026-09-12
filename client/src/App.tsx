@@ -14,7 +14,7 @@ const SPEEDS: Array<{ value: string; label: string }> = [
 ]
 
 export default function App() {
-  const { world, state, events, connected, setSpeed, setAutoSlow, restart } = useColony()
+  const { world, state, events, connected, speech, setSpeed, setAutoSlow, restart } = useColony()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [focus, setFocus] = useState<InspectorFocus>({ tab: 'now' })
   const [follow, setFollow] = useState(true)
@@ -27,6 +27,19 @@ export default function App() {
     window.addEventListener('hashchange', onHashChange)
     return () => window.removeEventListener('hashchange', onHashChange)
   }, [])
+
+  // Tell the server what is on screen, so a conversation in the open room, or involving the
+  // colonist in the inspector, is written before one nobody is watching.
+  useEffect(() => {
+    void fetch('/api/view', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        placeId: view.kind === 'room' ? view.placeId : null,
+        colonistId: selectedId,
+      }),
+    }).catch(() => {})
+  }, [view, selectedId])
 
   // The room view is mounted the first time a room is opened, then kept: going back to the city
   // and in again should not rebuild a scene from nothing.
@@ -201,6 +214,7 @@ export default function App() {
               onSelect={openColonist}
               onOpenPlace={openRoom}
               active={view.kind === 'city'}
+              speech={speech}
             />
             {roomOpened && (
               <RoomView
@@ -213,6 +227,7 @@ export default function App() {
                 onSelect={openColonist}
                 onOpenPlace={openRoom}
                 onBack={showCity}
+                speech={speech}
               />
             )}
           </div>

@@ -64,6 +64,12 @@ public sealed class Colonist
     /// <summary>The most recent thing Layer 2 had them think. Null until the fast lane runs in M3.</summary>
     public string? LastThought { get; set; }
 
+    /// <summary>
+    /// Words the mind wrote for a conversation the body had not finished yet, keyed by the other
+    /// person. Attached to the conversation's memory as soon as the body writes it.
+    /// </summary>
+    public Dictionary<string, string> PendingWords { get; } = [];
+
     private readonly List<ModelCallRecord> _trace = [];
     private int _callSequence;
 

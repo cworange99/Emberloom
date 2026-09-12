@@ -26,6 +26,9 @@ public sealed record ColonyEvent
     /// <summary>Raised for the things worth slowing down for. The feed can filter on it.</summary>
     public bool IsNotable { get; init; }
 
+    /// <summary>Words spoken aloud, when this line is someone speaking. The views show them over the speaker's head.</summary>
+    public string? Quote { get; init; }
+
     public override string ToString() => $"d{Day,6:F2}  {Layer,-6}  {Text}";
 }
 

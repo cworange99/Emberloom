@@ -12,6 +12,8 @@ interface Props {
   onOpenPlace: (id: string) => void
   /** False while a room is showing; the scene stops drawing and keeps its camera. */
   active: boolean
+  /** Lines being spoken right now, by colonist id — shown over the speaker's head. */
+  speech: ReadonlyMap<string, string>
 }
 
 /**
@@ -30,6 +32,7 @@ export function CityView({
   onSelect,
   onOpenPlace,
   active,
+  speech,
 }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
   const sceneRef = useRef<CityScene | null>(null)
@@ -162,6 +165,18 @@ export function CityView({
               </div>
             )
           })}
+
+          {[...speech].map(([id, text]) =>
+            colonists.some((c) => c.id === id) ? (
+              <div
+                key={`speech:${id}`}
+                ref={(element) => sceneRef.current?.setLabel(`speech:${id}`, element)}
+                className="speech"
+              >
+                {text}
+              </div>
+            ) : null,
+          )}
 
           {selected && (
             <div
