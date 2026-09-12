@@ -178,8 +178,49 @@ public class ForkTests
         Assert.False(fork.IsOpen);
         Assert.All(fork.Votes.Values, v => Assert.True(v.WasFallback));
 
-        var (yes, no) = fork.Tally();
-        Assert.Equal(yes > no, fork.Carried);
+        Assert.Equal(fork.HasMajority, fork.Carried);
+    }
+
+    /// <summary>
+    /// Live at M5, one "for" and four abstentions printed a mind. A fork takes a majority of the
+    /// whole council, by heads; however sure the lone voice is, it does not carry.
+    /// </summary>
+    [Fact]
+    public void OneVoiceDoesNotCarryAFork()
+    {
+        var (colony, body) = Start();
+        var fork = OpenPrint(colony);
+
+        fork.Cast(fork.Participants[0], new Vote(Stance.For, 1.0, "print it", "", false));
+        foreach (var id in fork.Participants.Skip(1))
+        {
+            fork.Cast(id, new Vote(Stance.Abstain, 0.1, "either way", "", false));
+        }
+
+        body.Tick();
+
+        Assert.False(fork.Carried);
+        Assert.Equal(8, colony.Colonists.Count);
+    }
+
+    /// <summary>Three of five carries it, however strongly the other two object.</summary>
+    [Fact]
+    public void AMajorityCarriesItOverFirmObjection()
+    {
+        var (colony, body) = Start();
+        var fork = OpenPrint(colony);
+
+        foreach (var (id, i) in fork.Participants.Select((id, i) => (id, i)))
+        {
+            fork.Cast(id, i < 3
+                ? new Vote(Stance.For, 0.2, "fine", "", false)
+                : new Vote(Stance.Against, 1.0, "never", "", false));
+        }
+
+        body.Tick();
+
+        Assert.Equal(3, fork.Needed);
+        Assert.True(fork.Carried);
     }
 
     /// <summary>

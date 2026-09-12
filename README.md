@@ -16,7 +16,7 @@ See [DESIGN.md](DESIGN.md) for the full design. Build order and milestone status
 | **M3** — memory pipeline and Reflection | **Done.** Episodic memories coalesce, consolidate, and produce beliefs that cite the memories they came from — walkable in the inspector. |
 | **M4** — the Mind Inspector | **Done.** Five tabs, every chain walkable end to end, and the prompt and response of every recent call kept locally. The Modest decision: the laptop plays via hosted inference and stays a development floor. |
 | **M4.5** — the view | **Done.** The 3D city is the main view and rooms open beside the inspector, both live over the socket. The art kits ship by fetch script or installer rather than the repository: decided, and built when packaging comes. |
-| **M5** — dialogue and deliberation | **Done.** Colonists speak when they meet, in bubbles over both views, and the words go into their memories. The colony faces two genuine forks — whether to let the Loom print, and whether to go up to a floor nobody has reached — and a council of five decides each one with argued, conviction-weighted votes. |
+| **M5** — dialogue and deliberation | **Done.** Colonists speak when they meet, in bubbles over both views, and the words go into their memories. The colony faces two genuine forks — whether to let the Loom print, and whether to go up to a floor nobody has reached — and a council of five decides each one by argued majority vote. |
 | M6 — player verbs | Not started |
 | M7 — generations | Not started |
 
@@ -139,8 +139,8 @@ conversation, so a later reflection can quote them.
 (*do we print another mind?*) and when a stairwell is cleared (*do we go up?* — nobody may, until
 it is decided). A council of five, the colonists who feel it most either way, is drawn to the
 plaza, and each one's mind writes a stance, a reason and a line aloud; later speakers hear the
-earlier ones. A banner over the view shows the argument as it happens. Votes are weighted by
-conviction and a tie changes nothing. With no mind at all the fork still gets decided after three
+earlier ones. A banner over the view shows the argument as it happens. It carries only if a
+majority of the whole council votes for it; abstaining keeps things as they are. With no mind at all the fork still gets decided after three
 colony-days, on where each member's personality leans, and the banner says no mind answered.
 
 ## The 3D views

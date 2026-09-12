@@ -252,8 +252,10 @@ above is closed to everyone until the colony decides; Wonder against Safety). Th
 colonists, not the whole colony, because each seat is one deep call: the five whose weights on the
 fork's two drives sit furthest from ordinary, since an indifferent council does not argue. They are
 asked in order, and each prompt carries what the earlier ones said. That is still stateless: the
-argument travels in the request, not in a server-side thread. Votes are weighted by conviction. A
-tie keeps the status quo, and a "no" puts the question off for some days. The fork waits for every
+argument travels in the request, not in a server-side thread. It carries only on a majority of
+the whole council by heads, three of five; abstaining keeps the status quo, and a "no" puts the
+question off for some days. (It was conviction-weighted at first, until one "for" and four
+abstentions printed a mind.) The fork waits for every
 mind it asked, however long that takes at speed. Its three-day timeout only matters for a colony
 with no mind, which still gets its turning points, decided on each member's weights and marked as
 fallbacks. Winning a vote relieves Standing, being overruled aggravates Belonging, and everyone who

@@ -413,10 +413,7 @@ public sealed class BodySimulation
             }
         }
 
-        var (yes, no) = fork.Tally();
-
-        // A tie leaves things as they are. Changing what the colony does should take a majority.
-        var carried = yes > no;
+        var carried = fork.HasMajority;
 
         fork.Decide(carried, _colony.Day);
         _colony.OpenFork = null;

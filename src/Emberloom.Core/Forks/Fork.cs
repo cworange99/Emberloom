@@ -104,10 +104,18 @@ public sealed class Fork
         return true;
     }
 
-    /// <summary>Conviction-weighted: a colonist who barely cares moves the colony less than one who does.</summary>
-    public (double For, double Against) Tally() => (
-        _votes.Values.Where(v => v.Stance == Stance.For).Sum(v => v.Conviction),
-        _votes.Values.Where(v => v.Stance == Stance.Against).Sum(v => v.Conviction));
+    public int Count(Stance stance) => _votes.Values.Count(v => v.Stance == stance);
+
+    /// <summary>How many of the council must vote for it: more than half, whoever abstains.</summary>
+    public int Needed => Participants.Count / 2 + 1;
+
+    /// <summary>
+    /// A majority of the whole council, by heads. It used to be conviction-weighted, for against
+    /// against — and live at M5 one "for" and four abstentions printed a mind. Changing what the
+    /// colony does takes most of the people deciding it; abstaining keeps things as they are.
+    /// Conviction still colours what each member remembers, and shows on the banner.
+    /// </summary>
+    public bool HasMajority => Count(Stance.For) >= Needed;
 
     internal void Decide(bool carried, double day)
     {
