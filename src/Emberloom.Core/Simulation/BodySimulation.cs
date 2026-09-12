@@ -537,7 +537,11 @@ public sealed class BodySimulation
     /// Writes one raw episodic row. Cheap and constant — thousands accumulate, and Layer 2's job
     /// is not to generate them but to periodically read a batch and decide what they meant.
     /// </summary>
-    private void Record(
+    /// <summary>
+    /// Writes one episodic memory. Public so the player's verbs record through the same path as
+    /// everything else the body notices: same ids, same folding of repeats, same event.
+    /// </summary>
+    public EpisodicMemory Record(
         Colonist colonist,
         string verb,
         string? about,
@@ -564,5 +568,6 @@ public sealed class BodySimulation
 
         colonist.Memory.Record(memory);
         MemoryRecorded?.Invoke(colonist, memory);
+        return memory;
     }
 }

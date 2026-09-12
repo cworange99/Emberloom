@@ -107,6 +107,7 @@ export interface CouncilSeat {
 
 export interface ForkState {
   id: string
+  kind: 'Print' | 'Ascend'
   question: string
   proposal: string
   openedOnDay: number

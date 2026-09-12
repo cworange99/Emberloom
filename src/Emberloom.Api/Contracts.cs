@@ -175,6 +175,7 @@ public sealed record ColonyStateDto(
 /// </summary>
 public sealed record ForkDto(
     string Id,
+    string Kind,
     string Question,
     string Proposal,
     double OpenedOnDay,
@@ -197,6 +198,7 @@ public sealed record ForkDto(
 
         return new ForkDto(
             fork.Id,
+            fork.Kind.ToString(),
             fork.Question,
             fork.Proposal,
             Math.Round(fork.OpenedOnDay, 2),

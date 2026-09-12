@@ -348,6 +348,25 @@ whether it came from the body or the mind. Watchable the way an aquarium is watc
 | **Provide** | Route charge into light, warmth, or a door that won't open. | Loom charge |
 | **Withhold** | Cut what you were providing. They notice. | Free, and expensive |
 
+**As built at M6, phase A.**
+
+- **What the colonists think you are.** Nothing. You are "a voice with no body", and no prompt ties
+  you to the Loom or the makers, because the colonists were never told.
+- **Speak.**
+  - What you say becomes a memory straight away, whether or not a mind ever answers. It is as
+    intense as anything the body records, so it leads the next reflection's batch.
+  - Nobody else hears it.
+  - Their answer is one Dialogue-budget call. It carries your words, and anything the voice has
+    said to them before, read from their own memories.
+  - It is submitted undroppable. The player is waiting, and a governor that quietly dropped the
+    answer, or held it behind the per-colonist cooldown, would look like the game ignoring them.
+- **Print.**
+  - Spends the charge on a seed you write, or on a rolled one. A written seed reaches Kindling
+    as its provenance.
+  - Refused while the colony is voting on a Print fork. A player who could print over an open
+    vote would make every Print fork decorative.
+  - Everyone else remembers the charge going when nobody asked.
+
 **Settled for now:** ship influence-only. But design the colony's job queue so a direct-assignment
 verb could be added behind a setting without touching the architecture.
 

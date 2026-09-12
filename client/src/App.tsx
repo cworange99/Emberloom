@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { CityView } from './CityView'
 import { RoomView } from './RoomView'
 import { ForkBanner } from './ForkBanner'
+import { PrintVerb } from './PrintVerb'
 import { ColonistDetailView, Roster, type InspectorFocus } from './ColonistPanel'
 import { useColony } from './useColony'
 
@@ -92,7 +93,7 @@ export default function App() {
       <header className="topbar">
         <div className="brand">
           What They Left Running
-          <span>M5 · dialogue and deliberation</span>
+          <span>M6 · player verbs</span>
         </div>
 
         <div className="speeds" role="group" aria-label="Simulation speed">
@@ -124,6 +125,16 @@ export default function App() {
         <button className="back" onClick={() => void restart(8)}>
           new colony
         </button>
+
+        <PrintVerb
+          charge={state.loomCharge}
+          blocked={
+            state.fork?.isOpen && state.fork.kind === 'Print'
+              ? 'The colony is deciding that right now.'
+              : null
+          }
+          onPrinted={openColonist}
+        />
 
         <dl className="readouts">
           <div className="readout">

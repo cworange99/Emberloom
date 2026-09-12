@@ -505,6 +505,56 @@ public sealed class MindService : IDisposable
         return result;
     }
 
+    /// <summary>
+    /// A colonist answering the voice — the player's Speak verb. The answer goes over their head
+    /// and into the feed, and a real one goes onto the memory of being spoken to, so a later
+    /// reflection has both sides of it.
+    /// </summary>
+    public async Task<ReplyResult> AnswerAsync(
+        Colonist colonist,
+        Colony colony,
+        string words,
+        string? heardMemoryId,
+        CancellationToken ct = default)
+    {
+        ReplyResult result;
+
+        try
+        {
+            result = await ReplyCall.ExecuteAsync(_client, colonist, colony, words, ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            result = ReplyCall.Fallback(colonist, words);
+        }
+
+        Commit(() =>
+        {
+            colonist.RecordCall(Record(
+                string.Empty, "Dialogue", "deep", colony, result.Call,
+                $"answered the voice: “{result.Line}”", wasFallback: !result.FromModel));
+
+            colony.Log(
+                result.FromModel ? EventLayer.Mind : EventLayer.World,
+                $"{colonist.DisplayName}, to the voice: “{result.Line}”",
+                colonist,
+                placeId: colonist.PlaceId,
+                notable: true,
+                quote: result.Line);
+
+            if (result.FromModel && heardMemoryId is not null && colonist.Memory.FindEpisodic(heardMemoryId) is { } heard)
+            {
+                heard.Words = $"{colonist.DisplayName} answered: {result.Line}";
+            }
+        });
+
+        return result;
+    }
+
     /// <summary>Puts the words on the conversation's memory, or holds them until the body writes it.</summary>
     private static void Remember(Colonist colonist, Colonist other, string words, double day)
     {

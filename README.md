@@ -17,7 +17,7 @@ See [DESIGN.md](DESIGN.md) for the full design. Build order and milestone status
 | **M4** — the Mind Inspector | **Done.** Five tabs, every chain walkable end to end, and the prompt and response of every recent call kept locally. The Modest decision: the laptop plays via hosted inference and stays a development floor. |
 | **M4.5** — the view | **Done.** The 3D city is the main view and rooms open beside the inspector, both live over the socket. The art kits ship by fetch script or installer rather than the repository: decided, and built when packaging comes. |
 | **M5** — dialogue and deliberation | **Done.** Colonists speak when they meet, in bubbles over both views, and the words go into their memories. The colony faces two genuine forks — whether to let the Loom print, and whether to go up to a floor nobody has reached — and a council of five decides each one by argued majority vote. |
-| M6 — player verbs | Not started |
+| M6 — player verbs | **Phase A done:** Speak and Print. Phase B — Provide, Withhold, Reveal — next. |
 | M7 — generations | Not started |
 
 ## Layout

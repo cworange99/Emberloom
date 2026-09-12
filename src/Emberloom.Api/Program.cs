@@ -7,6 +7,7 @@ using Emberloom.Core.Colonists;
 using Emberloom.Core.Memory;
 using Emberloom.Core.Relationships;
 using Emberloom.Core.Simulation;
+using Emberloom.Core.Verbs;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -279,6 +280,23 @@ app.MapPost("/api/restart", (RestartRequest request) =>
     return Results.Ok(sim.Snapshot());
 });
 
+// ---- the player's verbs (M6) --------------------------------------------------
+//
+// Influence, never orders. A refusal is a 409 carrying a sentence the client shows as it is: the
+// colony is deciding that already, the Loom is short of charge, and so on.
+
+app.MapPost("/api/verbs/speak", (SpeakRequest request) =>
+    VerbReply(sim.Speak(request.ColonistId, request.Text ?? string.Empty)));
+
+app.MapPost("/api/verbs/print", (PrintRequest request) => VerbReply(sim.Print(request.Seed)));
+
+// A rolled seed, for the Print form's "roll one". Nothing is printed until the form is sent.
+app.MapGet("/api/verbs/seed", () => Results.Ok(new { seed = SeedRoller.Roll(Random.Shared) }));
+
+static IResult VerbReply(VerbResult outcome) => outcome.Ok
+    ? Results.Ok(new { colonistId = outcome.Colonist?.Id, memoryId = outcome.Memory?.Id })
+    : Results.Conflict(new { error = outcome.Refusal });
+
 // ---- live stream ------------------------------------------------------------
 
 app.Map("/ws", async (HttpContext context) =>
@@ -343,3 +361,5 @@ internal sealed record SpeedRequest(string Speed);
 internal sealed record AutoSlowRequest(bool Enabled);
 internal sealed record RestartRequest(int? Colonists, int? Seed);
 internal sealed record ViewRequest(string? PlaceId, string? ColonistId);
+internal sealed record SpeakRequest(string ColonistId, string? Text);
+internal sealed record PrintRequest(string? Seed);

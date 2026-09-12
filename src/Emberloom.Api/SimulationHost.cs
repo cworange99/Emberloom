@@ -11,6 +11,7 @@ using Emberloom.Core.Events;
 using Emberloom.Core.Simulation;
 using Emberloom.Core.World;
 using Emberloom.Core.Forks;
+using Emberloom.Core.Verbs;
 
 namespace Emberloom.Api;
 
@@ -189,7 +190,7 @@ public sealed class SimulationHost : BackgroundService
     /// Kindling is undroppable. A colonist who was never written would act on archetype weights
     /// forever, which is the one degradation the design refuses to accept quietly.
     /// </summary>
-    private void SubmitKindling(Colonist colonist)
+    private void SubmitKindling(Colonist colonist, string? provenance = null)
     {
         if (_mind is null || _governor is null)
         {
@@ -214,7 +215,7 @@ public sealed class SimulationHost : BackgroundService
                     // no trace line at all.
                     var colony = Read((c, _) => c);
                     var started = Stopwatch.GetTimestamp();
-                    var result = await _mind.KindleAsync(colonist, colony, colonist.Seed, ct: ct).ConfigureAwait(false);
+                    var result = await _mind.KindleAsync(colonist, colony, colonist.Seed, provenance, ct).ConfigureAwait(false);
 
                     // Only a call that reached a model counts toward throughput. An unreachable
                     // mind fails in a moment, and counting that would make the machine look fast.
@@ -420,6 +421,89 @@ public sealed class SimulationHost : BackgroundService
     }
 
     public void SetView(string? placeId, string? colonistId) => _view = new ViewFocus(placeId, colonistId);
+
+    // ---- the player's verbs (M6) ------------------------------------------------------------
+
+    /// <summary>
+    /// Speak. The words are remembered at once, under the lock, whether or not a mind ever answers;
+    /// the answer is one call. It is submitted undroppable, like Kindling: the player asked a
+    /// question and is waiting, and a governor that quietly dropped it — or held it behind the
+    /// per-colonist cooldown — would look like the game ignoring them.
+    /// </summary>
+    public VerbResult Speak(string colonistId, string text)
+    {
+        VerbResult outcome;
+
+        lock (_gate)
+        {
+            var colonist = _colony.Find(colonistId);
+            if (colonist is null)
+            {
+                return VerbResult.Refused("There is nobody here by that name.");
+            }
+
+            outcome = PlayerVerbs.Speak(_colony, _body, colonist, text);
+        }
+
+        if (outcome.Ok && _mind is not null && _governor is not null)
+        {
+            var colonist = outcome.Colonist!;
+            var words = text.Trim();
+            var heardId = outcome.Memory?.Id;
+
+            _governor.Submit(new MindRequest
+            {
+                Call = CallType.Dialogue,
+                Priority = CallPriority.PlayerFocus,
+                ColonistId = colonist.Id,
+                Undroppable = true,
+                Work = async ct =>
+                {
+                    var colony = Read((c, _) => c);
+                    var started = Stopwatch.GetTimestamp();
+                    var result = await _mind.AnswerAsync(colonist, colony, words, heardId, ct).ConfigureAwait(false);
+
+                    if (result.Call is not null)
+                    {
+                        _deepCalls.Record(Stopwatch.GetElapsedTime(started));
+                    }
+
+                    Broadcast(Snapshot());
+
+                    return new MindCallOutcome
+                    {
+                        PromptTokens = result.Call?.PromptTokens ?? 0,
+                        CompletionTokens = result.Call?.CompletionTokens ?? 0,
+                        WasFallback = !result.FromModel
+                    };
+                }
+            });
+        }
+
+        return outcome;
+    }
+
+    /// <summary>Print. The new mind acts at once on an archetype; Kindling writes it from the seed.</summary>
+    public VerbResult Print(string? seed)
+    {
+        VerbResult outcome;
+
+        lock (_gate)
+        {
+            outcome = PlayerVerbs.Print(_colony, _body, _random, seed);
+        }
+
+        if (outcome.Ok)
+        {
+            SubmitKindling(outcome.Colonist!,
+                string.IsNullOrWhiteSpace(seed)
+                    ? null
+                    : "Written by a voice with no body, which asked the Loom for this mind in these words.");
+            Broadcast(Snapshot());
+        }
+
+        return outcome;
+    }
 
     /// <summary>
     /// Two colonists have started talking; ask the mind what they say. Called from inside the

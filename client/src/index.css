@@ -1483,3 +1483,93 @@ button {
   line-height: 1.35;
   color: #d8dcd0;
 }
+
+/* ---------- the player's verbs (M6) ----------
+   Speak sits in the inspector under the colonist's name; Print drops down from the top bar. Both
+   in the player's colour, the flag — the one layer that is neither body nor mind. */
+
+.verb {
+  display: grid;
+  gap: 6px;
+  font-family: var(--mono);
+}
+
+.verb label {
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--flag);
+}
+
+.verb textarea {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  font-family: var(--body);
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 6px 8px;
+}
+
+.verb textarea:focus {
+  outline: none;
+  border-color: var(--flag);
+}
+
+.verb-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.verb-status {
+  flex: 1;
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.verb-foot button {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  color: var(--flag);
+  background: var(--flag-wash);
+  border: 1px solid var(--flag);
+  border-radius: 3px;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+
+.verb-foot button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.verb.speak {
+  margin: 10px 0 12px;
+  padding: 10px;
+  background: var(--flag-wash);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+
+.print-verb {
+  position: relative;
+}
+
+.print-pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 10;
+  width: min(340px, 80vw);
+  padding: 10px;
+  background: var(--surface);
+  border: 1px solid var(--flag);
+  border-radius: 4px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+}

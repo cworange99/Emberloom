@@ -222,6 +222,8 @@ export function ColonistDetailView({
           </div>
         </div>
 
+        <SpeakBox colonistId={id} name={colonist.displayName} />
+
         <div className="tabs" role="tablist" aria-label="Mind Inspector">
           {tabs.map((tab) => (
             <button
@@ -248,6 +250,84 @@ export function ColonistDetailView({
         </div>
       </div>
     </>
+  )
+}
+
+// ---- Speak ----------------------------------------------------------------------------------
+
+const MAX_WORDS = 280
+
+/**
+ * Speak, the second verb: say something to this one colonist. It is remembered at once and weighed
+ * heavily; their answer comes when the governor has a mind free, over their head and in the feed.
+ */
+function SpeakBox({ colonistId, name }: { colonistId: string; name: string }) {
+  const [text, setText] = useState('')
+  const [status, setStatus] = useState<string | null>(null)
+  const [sending, setSending] = useState(false)
+
+  // A half-written sentence to someone else should not carry over to the next mind opened.
+  useEffect(() => {
+    setText('')
+    setStatus(null)
+  }, [colonistId])
+
+  const send = async () => {
+    const words = text.trim()
+    if (!words || sending) return
+    setSending(true)
+
+    try {
+      const response = await fetch('/api/verbs/speak', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ colonistId, text: words }),
+      })
+
+      if (response.ok) {
+        setText('')
+        setStatus(`${name} heard you. Their answer comes when a mind is free.`)
+      } else {
+        const body = (await response.json().catch(() => null)) as { error?: string } | null
+        setStatus(body?.error ?? 'They did not hear you.')
+      }
+    } catch {
+      setStatus('They did not hear you.')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  return (
+    <form
+      className="verb speak"
+      onSubmit={(e) => {
+        e.preventDefault()
+        void send()
+      }}
+    >
+      <label htmlFor="speak-text">Speak to {name}</label>
+      <textarea
+        id="speak-text"
+        rows={2}
+        maxLength={MAX_WORDS}
+        value={text}
+        placeholder="They will remember it. Nobody else will hear."
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault()
+            void send()
+          }
+        }}
+      />
+      <div className="verb-foot">
+        <span className="verb-status">{status ?? `${text.length}/${MAX_WORDS}`}</span>
+        <button type="submit" disabled={sending || !text.trim()}>
+          speak
+        </button>
+      </div>
+    </form>
   )
 }
 
