@@ -367,6 +367,31 @@ whether it came from the body or the mind. Watchable the way an aquarium is watc
     vote would make every Print fork decorative.
   - Everyone else remembers the charge going when nobody asked.
 
+**As built at M6, phase B.**
+
+- **One pool.** Provide and Print draw on the same charge.
+- **Light.** A dark place counts as lit for working and for fear at night. It costs 1 charge a day.
+- **Warmth.** Shelters only. Rest there relieves half again as much, and scores that much
+  better. It costs 1 charge a day.
+- **The price of both.** Against a trickle of 3.2 a day, two lamps leave barely enough ever to
+  print again.
+- **A door that will not open.** It opens for 15 charge, once. Everyone hears it opened by
+  itself, and nobody saw who did it.
+  - It is refused on a floor the colony has voted to leave shut, the same way Print is refused
+    during a Print vote.
+  - A floor above an opened stairwell still waits on an Ascend fork.
+- **Withhold.** It costs nothing. Whoever is there, or was there in the last two days,
+  remembers it going out, and anyone there feels less safe.
+- **Running dry.** When the Loom runs dry, the newest provision goes out first, and is noticed
+  exactly the same way. The colony cannot tell cutting from running out, and is not told.
+- **Reveal.** Shows one colonist one fragment of the makers', once, irreversibly.
+  - It is as vivid as any memory, and a relief to Wonder.
+  - Some fragments change what the colony can do: the Loom gathers faster, or the stairwell
+    takes half the work to clear.
+  - The colony records what has been shown, and to whom, for the myth system at M7.
+  - The five fragments in `Revelations.cs` are placeholders to exercise the verb. The real ones
+    are still to be written.
+
 **Settled for now:** ship influence-only. But design the colony's job queue so a direct-assignment
 verb could be added behind a setting without touching the architecture.
 

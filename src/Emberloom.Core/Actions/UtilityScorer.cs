@@ -202,7 +202,7 @@ public sealed class UtilityScorer
             modifier *= Math.Exp(-3.2 * aversion);
         }
 
-        if (place.Light < 0.5 && colony.IsNight)
+        if (colony.LightAt(place) < 0.5 && colony.IsNight)
         {
             modifier *= definition.Kind == ActionKind.Rest ? 1.0 : 0.35;
         }
@@ -210,6 +210,11 @@ public sealed class UtilityScorer
         if (definition.Kind == ActionKind.Rest && !colony.IsNight)
         {
             modifier *= 0.45;
+        }
+
+        if (definition.Kind == ActionKind.Rest && colony.IsWarmed(place.Id))
+        {
+            modifier *= Verbs.ProvisionRules.WarmRestBonus;
         }
 
         if (definition.Kind == ActionKind.Forage)

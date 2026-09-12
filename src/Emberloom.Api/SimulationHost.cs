@@ -505,6 +505,71 @@ public sealed class SimulationHost : BackgroundService
         return outcome;
     }
 
+    /// <summary>Provide: light, warmth, or a door. Body only — nothing here waits on a mind.</summary>
+    public VerbResult Provide(string kind, string placeId)
+    {
+        if (!Enum.TryParse<ProvideKind>(kind, ignoreCase: true, out var what))
+        {
+            return VerbResult.Refused($"The Loom cannot provide '{kind}'.");
+        }
+
+        VerbResult outcome;
+        lock (_gate)
+        {
+            outcome = PlayerVerbs.Provide(_colony, _body, what, placeId);
+        }
+
+        Broadcast(Snapshot());
+        return outcome;
+    }
+
+    /// <summary>Withhold: cut light or warmth. Free, and they notice.</summary>
+    public VerbResult Withhold(string kind, string placeId)
+    {
+        if (!Enum.TryParse<ProvisionKind>(kind, ignoreCase: true, out var what))
+        {
+            return VerbResult.Refused($"There is no '{kind}' to cut.");
+        }
+
+        VerbResult outcome;
+        lock (_gate)
+        {
+            outcome = PlayerVerbs.Withhold(_colony, _body, what, placeId);
+        }
+
+        Broadcast(Snapshot());
+        return outcome;
+    }
+
+    /// <summary>Reveal: show one colonist something of the makers'. Irreversible.</summary>
+    public VerbResult Reveal(string revelationId, string colonistId)
+    {
+        VerbResult outcome;
+        lock (_gate)
+        {
+            var colonist = _colony.Find(colonistId);
+            if (colonist is null)
+            {
+                return VerbResult.Refused("There is nobody here by that name.");
+            }
+
+            outcome = PlayerVerbs.Reveal(_colony, _body, colonist, revelationId);
+        }
+
+        Broadcast(Snapshot());
+        return outcome;
+    }
+
+    /// <summary>What there is to reveal, and who has been shown what already.</summary>
+    public IReadOnlyList<RevelationDto> ListRevelations() => Read((colony, _) =>
+        Revelations.All
+            .Select(r => new RevelationDto(
+                r.Id,
+                r.Title,
+                r.Unlocks,
+                colony.Revealed.TryGetValue(r.Id, out var who) ? colony.Find(who)?.DisplayName ?? who : null))
+            .ToList());
+
     /// <summary>
     /// Two colonists have started talking; ask the mind what they say. Called from inside the
     /// tick, under the colony lock.
@@ -644,13 +709,14 @@ public sealed class SimulationHost : BackgroundService
         Math.Round(colony.TimeOfDay, 4),
         colony.IsNight,
         Math.Round(colony.LoomCharge, 1),
+        Math.Round(colony.UpkeepPerDay, 2),
         colony.ArtifactsRecovered,
         colony.Living.Count(),
         body.ActionsCompleted,
         ClockSnapshot(),
         GovernorSnapshot(),
         colony.Living.Select(c => ColonistDto.From(c, colony)).ToList(),
-        colony.Map.Places.Select(PlaceStateDto.From).ToList(),
+        colony.Map.Places.Select(p => PlaceStateDto.From(p, colony)).ToList(),
         ForkDto.From(colony)));
 
     public GovernorDto? GovernorSnapshot()

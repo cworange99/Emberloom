@@ -160,6 +160,7 @@ public sealed record ColonyStateDto(
     double TimeOfDay,
     bool IsNight,
     double LoomCharge,
+    double UpkeepPerDay,
     int ArtifactsRecovered,
     int Population,
     int ActionsCompleted,
@@ -237,15 +238,22 @@ public sealed record PlaceStateDto(
     bool IsBlocked,
     bool IsExplored,
     double ClearingProgress,
-    int SalvageRemaining)
+    int SalvageRemaining,
+    bool IsLit,
+    bool IsWarmed)
 {
-    public static PlaceStateDto From(Place place) => new(
+    public static PlaceStateDto From(Place place, Colony colony) => new(
         place.Id,
         place.IsBlocked,
         place.IsExplored,
         Math.Round(place.ClearingProgress, 3),
-        place.SalvageRemaining);
+        place.SalvageRemaining,
+        colony.IsLit(place.Id),
+        colony.IsWarmed(place.Id));
 }
+
+/// <summary>One thing of the makers' the player could show, and — once shown — who saw it.</summary>
+public sealed record RevelationDto(string Id, string Title, string? Unlocks, string? ShownTo);
 
 /// <summary>Sent once when a client connects, so it does not have to rebuild the map every frame.</summary>
 public sealed record WorldDto(

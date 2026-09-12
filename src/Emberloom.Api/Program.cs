@@ -293,6 +293,15 @@ app.MapPost("/api/verbs/print", (PrintRequest request) => VerbReply(sim.Print(re
 // A rolled seed, for the Print form's "roll one". Nothing is printed until the form is sent.
 app.MapGet("/api/verbs/seed", () => Results.Ok(new { seed = SeedRoller.Roll(Random.Shared) }));
 
+app.MapPost("/api/verbs/provide", (ProvisionRequest request) => VerbReply(sim.Provide(request.Kind, request.PlaceId)));
+
+app.MapPost("/api/verbs/withhold", (ProvisionRequest request) => VerbReply(sim.Withhold(request.Kind, request.PlaceId)));
+
+app.MapGet("/api/verbs/revelations", () => sim.ListRevelations());
+
+app.MapPost("/api/verbs/reveal", (RevealRequest request) =>
+    VerbReply(sim.Reveal(request.RevelationId, request.ColonistId)));
+
 static IResult VerbReply(VerbResult outcome) => outcome.Ok
     ? Results.Ok(new { colonistId = outcome.Colonist?.Id, memoryId = outcome.Memory?.Id })
     : Results.Conflict(new { error = outcome.Refusal });
@@ -363,3 +372,5 @@ internal sealed record RestartRequest(int? Colonists, int? Seed);
 internal sealed record ViewRequest(string? PlaceId, string? ColonistId);
 internal sealed record SpeakRequest(string ColonistId, string? Text);
 internal sealed record PrintRequest(string? Seed);
+internal sealed record ProvisionRequest(string Kind, string PlaceId);
+internal sealed record RevealRequest(string RevelationId, string ColonistId);

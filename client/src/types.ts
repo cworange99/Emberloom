@@ -82,6 +82,8 @@ export interface ColonyState {
   timeOfDay: number
   isNight: boolean
   loomCharge: number
+  /** What the player's light and warmth cost, in charge per colony-day. */
+  upkeepPerDay: number
   artifactsRecovered: number
   population: number
   actionsCompleted: number
@@ -122,6 +124,18 @@ export interface PlaceState {
   isExplored: boolean
   clearingProgress: number
   salvageRemaining: number
+  /** Light the player keeps burning here on the Loom's charge. */
+  isLit: boolean
+  /** Warmth the player keeps running here — shelters only. */
+  isWarmed: boolean
+}
+
+/** One thing of the makers' the player could show. shownTo is set once it has been shown. */
+export interface Revelation {
+  id: string
+  title: string
+  unlocks: string | null
+  shownTo: string | null
 }
 
 export interface World {

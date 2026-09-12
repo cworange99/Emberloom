@@ -1,5 +1,7 @@
 using Emberloom.Core.Colonists;
+using Emberloom.Core.Drives;
 using Emberloom.Core.Events;
+using Emberloom.Core.World;
 using Emberloom.Core.Forks;
 using Emberloom.Core.Memory;
 using Emberloom.Core.Simulation;
@@ -111,5 +113,202 @@ public static class PlayerVerbs
         }
 
         return new VerbResult(true, Colonist: printed);
+    }
+
+    /// <summary>
+    /// Provide: route charge into light, warmth, or a door that will not open. Light and warmth
+    /// are paid by the day for as long as they run; a door once. Whoever is there sees it happen.
+    /// </summary>
+    public static VerbResult Provide(Colony colony, BodySimulation body, ProvideKind kind, string placeId)
+    {
+        var place = colony.Map.Find(placeId);
+        if (place is null)
+        {
+            return VerbResult.Refused("There is no such place.");
+        }
+
+        var holds = Math.Floor(colony.LoomCharge);
+
+        if (kind == ProvideKind.Door)
+        {
+            if (!place.IsBlocked)
+            {
+                return VerbResult.Refused($"Nothing is keeping anyone out of {place.Name}.");
+            }
+
+            // A "no" at an Ascend fork is the colony's. Opening the door over it would make the
+            // vote decorative, the same way printing over an open Print fork would.
+            if (colony.ForbiddenPlaces.Contains(place.Id))
+            {
+                return VerbResult.Refused($"Whether to go up to {place.Name} is the colony's to decide.");
+            }
+
+            if (colony.LoomCharge < ProvisionRules.DoorCost)
+            {
+                return VerbResult.Refused(
+                    $"Opening it takes {ProvisionRules.DoorCost:F0} charge, and the Loom holds {holds:F0}.");
+            }
+
+            colony.LoomCharge -= ProvisionRules.DoorCost;
+            place.ClearingDone = place.ClearingRequired;
+
+            colony.Log(EventLayer.Player, $"You routed charge into {place.Name}, and the way in opened.",
+                placeId: place.Id, notable: true);
+
+            // Nobody saw who did it. Everyone hears that it happened.
+            foreach (var colonist in colony.Living)
+            {
+                body.Record(colonist, "heard that the way into", $"{place.Name} opened by itself",
+                    colonist.PlaceId, valence: 0.3, intensity: 0.7);
+            }
+
+            // A way up is still the colony's to take.
+            ForkRules.HoldTheWayUp(colony, place);
+            return new VerbResult(true);
+        }
+
+        var provision = kind == ProvideKind.Light ? ProvisionKind.Light : ProvisionKind.Warmth;
+        var word = ProvisionRules.Word(provision);
+        var cost = ProvisionRules.CostPerDay(provision);
+
+        if (colony.IsProvided(provision, place.Id))
+        {
+            return VerbResult.Refused($"There is already {word} at {place.Name}.");
+        }
+
+        if (provision == ProvisionKind.Light && place.Light >= 1.0)
+        {
+            return VerbResult.Refused($"{place.Name} is already in full light.");
+        }
+
+        if (provision == ProvisionKind.Warmth && place.Kind != PlaceKind.Shelter)
+        {
+            return VerbResult.Refused("Warmth only holds in a shelter.");
+        }
+
+        if (colony.LoomCharge < cost)
+        {
+            return VerbResult.Refused($"Keeping {word} there costs {cost:F0} charge a day, and the Loom holds {holds:F0}.");
+        }
+
+        colony.Provisions.Add(new Provision(provision, place.Id, cost, colony.Day));
+
+        colony.Log(EventLayer.Player, $"You routed charge into {word} at {place.Name}. It costs {cost:F0} a day.",
+            placeId: place.Id, notable: true);
+
+        foreach (var colonist in colony.ColonistsAt(place.Id))
+        {
+            body.Record(colonist, provision == ProvisionKind.Light ? "saw the light come on at" : "felt the warmth come on at",
+                place.Name, place.Id, valence: 0.4, intensity: 0.6);
+        }
+
+        return new VerbResult(true);
+    }
+
+    /// <summary>
+    /// Withhold: cut what you were providing. Free, and expensive — they notice. Whoever is there
+    /// feels it at once, and whoever had been using it lately remembers it going.
+    /// </summary>
+    public static VerbResult Withhold(Colony colony, BodySimulation body, ProvisionKind kind, string placeId)
+    {
+        var provision = colony.Provisions.FirstOrDefault(p => p.Kind == kind && p.PlaceId == placeId);
+        if (provision is null)
+        {
+            return VerbResult.Refused("You are not providing that.");
+        }
+
+        var place = colony.Map[provision.PlaceId];
+        colony.Provisions.Remove(provision);
+
+        colony.Log(EventLayer.Player, $"You cut the {ProvisionRules.Word(kind)} at {place.Name}.",
+            placeId: place.Id, notable: true);
+
+        Notice(colony, body, provision);
+        return new VerbResult(true);
+    }
+
+    /// <summary>
+    /// The Loom ran short: a provision goes out on its own, and is noticed exactly as though it had
+    /// been cut. The colony cannot tell the difference, and is not told.
+    /// </summary>
+    public static void Lapse(Colony colony, BodySimulation body, Provision provision)
+    {
+        var place = colony.Map[provision.PlaceId];
+        colony.Provisions.Remove(provision);
+
+        colony.Log(EventLayer.World, $"The Loom ran short, and the {ProvisionRules.Word(provision.Kind)} at {place.Name} went out.",
+            placeId: place.Id, notable: true);
+
+        Notice(colony, body, provision);
+    }
+
+    /// <summary>
+    /// Reveal: show one colonist something of the makers'. Irreversible — each thing is shown once,
+    /// to one mind, which remembers it as vividly as anything and can only pass it on by talking.
+    /// Some things change what the colony can do; the rest are evidence for someone to make sense of.
+    /// </summary>
+    public static VerbResult Reveal(Colony colony, BodySimulation body, Colonist colonist, string revelationId)
+    {
+        var revelation = Revelations.Find(revelationId);
+        if (revelation is null)
+        {
+            return VerbResult.Refused("There is nothing like that to show.");
+        }
+
+        if (colony.Revealed.ContainsKey(revelation.Id))
+        {
+            return VerbResult.Refused("That has already been shown. It cannot be shown again.");
+        }
+
+        if (!colony.Living.Contains(colonist))
+        {
+            return VerbResult.Refused($"{colonist.DisplayName} can no longer see anything.");
+        }
+
+        colony.Revealed[revelation.Id] = colonist.Id;
+
+        var memory = body.Record(colonist, "was shown something of the makers':", revelation.Shown,
+            colonist.PlaceId, revelation.Valence, intensity: 1.0);
+
+        // Whatever it means, it is something nobody understands — which is what Wonder is for.
+        colonist.Drives.Relieve(new DriveVector(new Dictionary<Drive, double> { [Drive.Wonder] = 0.6 }));
+
+        colony.Log(EventLayer.Player, $"You showed {colonist.DisplayName} {revelation.Title}.", colonist, notable: true);
+
+        if (revelation.Apply is not null)
+        {
+            revelation.Apply(colony);
+            colony.Log(EventLayer.World, revelation.Unlocks ?? "Something changed.", colonist, notable: true);
+        }
+
+        return new VerbResult(true, Colonist: colonist, Memory: memory);
+    }
+
+    /// <summary>"They notice": whoever is there now, and whoever has been there in the last two days.</summary>
+    private static void Notice(Colony colony, BodySimulation body, Provision provision)
+    {
+        var place = colony.Map[provision.PlaceId];
+        var word = ProvisionRules.Word(provision.Kind);
+
+        foreach (var colonist in colony.Living.ToList())
+        {
+            var here = colonist.PlaceId == place.Id;
+            var usedIt = here || colonist.Memory
+                .MostSalient(colony.Day, 40)
+                .Any(m => m.PlaceId == place.Id && colony.Day - m.Day < 2);
+
+            if (!usedIt)
+            {
+                continue;
+            }
+
+            body.Record(colonist, $"noticed the {word} go out at", place.Name, place.Id,
+                valence: -0.5, intensity: here ? 0.85 : 0.6);
+
+            if (here)
+            {
+                colonist.Drives.Aggravate(Drive.Safety, 0.15);
+            }
+        }
     }
 }

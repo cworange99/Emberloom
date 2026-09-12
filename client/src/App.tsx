@@ -3,6 +3,7 @@ import { CityView } from './CityView'
 import { RoomView } from './RoomView'
 import { ForkBanner } from './ForkBanner'
 import { PrintVerb } from './PrintVerb'
+import { PlaceVerbs } from './PlaceVerbs'
 import { ColonistDetailView, Roster, type InspectorFocus } from './ColonistPanel'
 import { useColony } from './useColony'
 
@@ -87,6 +88,7 @@ export default function App() {
   }
 
   const { clock } = state
+  const roomPlace = view.kind === 'room' ? world.places.find((p) => p.id === view.placeId) : undefined
 
   return (
     <div className="app">
@@ -147,7 +149,10 @@ export default function App() {
           </div>
           <div className="readout">
             <dt>Charge</dt>
-            <dd>{state.loomCharge.toFixed(0)}</dd>
+            <dd title="The Loom's charge, and what your light and warmth cost it each day">
+              {state.loomCharge.toFixed(0)}
+              {state.upkeepPerDay > 0 && <span className="of">−{state.upkeepPerDay.toFixed(0)}/d</span>}
+            </dd>
           </div>
           <div className="readout">
             <dt>Salvage</dt>
@@ -243,6 +248,13 @@ export default function App() {
               />
             )}
             {state.fork && <ForkBanner fork={state.fork} onSelect={openColonist} />}
+            {roomPlace && (
+              <PlaceVerbs
+                place={roomPlace}
+                state={state.places.find((p) => p.id === roomPlace.id)}
+                charge={state.loomCharge}
+              />
+            )}
           </div>
 
           <div className="feed">

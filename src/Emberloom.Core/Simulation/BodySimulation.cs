@@ -3,6 +3,7 @@ using Emberloom.Core.Colonists;
 using Emberloom.Core.Drives;
 using Emberloom.Core.Events;
 using Emberloom.Core.Forks;
+using Emberloom.Core.Verbs;
 using Emberloom.Core.Memory;
 using Emberloom.Core.World;
 
@@ -74,7 +75,17 @@ public sealed class BodySimulation
 
     private void AdvanceWorld()
     {
-        _colony.LoomCharge += _colony.LoomChargePerDay * DayPerTick;
+        _colony.LoomCharge += (_colony.LoomChargePerDay - _colony.UpkeepPerDay) * DayPerTick;
+
+        // What the player keeps running is paid for as it runs. When the Loom runs dry, the
+        // newest provision goes out first, one a tick until the books balance — and each going
+        // out is noticed, just as if it had been cut.
+        if (_colony.LoomCharge < 0 && _colony.Provisions.Count > 0)
+        {
+            PlayerVerbs.Lapse(_colony, this, _colony.Provisions[^1]);
+        }
+
+        _colony.LoomCharge = Math.Max(0, _colony.LoomCharge);
     }
 
     private void AdvanceColonist(Colonist colonist)
@@ -84,7 +95,7 @@ public sealed class BodySimulation
         var here = _colony.Map[colonist.PlaceId];
 
         // Standing somewhere dark and unstable is its own pressure on Safety.
-        if (here.Danger > 0.2 || (here.Light < 0.4 && _colony.IsNight))
+        if (here.Danger > 0.2 || (_colony.LightAt(here) < 0.4 && _colony.IsNight))
         {
             colonist.Drives.Aggravate(Drive.Safety, here.Danger * 0.4 * DayPerTick);
         }
@@ -183,7 +194,15 @@ public sealed class BodySimulation
         // Relief is a rate per colony-day of work, not a lump sum per action. Applying it per
         // unit of time is what makes DurationTicks mean anything: an hour of sleep is worth more
         // than an hour of chat because it is an hour, not because the action "finished".
-        colonist.Drives.Relieve(current.Definition.Relief, DayPerTick * ActionCatalog.ReliefScale);
+        var reliefScale = DayPerTick * ActionCatalog.ReliefScale;
+
+        // A shelter kept warm is a better night's sleep.
+        if (current.Definition.Kind == ActionKind.Rest && _colony.IsWarmed(place.Id))
+        {
+            reliefScale *= ProvisionRules.WarmRestBonus;
+        }
+
+        colonist.Drives.Relieve(current.Definition.Relief, reliefScale);
 
         ApplyWorkEffects(colonist, current, place, DayPerTick);
 

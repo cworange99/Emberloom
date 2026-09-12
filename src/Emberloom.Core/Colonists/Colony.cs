@@ -1,6 +1,7 @@
 using Emberloom.Core.Events;
 using Emberloom.Core.Forks;
 using Emberloom.Core.Relationships;
+using Emberloom.Core.Verbs;
 using Emberloom.Core.World;
 
 namespace Emberloom.Core.Colonists;
@@ -70,6 +71,28 @@ public sealed class Colony
     public double AskAgainOn(ForkKind kind) => _askAgainOn.GetValueOrDefault(kind);
 
     public void PutOff(ForkKind kind, double until) => _askAgainOn[kind] = until;
+
+    /// <summary>Light and warmth the player keeps running on the Loom's charge, oldest first.</summary>
+    public List<Provision> Provisions { get; } = [];
+
+    public bool IsProvided(ProvisionKind kind, string placeId) =>
+        Provisions.Any(p => p.Kind == kind && p.PlaceId == placeId);
+
+    public bool IsLit(string placeId) => IsProvided(ProvisionKind.Light, placeId);
+
+    public bool IsWarmed(string placeId) => IsProvided(ProvisionKind.Warmth, placeId);
+
+    /// <summary>How light a place is, counting any light the player keeps burning there.</summary>
+    public double LightAt(Place place) => IsLit(place.Id) ? 1.0 : place.Light;
+
+    /// <summary>What the provisions cost, in charge per colony-day.</summary>
+    public double UpkeepPerDay => Provisions.Sum(p => p.CostPerDay);
+
+    /// <summary>
+    /// Which of the makers' things have been shown, and to whom. Irreversible. The myth system
+    /// (M7) reads this: what the colony has seen is what its founding story has to account for.
+    /// </summary>
+    public Dictionary<string, string> Revealed { get; } = [];
 
     public IReadOnlyList<Colonist> Colonists => _colonists;
 

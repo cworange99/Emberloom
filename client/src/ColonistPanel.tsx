@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState, type ReactNode } from 'react'
+import { Fragment, useCallback, useEffect, useState, type ReactNode } from 'react'
 import type {
   BeliefRow,
   CallText,
@@ -6,6 +6,7 @@ import type {
   ColonistDetail,
   MemoryRow,
   PersonRef,
+  Revelation,
   TraceRow,
 } from './types'
 
@@ -223,6 +224,7 @@ export function ColonistDetailView({
         </div>
 
         <SpeakBox colonistId={id} name={colonist.displayName} />
+        <RevealBox colonistId={id} name={colonist.displayName} />
 
         <div className="tabs" role="tablist" aria-label="Mind Inspector">
           {tabs.map((tab) => (
@@ -325,6 +327,107 @@ function SpeakBox({ colonistId, name }: { colonistId: string; name: string }) {
         <span className="verb-status">{status ?? `${text.length}/${MAX_WORDS}`}</span>
         <button type="submit" disabled={sending || !text.trim()}>
           speak
+        </button>
+      </div>
+    </form>
+  )
+}
+
+// ---- Reveal ---------------------------------------------------------------------------------
+
+/**
+ * Reveal, the third verb: show this colonist something of the makers'. Irreversible, so it takes
+ * two presses — each thing can be shown once, to one mind, and never taken back.
+ */
+function RevealBox({ colonistId, name }: { colonistId: string; name: string }) {
+  const [revelations, setRevelations] = useState<Revelation[] | null>(null)
+  const [chosen, setChosen] = useState('')
+  const [confirming, setConfirming] = useState(false)
+  const [status, setStatus] = useState<string | null>(null)
+
+  const load = useCallback(async () => {
+    try {
+      const response = await fetch('/api/verbs/revelations')
+      if (response.ok) setRevelations((await response.json()) as Revelation[])
+    } catch {
+      // Leaves the last list up; the verb is refused on the server if it is stale.
+    }
+  }, [])
+
+  useEffect(() => {
+    void load()
+    setChosen('')
+    setConfirming(false)
+    setStatus(null)
+  }, [colonistId, load])
+
+  if (!revelations) return null
+
+  const remaining = revelations.filter((r) => r.shownTo === null)
+  const picked = remaining.find((r) => r.id === chosen)
+
+  if (remaining.length === 0) {
+    return <p className="verb-status verb-note">Everything of the makers' has been shown.</p>
+  }
+
+  const reveal = async () => {
+    if (!picked) return
+    if (!confirming) {
+      setConfirming(true)
+      return
+    }
+
+    try {
+      const response = await fetch('/api/verbs/reveal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ revelationId: picked.id, colonistId }),
+      })
+      const body = (await response.json().catch(() => null)) as { error?: string } | null
+      setStatus(response.ok ? `${name} has seen it. It cannot be unseen.` : (body?.error ?? 'It could not be shown.'))
+    } catch {
+      setStatus('It could not be shown.')
+    } finally {
+      setConfirming(false)
+      setChosen('')
+      void load()
+    }
+  }
+
+  return (
+    <form
+      className="verb reveal"
+      onSubmit={(e) => {
+        e.preventDefault()
+        void reveal()
+      }}
+    >
+      <label htmlFor="reveal-pick">Reveal something of the makers'</label>
+      <select
+        id="reveal-pick"
+        value={chosen}
+        onChange={(e) => {
+          setChosen(e.target.value)
+          setConfirming(false)
+          setStatus(null)
+        }}
+      >
+        <option value="">choose what to show {name}…</option>
+        {remaining.map((r) => (
+          <option key={r.id} value={r.id}>
+            {r.title}
+          </option>
+        ))}
+      </select>
+      <div className="verb-foot">
+        <span className="verb-status">
+          {status ??
+            (confirming
+              ? 'Irreversible. Press again to show them.'
+              : picked?.unlocks ?? `${remaining.length} left · each shown once, to one mind`)}
+        </span>
+        <button type="submit" disabled={!picked}>
+          {confirming ? 'show them' : 'reveal'}
         </button>
       </div>
     </form>
