@@ -259,6 +259,9 @@ export function ColonistDetailView({
 
 const MAX_WORDS = 280
 
+/** Shown when a verb's request fails outright, as opposed to the colony refusing it. */
+export const UNREACHABLE = "Couldn't reach the colony — is the server running?"
+
 /**
  * Speak, the second verb: say something to this one colonist. It is remembered at once and weighed
  * heavily; their answer comes when the governor has a mind free, over their head and in the feed.
@@ -294,7 +297,9 @@ function SpeakBox({ colonistId, name }: { colonistId: string; name: string }) {
         setStatus(body?.error ?? 'They did not hear you.')
       }
     } catch {
-      setStatus('They did not hear you.')
+      // Not the colony refusing: the request never reached it. Say so plainly, or a stopped
+      // server reads as a colonist ignoring you.
+      setStatus(UNREACHABLE)
     } finally {
       setSending(false)
     }
@@ -386,7 +391,7 @@ function RevealBox({ colonistId, name }: { colonistId: string; name: string }) {
       const body = (await response.json().catch(() => null)) as { error?: string } | null
       setStatus(response.ok ? `${name} has seen it. It cannot be unseen.` : (body?.error ?? 'It could not be shown.'))
     } catch {
-      setStatus('It could not be shown.')
+      setStatus(UNREACHABLE)
     } finally {
       setConfirming(false)
       setChosen('')

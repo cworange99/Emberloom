@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { UNREACHABLE } from './ColonistPanel'
 
 /** Colony.PrintCost on the server — which is what actually refuses a print it cannot afford. */
 const PRINT_COST = 25
@@ -55,7 +56,7 @@ export function PrintVerb({
         setStatus(body?.error ?? 'The Loom would not print.')
       }
     } catch {
-      setStatus('The Loom would not print.')
+      setStatus(UNREACHABLE)
     } finally {
       setBusy(false)
     }

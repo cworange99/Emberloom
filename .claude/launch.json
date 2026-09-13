@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "emberloom",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "src/Emberloom.Api", "--urls", "http://localhost:5223"],
+      "port": 5223
+    }
+  ]
+}

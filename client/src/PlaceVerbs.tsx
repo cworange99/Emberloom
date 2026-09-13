@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { Place, PlaceState } from './types'
+import { UNREACHABLE } from './ColonistPanel'
 
 /** ProvisionRules on the server, which is what actually refuses what the Loom cannot afford. */
 const PER_DAY = 1
@@ -27,7 +28,7 @@ export function PlaceVerbs({ place, state, charge }: { place: Place; state: Plac
       const body = (await response.json().catch(() => null)) as { error?: string } | null
       setStatus(response.ok ? null : (body?.error ?? 'The Loom would not do that.'))
     } catch {
-      setStatus('The Loom would not do that.')
+      setStatus(UNREACHABLE)
     } finally {
       setBusy(false)
     }
