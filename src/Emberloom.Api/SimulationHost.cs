@@ -125,13 +125,16 @@ public sealed class SimulationHost : BackgroundService
         _colony = ColonyFactory.Create(colonists, _random);
         _body = new BodySimulation(_colony, _random);
         AttachBody();
-        Clock = new SimulationClock();
 
         _colony.Feed.Appended += OnEvent;
         QueueKindlingForEveryone();
     }
 
-    public SimulationClock Clock { get; }
+    /// <summary>
+    /// Created with the host rather than partway through its constructor: the governor's throttle
+    /// handler, wired up earlier in the constructor, closes over it.
+    /// </summary>
+    public SimulationClock Clock { get; } = new();
 
     public bool MindConfigured => _mind is not null;
 
