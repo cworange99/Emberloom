@@ -1,5 +1,6 @@
 using Emberloom.Core.Actions;
 using Emberloom.Core.Drives;
+using Emberloom.Core.Life;
 using Emberloom.Core.Memory;
 
 namespace Emberloom.Core.Colonists;
@@ -60,6 +61,15 @@ public sealed class Colonist
     public bool IsAlive { get; set; } = true;
 
     public double DiedOnDay { get; set; } = -1;
+
+    /// <summary>How long this body lasts, in colony days. Set at print or birth; see LifeRules.</summary>
+    public double LifespanDays { get; set; } = LifeRules.BaseLifespanDays;
+
+    /// <summary>In the last stretch of their life, and slowing. Set once, so it is noticed once.</summary>
+    public bool IsElder { get; set; }
+
+    /// <summary>When they last had a successor. Pairing has a cooldown.</summary>
+    public double LastPairedOnDay { get; set; } = double.NegativeInfinity;
 
     /// <summary>The most recent thing Layer 2 had them think. Null until the fast lane runs in M3.</summary>
     public string? LastThought { get; set; }

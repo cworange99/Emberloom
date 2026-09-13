@@ -76,6 +76,11 @@ Console.WriteLine();
 Console.WriteLine($"=== after {days} colony-days, {colonists} colonists ===");
 Console.WriteLine($"Loom charge      {colony.LoomCharge,8:F1}");
 Console.WriteLine($"Artifacts        {colony.ArtifactsRecovered,8}");
+Console.WriteLine($"Living           {colony.Living.Count(),8}");
+Console.WriteLine($"Born             {colony.Colonists.Count(c => c.Lineage == LineageKind.Paired),8}");
+Console.WriteLine($"Died             {colony.Colonists.Count(c => !c.IsAlive),8}");
+Console.WriteLine($"Generations      {Generations(colony),8}");
+Console.WriteLine($"Cores            {string.Join(", ", colony.Cores.GroupBy(c => c.Fate).Select(g => $"{g.Key.ToString().ToLowerInvariant()} {g.Count()}"))}");
 Console.WriteLine($"Feed lines       {colony.Feed.Events.Count,8}");
 Console.WriteLine($"Action switches  {decisions,8}");
 Console.WriteLine();
@@ -154,6 +159,20 @@ static void Sweep(int days, int colonists, int seed)
     ActionCatalog.ReliefScale = 3.0;
 }
 
+/// <summary>The deepest line of descent: printed minds are generation one, their children two.</summary>
+static int Generations(Colony colony)
+{
+    var depth = new Dictionary<string, int>();
+
+    int Of(Colonist c) => depth.TryGetValue(c.Id, out var d)
+        ? d
+        : depth[c.Id] = c.ParentIds.Count == 0
+            ? 1
+            : 1 + c.ParentIds.Select(colony.Find).Where(p => p is not null).Select(p => Of(p!)).DefaultIfEmpty(0).Max();
+
+    return colony.Colonists.Count == 0 ? 0 : colony.Colonists.Max(Of);
+}
+
 static string Tag(EventLayer layer) => layer switch
 {
     EventLayer.Body => "body ",
@@ -162,5 +181,7 @@ static string Tag(EventLayer layer) => layer switch
     _ => "world"
 };
 
+// Deliberate is not in All — the scorer offers it only to a sitting council — but a council member
+// finishing a session still has to be counted.
 static int DurationOf(ActionKind kind) =>
-    ActionCatalog.All.First(a => a.Kind == kind).DurationTicks;
+    ActionCatalog.All.Append(ActionCatalog.Deliberate).First(a => a.Kind == kind).DurationTicks;

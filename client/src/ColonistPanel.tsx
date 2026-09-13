@@ -213,18 +213,42 @@ export function ColonistDetailView({
           <div>
             <h2>{colonist.displayName}</h2>
             <p>
-              {colonist.lineage} · day {colonist.ageDays.toFixed(0)} · {colonist.mood} · at{' '}
-              <PlaceLink
-                id={colonist.placeId}
-                name={placeNames.get(colonist.placeId) ?? colonist.placeId}
-                links={links}
-              />
+              {colonist.isAlive ? colonist.lineage : 'dead'} · {colonist.ageDays.toFixed(0)} of ~
+              {colonist.lifespanDays.toFixed(0)} days
+              {colonist.isAlive && colonist.isElder && ' · slowing'}
+              {colonist.isAlive && (
+                <>
+                  {' · '}
+                  {colonist.mood} · at{' '}
+                  <PlaceLink
+                    id={colonist.placeId}
+                    name={placeNames.get(colonist.placeId) ?? colonist.placeId}
+                    links={links}
+                  />
+                </>
+              )}
             </p>
+            {colonist.parents.length > 0 && (
+              <p>
+                born to{' '}
+                {colonist.parents.map((parent, index) => (
+                  <span key={parent.id}>
+                    {index > 0 && ' and '}
+                    <PersonLink person={parent} links={links} />
+                  </span>
+                ))}
+              </p>
+            )}
           </div>
         </div>
 
-        <SpeakBox colonistId={id} name={colonist.displayName} />
-        <RevealBox colonistId={id} name={colonist.displayName} />
+        {/* The dead can be read in the inspector, but not spoken to or shown anything. */}
+        {colonist.isAlive && (
+          <>
+            <SpeakBox colonistId={id} name={colonist.displayName} />
+            <RevealBox colonistId={id} name={colonist.displayName} />
+          </>
+        )}
 
         <div className="tabs" role="tablist" aria-label="Mind Inspector">
           {tabs.map((tab) => (

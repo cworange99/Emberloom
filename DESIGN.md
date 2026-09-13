@@ -302,6 +302,36 @@ Both paths end in a single Kindling call.
 **Death.** Bodies fail. The mind persists as a core the colony must decide what to do with: read it,
 archive it, or destroy it. That decision is a Deliberation.
 
+**As built at M7, phase A.** All of this is body. A colony with no mind still has generations, and
+the headless sim shows them: 12 in 240 colony days, with the population holding between 8 and 14.
+
+- **Lifespans.** A life is 40 colony days, give or take a fifth. For its last 15% the colonist
+  slows and rests more.
+  - That figure is a placeholder. The overnight run should set it.
+  - A printed mind's lifespan comes from its designation, not the colony's random stream, so
+    adding lives did not reshuffle existing colonies.
+- **Death.** Whoever was close has lost someone; everyone else has heard.
+- **The core fork.** It opens before any other, and its council is whoever was closest to the
+  dead. There are three fates:
+  - A majority for reads it. What the dead believed reaches everyone as something heard, which
+    still has to survive their own reflection to become a belief.
+  - A majority against destroys it.
+  - Neither keeps it, unread.
+  - A core nobody gets to within six days is kept, unread. Otherwise, with cores outranking
+    prints, a backlog of cores held every Print fork off in the sim.
+- **Pairing.**
+  - A pair must be bonded both ways, both 12 days old or more, not slowing, and not already
+    family.
+  - Each such pair has a 35% chance of a child each day. There is at most one birth a day and a
+    cap of 20 colonists.
+  - A maturity of 6 days produced a generation every fortnight, faster than anyone could reflect
+    their way to a belief worth inheriting.
+- **Inheritance.**
+  - A child's weights are its parents', crossed, and Kindling writes a personality around them
+    without overwriting them.
+  - A child also gets two of each parent's strongest memories as dreams. They are recorded as its
+    own, with nothing to say whose they were.
+
 ---
 
 ## 9. The Mind Inspector

@@ -18,6 +18,12 @@ public sealed record KindlingSeed
 
     /// <summary>How the seed came about, if the colony argued over it. Empty for a rolled seed.</summary>
     public string? Provenance { get; init; }
+
+    /// <summary>
+    /// True for a mind two colonists made rather than one the Loom printed. Its weights are
+    /// already its parents', crossed; the call still returns weights, and they are not used.
+    /// </summary>
+    public bool Born { get; init; }
 }
 
 public sealed record KindlingResult
@@ -76,7 +82,9 @@ public static class KindlingCall
 
         return $"""
             [Task]
-            The Loom has just finished printing a new mind, designation {seed.Designation}.
+            {(seed.Born
+                ? $"A new mind has just been born, designation {seed.Designation}: not printed by the Loom, but made by two colonists together."
+                : $"The Loom has just finished printing a new mind, designation {seed.Designation}.")}
             {provenance}
             Seed: "{seed.Seed}"
 

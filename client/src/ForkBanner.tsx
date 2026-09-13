@@ -10,9 +10,7 @@ export function ForkBanner({ fork, onSelect }: { fork: ForkState; onSelect: (id:
 
   const kicker = fork.isOpen
     ? 'The colony is deciding'
-    : fork.carried
-      ? 'Decided — yes'
-      : 'Decided — no'
+    : `Decided — ${fork.outcome ?? (fork.carried ? 'yes' : 'no')}`
 
   return (
     <section className={fork.isOpen ? 'fork' : 'fork is-decided'} role="status" aria-live="polite">

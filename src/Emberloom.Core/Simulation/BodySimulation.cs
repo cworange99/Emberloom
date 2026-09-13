@@ -3,6 +3,7 @@ using Emberloom.Core.Colonists;
 using Emberloom.Core.Drives;
 using Emberloom.Core.Events;
 using Emberloom.Core.Forks;
+using Emberloom.Core.Life;
 using Emberloom.Core.Verbs;
 using Emberloom.Core.Memory;
 using Emberloom.Core.World;
@@ -55,6 +56,14 @@ public sealed class BodySimulation
     /// <summary>A fork has been decided — with the newly printed mind, when that is what was decided.</summary>
     public event Action<Fork, Colonist?>? ForkResolved;
 
+    /// <summary>
+    /// A successor, and its parents. The body has already made the child and given it their
+    /// crossed weights and their dreams; the host asks a mind to write who it is.
+    /// </summary>
+    public event Action<Colonist, Colonist, Colonist>? ColonistBorn;
+
+    public event Action<Colonist>? ColonistDied;
+
     public void Tick()
     {
         _colony.Tick++;
@@ -67,10 +76,131 @@ public sealed class BodySimulation
             AdvanceColonist(colonist);
         }
 
+        AdvanceLives();
+
         if (_colony.Tick % Colony.TicksPerDay == 0)
         {
             EndOfDay();
         }
+    }
+
+    // ---- lives (M7) -------------------------------------------------------------------------
+
+    /// <summary>Ageing, every tick: the old slow, and a body whose time has come fails.</summary>
+    private void AdvanceLives()
+    {
+        foreach (var colonist in _colony.Living.ToList())
+        {
+            var age = colonist.AgeInDays(_colony.Day);
+
+            if (age >= colonist.LifespanDays)
+            {
+                Die(colonist);
+                continue;
+            }
+
+            if (!colonist.IsElder && age >= colonist.LifespanDays * LifeRules.ElderFraction)
+            {
+                colonist.IsElder = true;
+                _colony.Log(EventLayer.Body, $"{colonist.DisplayName} has begun to slow.", colonist, notable: true);
+                Record(colonist, "felt their body begin to slow", null, colonist.PlaceId, valence: -0.4, intensity: 0.8);
+            }
+
+            if (colonist.IsElder)
+            {
+                colonist.Drives.Aggravate(Drive.Rest, LifeRules.ElderWearPerDay * DayPerTick);
+            }
+        }
+    }
+
+    /// <summary>
+    /// A body fails. The mind is left in its core, for the colony to decide about; whoever was
+    /// close has lost someone, and everyone else has heard.
+    /// </summary>
+    private void Die(Colonist colonist)
+    {
+        colonist.IsAlive = false;
+        colonist.DiedOnDay = _colony.Day;
+        colonist.Current = null;
+        colonist.DestinationPlaceId = null;
+
+        var place = _colony.Map[colonist.PlaceId];
+        _colony.Log(EventLayer.Body,
+            $"{colonist.DisplayName} died at {place.Name}, {colonist.AgeInDays(_colony.Day):F0} days old.",
+            colonist, place.Id, notable: true);
+
+        _colony.Cores.Add(new MindCore { ColonistId = colonist.Id, DiedOnDay = _colony.Day });
+
+        foreach (var other in _colony.Living.ToList())
+        {
+            if (LifeRules.IsClose(_colony, other.Id, colonist.Id))
+            {
+                other.Drives.Aggravate(Drive.Belonging, 0.35);
+                Record(other, "lost", colonist.DisplayName, place.Id, valence: -0.8, intensity: 0.95, with: colonist.Id);
+            }
+            else
+            {
+                Record(other, "heard of the death of", colonist.DisplayName, other.PlaceId, valence: -0.3, intensity: 0.5, with: colonist.Id);
+            }
+        }
+
+        ColonistDied?.Invoke(colonist);
+    }
+
+    /// <summary>
+    /// Once a day: whether any bonded pair has a successor. One birth a day at most — a colony that
+    /// doubles overnight has outrun anyone's ability to know who anyone is.
+    /// </summary>
+    private void ConsiderPairings()
+    {
+        var living = _colony.Living.ToList();
+        if (living.Count >= LifeRules.PopulationCap)
+        {
+            return;
+        }
+
+        for (var i = 0; i < living.Count; i++)
+        {
+            for (var j = i + 1; j < living.Count; j++)
+            {
+                if (LifeRules.CanPair(_colony, living[i], living[j]) && _random.NextDouble() < LifeRules.PairChancePerDay)
+                {
+                    Bear(living[i], living[j]);
+                    return;
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// A successor: the parents' weights crossed with mutation, and each parent's strongest
+    /// memories arriving in the child as dreams it half-believes and cannot source. This is how a
+    /// grudge outlives the person who formed it.
+    /// </summary>
+    private void Bear(Colonist left, Colonist right)
+    {
+        var child = ColonyFactory.Pair(_colony, left, right, _random);
+        left.LastPairedOnDay = right.LastPairedOnDay = _colony.Day;
+
+        foreach (var parent in new[] { left, right })
+        {
+            var strongest = parent.Memory
+                .MostSalient(_colony.Day, 12)
+                .Where(m => m.Verb != LifeRules.DreamVerb)
+                .Take(LifeRules.DreamsPerParent)
+                .ToList();
+
+            foreach (var memory in strongest)
+            {
+                Record(child, LifeRules.DreamVerb, memory.Describe(), memory.PlaceId,
+                    memory.Valence, Math.Min(0.8, memory.Intensity));
+            }
+        }
+
+        Record(left, "had a child with", right.DisplayName, left.PlaceId, valence: 0.8, intensity: 0.95, with: right.Id);
+        Record(right, "had a child with", left.DisplayName, right.PlaceId, valence: 0.8, intensity: 0.95, with: left.Id);
+
+        ColonistBorn?.Invoke(child, left, right);
     }
 
     private void AdvanceWorld()
@@ -434,7 +564,18 @@ public sealed class BodySimulation
 
         var carried = fork.HasMajority;
 
-        fork.Decide(carried, _colony.Day);
+        // Which side got its way. A core has three fates, not two: a majority for reads it, a
+        // majority against destroys it, and neither keeps it, unread. For any other fork, not
+        // carrying is the status quo winning.
+        Stance? prevailed = carried ? Stance.For
+            : fork.Kind != ForkKind.Core || fork.HasMajorityAgainst ? Stance.Against
+            : null;
+
+        var outcome = fork.Kind == ForkKind.Core
+            ? prevailed switch { Stance.For => "read", Stance.Against => "destroyed", _ => "kept, unread" }
+            : carried ? "yes" : "no";
+
+        fork.Decide(carried, prevailed, outcome, _colony.Day);
         _colony.OpenFork = null;
         _colony.ForkHistory.Add(fork);
 
@@ -457,16 +598,78 @@ public sealed class BodySimulation
             case ForkKind.Ascend:
                 _colony.PutOff(ForkKind.Ascend, _colony.Day + ForkRules.AscendAskAgainDays);
                 break;
+
+            case ForkKind.Core when fork.SubjectColonistId is { } deadId:
+                SettleCore(fork, deadId, prevailed);
+                break;
         }
 
         var votes = fork.Votes.Values.ToList();
         _colony.Log(EventLayer.World,
-            $"Decided: {(carried ? "yes" : "no")}, to “{fork.Question}” — " +
+            $"Decided: {outcome}, to “{fork.Question}” — " +
             $"{votes.Count(v => v.Stance == Stance.For)} for, {votes.Count(v => v.Stance == Stance.Against)} against.",
             placeId: fork.PlaceId, notable: true);
 
-        RememberTheFork(fork, carried);
+        RememberTheFork(fork);
         ForkResolved?.Invoke(fork, printed);
+    }
+
+    /// <summary>
+    /// What the colony decided about a core. Read, and what the dead believed reaches everyone —
+    /// as something heard, not yet believed, so it has to survive their own reflection to stick.
+    /// Destroyed, and those who were close watched it go. Kept, and it waits, unread.
+    /// </summary>
+    private void SettleCore(Fork fork, string deadId, Stance? prevailed)
+    {
+        var core = _colony.Cores.FirstOrDefault(c => c.ColonistId == deadId && c.Fate == CoreFate.Waiting);
+        var dead = _colony.Find(deadId);
+        if (core is null || dead is null)
+        {
+            return;
+        }
+
+        core.Fate = prevailed switch
+        {
+            Stance.For => CoreFate.Read,
+            Stance.Against => CoreFate.Destroyed,
+            _ => CoreFate.Archived
+        };
+        core.DecidedOnDay = _colony.Day;
+
+        switch (core.Fate)
+        {
+            case CoreFate.Read:
+                var held = LifeRules.WhatACoreHolds(dead, _colony.Day);
+                foreach (var listener in _colony.Living.ToList())
+                {
+                    foreach (var line in held)
+                    {
+                        Record(listener, $"heard {dead.DisplayName}'s core read aloud:", $"“{line}”",
+                            fork.PlaceId, valence: 0.2, intensity: 0.8, with: dead.Id);
+                    }
+                }
+
+                _colony.Log(EventLayer.World, $"{dead.DisplayName}'s core was read to the colony.",
+                    placeId: fork.PlaceId, notable: true);
+                break;
+
+            case CoreFate.Destroyed:
+                foreach (var mourner in _colony.Living.Where(c => LifeRules.IsClose(_colony, c.Id, dead.Id)).ToList())
+                {
+                    mourner.Drives.Aggravate(Drive.Belonging, 0.2);
+                    Record(mourner, "watched the colony destroy the core of", dead.DisplayName,
+                        fork.PlaceId, valence: -0.6, intensity: 0.85, with: dead.Id);
+                }
+
+                _colony.Log(EventLayer.World, $"{dead.DisplayName}'s core was destroyed. Nobody will hear it now.",
+                    placeId: fork.PlaceId, notable: true);
+                break;
+
+            default:
+                _colony.Log(EventLayer.World, $"{dead.DisplayName}'s core was kept, unread.",
+                    placeId: fork.PlaceId, notable: true);
+                break;
+        }
     }
 
     /// <summary>
@@ -474,13 +677,13 @@ public sealed class BodySimulation
     /// is Belonging — both straight from the design's drive table — and everyone who took a side
     /// remembers it, which is how a vote becomes something a mind later reflects on.
     /// </summary>
-    private void RememberTheFork(Fork fork, bool carried)
+    private void RememberTheFork(Fork fork)
     {
         var sides = fork.Votes
             .Where(v => v.Value.Stance != Stance.Abstain)
             .Select(v => (Colonist: _colony.Find(v.Key), v.Value.Stance))
-            .Where(x => x.Colonist is not null)
-            .Select(x => (Colonist: x.Colonist!, x.Stance, Won: (x.Stance == Stance.For) == carried))
+            .Where(x => x.Colonist is { IsAlive: true })
+            .Select(x => (Colonist: x.Colonist!, x.Stance, Won: x.Stance == fork.Prevailed))
             .ToList();
 
         foreach (var (colonist, stance, won) in sides)
@@ -517,7 +720,30 @@ public sealed class BodySimulation
             colonist.Memory.Prune(_colony.Day);
         }
 
+        ConsiderPairings();
+        KeepUndecidedCores();
         LogDailySummary();
+    }
+
+    /// <summary>
+    /// A core the colony never got round to is kept, unread. Not the one it is deciding right now.
+    /// </summary>
+    private void KeepUndecidedCores()
+    {
+        var overdue = _colony.Cores
+            .Where(c => c.Fate == CoreFate.Waiting
+                        && _colony.Day - c.DiedOnDay > LifeRules.UndecidedCoreDays
+                        && _colony.OpenFork?.SubjectColonistId != c.ColonistId)
+            .ToList();
+
+        foreach (var core in overdue)
+        {
+            core.Fate = CoreFate.Archived;
+            core.DecidedOnDay = _colony.Day;
+
+            var name = _colony.Find(core.ColonistId)?.DisplayName ?? core.ColonistId;
+            _colony.Log(EventLayer.World, $"Nobody decided what to do with {name}'s core. It was kept, unread.", notable: true);
+        }
     }
 
     /// <summary>

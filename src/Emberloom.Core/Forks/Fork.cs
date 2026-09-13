@@ -1,6 +1,7 @@
 using Emberloom.Core.Colonists;
 using Emberloom.Core.Drives;
 using Emberloom.Core.Events;
+using Emberloom.Core.Life;
 using Emberloom.Core.World;
 
 namespace Emberloom.Core.Forks;
@@ -12,7 +13,10 @@ public enum ForkKind
     Print,
 
     /// <summary>A way up has been cleared. Go further, or leave what is up there alone?</summary>
-    Ascend
+    Ascend,
+
+    /// <summary>Someone has died, and their mind is still in its core. Read it, keep it, or destroy it?</summary>
+    Core
 }
 
 public enum Stance
@@ -58,6 +62,20 @@ public sealed class Fork
     /// <summary>For an Ascend fork, the place the colony is deciding whether to go up to.</summary>
     public string? SubjectPlaceId { get; init; }
 
+    /// <summary>For a Core fork, whose core it is.</summary>
+    public string? SubjectColonistId { get; init; }
+
+    /// <summary>
+    /// What each stance means for this question, in the words the deliberation prompt uses. For
+    /// most forks "against" just means not doing it; for a core it means destroying it, and a
+    /// council that is not told that will argue the wrong question.
+    /// </summary>
+    public string ForMeans { get; init; } = "they want it done";
+
+    public string AgainstMeans { get; init; } = "they do not want it done, even gently";
+
+    public string AbstainMeans { get; init; } = "they truly have no preference";
+
     /// <summary>Where the council gathers. The plaza: where arguments happen.</summary>
     public required string PlaceId { get; init; }
 
@@ -81,6 +99,15 @@ public sealed class Fork
 
     /// <summary>Null while the colony is still deciding.</summary>
     public bool? Carried { get; private set; }
+
+    /// <summary>
+    /// The side that got its way, once decided. Null when neither did — which only a core can
+    /// end in: no majority to read it and none to destroy it keeps it, unread.
+    /// </summary>
+    public Stance? Prevailed { get; private set; }
+
+    /// <summary>What was decided, in a word or two: "yes", "no", or a core's fate.</summary>
+    public string? Outcome { get; private set; }
 
     public double? ResolvedOnDay { get; private set; }
 
@@ -117,9 +144,14 @@ public sealed class Fork
     /// </summary>
     public bool HasMajority => Count(Stance.For) >= Needed;
 
-    internal void Decide(bool carried, double day)
+    /// <summary>A majority against, by heads. For a core, that destroys it.</summary>
+    public bool HasMajorityAgainst => Count(Stance.Against) >= Needed;
+
+    internal void Decide(bool carried, Stance? prevailed, string outcome, double day)
     {
         Carried = carried;
+        Prevailed = prevailed;
+        Outcome = outcome;
         ResolvedOnDay = day;
     }
 }
@@ -173,6 +205,14 @@ public static class ForkRules
         if (colony.Living.Any(c => c.AwaitingKindling))
         {
             return null;
+        }
+
+        // The dead come first. A core waiting to be decided is the most personal question a
+        // colony faces, and it should not queue behind a print.
+        var waiting = colony.Cores.FirstOrDefault(c => c.Fate == CoreFate.Waiting);
+        if (waiting is not null && colony.Find(waiting.ColonistId) is { } dead)
+        {
+            return OpenCore(colony, dead);
         }
 
         var above = colony.ForbiddenPlaces
@@ -281,8 +321,40 @@ public static class ForkRules
         (ForkKind.Print, Stance.Against) => "That charge is all we have against the dark. Keep it.",
         (ForkKind.Ascend, Stance.For) => "Whatever is up there has waited long enough.",
         (ForkKind.Ascend, Stance.Against) => "We have lost enough to that stairwell already.",
+        (ForkKind.Core, Stance.For) => "Read it. They would have wanted to be heard.",
+        (ForkKind.Core, Stance.Against) => "Let it go. Some things should stay with the dead.",
         _ => "I will go along with whatever the rest of you decide."
     };
+
+    /// <summary>
+    /// A core fork. The council is whoever was closest to the dead, not whoever feels the drives
+    /// most: this is theirs to decide, and they are the ones who will live with it.
+    /// </summary>
+    private static Fork OpenCore(Colony colony, Colonist dead)
+    {
+        var name = dead.DisplayName;
+
+        return new Fork
+        {
+            Id = $"fork-{colony.ForkHistory.Count + 1}",
+            Kind = ForkKind.Core,
+            Question = $"What do we do with {name}'s core?",
+            Proposal = $"Read it: what {name} believed passes to everyone.",
+            Stakes = $"{name} is dead, but the mind is still in its core. Read it, and everyone hears what {name} believed, true or not. Destroy it, and nobody ever will. Or keep it, unread.",
+            SubjectColonistId = dead.Id,
+            ForMeans = "they want it read, so everyone hears what the dead believed",
+            AgainstMeans = "they want it destroyed, so nobody ever hears it",
+            AbstainMeans = "they would keep it, unread",
+            PlaceId = colony.Map.OfKind(PlaceKind.Plaza).FirstOrDefault()?.Id ?? "plaza",
+            OpenedOnDay = colony.Day,
+            Participants = colony.Living
+                .OrderByDescending(c => LifeRules.Closeness(colony, c.Id, dead.Id))
+                .ThenBy(c => c.Id, StringComparer.Ordinal)
+                .Take(CouncilSize)
+                .Select(c => c.Id)
+                .ToList()
+        };
+    }
 
     private static Fork Open(
         Colony colony,

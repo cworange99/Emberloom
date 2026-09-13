@@ -96,9 +96,8 @@ public static class DeliberationCall
             {Rows(lately)}
 
             [Task]
-            Where does {colonist.DisplayName} stand? "for" means they want it done; "against" means they
-            do not want it done, even gently; "abstain" means they truly have no preference. Most
-            people here have a view. Give their reasoning in one sentence, grounded in what they
+            Where does {colonist.DisplayName} stand? "for" means {fork.ForMeans}; "against" means
+            {fork.AgainstMeans}; "abstain" means {fork.AbstainMeans}. Most people here have a view. Give their reasoning in one sentence, grounded in what they
             believe and what has happened to them; the one line they say aloud to the others, in their
             own words and not repeating anyone above, saying what they want the colony to do; and
             their conviction, from 0 (barely cares) to 1 (would stake everything on it).

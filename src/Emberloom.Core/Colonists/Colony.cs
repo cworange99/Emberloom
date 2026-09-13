@@ -1,5 +1,6 @@
 using Emberloom.Core.Events;
 using Emberloom.Core.Forks;
+using Emberloom.Core.Life;
 using Emberloom.Core.Relationships;
 using Emberloom.Core.Verbs;
 using Emberloom.Core.World;
@@ -93,6 +94,9 @@ public sealed class Colony
     /// (M7) reads this: what the colony has seen is what its founding story has to account for.
     /// </summary>
     public Dictionary<string, string> Revealed { get; } = [];
+
+    /// <summary>Every dead mind's core, and what the colony decided to do with it.</summary>
+    public List<MindCore> Cores { get; } = [];
 
     public IReadOnlyList<Colonist> Colonists => _colonists;
 

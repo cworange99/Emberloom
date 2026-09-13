@@ -66,13 +66,15 @@ public sealed class MindService : IDisposable
         Colony colony,
         string seedText,
         string? provenance = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        bool born = false)
     {
         var seed = new KindlingSeed
         {
             Designation = colonist.Designation,
             Seed = seedText,
-            Provenance = provenance
+            Provenance = provenance,
+            Born = born
         };
 
         KindlingResult result;
@@ -96,7 +98,7 @@ public sealed class MindService : IDisposable
             result = KindlingCall.Fallback(seed);
         }
 
-        ApplyKindling(colonist, colony, result);
+        ApplyKindling(colonist, colony, result, keepWeights: born);
         return result;
     }
 
@@ -105,17 +107,25 @@ public sealed class MindService : IDisposable
     /// the colonist scores every future action against weights a model wrote, with no further
     /// inference.
     /// </summary>
-    private void ApplyKindling(Colonist colonist, Colony colony, KindlingResult result)
+    private void ApplyKindling(Colonist colonist, Colony colony, KindlingResult result, bool keepWeights = false)
     {
         var names = result.NameCandidates.Count;
-        var produced = result.FromModel
-            ? $"personality, {names} name candidate{(names == 1 ? "" : "s")}, seven weights · {WeightSummary(result)}"
-            : "fallback stub — the mind was unavailable";
+        var produced = !result.FromModel
+            ? "fallback stub — the mind was unavailable"
+            : keepWeights
+                ? $"personality, {names} name candidate{(names == 1 ? "" : "s")} · weights inherited from the parents, kept"
+                : $"personality, {names} name candidate{(names == 1 ? "" : "s")}, seven weights · {WeightSummary(result)}";
 
         Commit(() =>
         {
             colonist.Personality = result.Personality;
-            colonist.Weights = result.Weights;
+
+            // A born mind's weights are its inheritance — its parents', crossed with mutation. A
+            // model writing over them would erase the one thing a child is guaranteed to carry.
+            if (!keepWeights)
+            {
+                colonist.Weights = result.Weights;
+            }
             colonist.NameCandidates = result.NameCandidates;
             colonist.IsKindled = result.FromModel;
 

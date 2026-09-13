@@ -1,0 +1,166 @@
+using Emberloom.Core.Colonists;
+using Emberloom.Core.Relationships;
+
+namespace Emberloom.Core.Life;
+
+/// <summary>
+/// Ageing, pairing and dying — DESIGN §8. All body: a life begins and ends with no model call,
+/// and a colony with no mind still has generations. What the mind adds is who the child turns out
+/// to be (Kindling) and what the colony decides to do with the dead (a core fork).
+/// </summary>
+public static class LifeRules
+{
+    /// <summary>
+    /// A life, in colony days. A starting figure, not a measured one: at 3x a 40-day life is about
+    /// 27 real minutes, at 10x about 8. The overnight run at the end of M7 is what should set it —
+    /// long enough that a mind reflects its way to beliefs worth passing on, short enough that a
+    /// night sees several generations.
+    /// </summary>
+    public const double BaseLifespanDays = 40;
+
+    /// <summary>Lives vary by this much either way, so a generation does not die in one afternoon.</summary>
+    public const double LifespanSpread = 0.2;
+
+    /// <summary>The last stretch of a life, when the body starts to slow.</summary>
+    public const double ElderFraction = 0.85;
+
+    /// <summary>How hard age presses on Rest, per colony day. The old sleep more.</summary>
+    public const double ElderWearPerDay = 0.4;
+
+    /// <summary>
+    /// Nobody pairs in their first days — they have to have become someone first. Measured with
+    /// the headless sim: at 6 days a colony reached 8 generations in 120 days, a new one every
+    /// fortnight, faster than anyone could reflect their way to a belief worth inheriting.
+    /// </summary>
+    public const double MaturityDays = 12;
+
+    public const double PairCooldownDays = 12;
+
+    /// <summary>
+    /// How long a core waits for the colony before it is kept, unread, by default. Deaths can come
+    /// faster than councils decide, and cores outrank prints: in the sim a backlog of five waiting
+    /// cores held every Print fork off for good.
+    /// </summary>
+    public const double UndecidedCoreDays = 6;
+
+    /// <summary>A bonded pair's chance, each day, of a successor. Pairing is cheap, not constant.</summary>
+    public const double PairChancePerDay = 0.35;
+
+    /// <summary>The city has room, but not endless room — and every mind costs the governor.</summary>
+    public const int PopulationCap = 20;
+
+    /// <summary>How many of each parent's strongest memories a child dreams.</summary>
+    public const int DreamsPerParent = 2;
+
+    /// <summary>
+    /// What a child's inherited memories read as: theirs, but not quite. "They half-believe and
+    /// cannot source" them (DESIGN §8), and nothing in the memory says whose it was.
+    /// </summary>
+    public const string DreamVerb = "dreams, and half believes, that they";
+
+    /// <summary>
+    /// A printed mind's lifespan, fixed by its designation. Drawn this way rather than from the
+    /// colony's random stream so that adding lives did not reshuffle every colony that already
+    /// existed — the same seed still grows the same colony.
+    /// </summary>
+    public static double Lifespan(string designation)
+    {
+        var unit = StableHash(designation) % 1000 / 999.0;
+        return BaseLifespanDays * (1 - LifespanSpread + 2 * LifespanSpread * unit);
+    }
+
+    /// <summary>A born mind's lifespan, drawn from the colony's random stream like everything else about them.</summary>
+    public static double Lifespan(Random random) =>
+        BaseLifespanDays * (1 - LifespanSpread + 2 * LifespanSpread * random.NextDouble());
+
+    /// <summary>How one colonist feels about another: affinity and trust together.</summary>
+    public static double Closeness(Colony colony, string fromId, string toId) =>
+        colony.Relationships.Peek(fromId, toId) is { } r ? r.Affinity + r.Trust : 0;
+
+    /// <summary>Close enough that their death is a loss rather than news.</summary>
+    public static bool IsClose(Colony colony, string fromId, string toId) => Closeness(colony, fromId, toId) > 0.5;
+
+    /// <summary>
+    /// Two colonists past a bond threshold — both ways, since a bond is asymmetric — grown, not yet
+    /// slowing, not recently parents, and not already family.
+    /// </summary>
+    public static bool CanPair(Colony colony, Colonist a, Colonist b)
+    {
+        if (!a.IsAlive || !b.IsAlive || a.Id == b.Id || a.IsElder || b.IsElder)
+        {
+            return false;
+        }
+
+        var day = colony.Day;
+
+        if (a.AgeInDays(day) < MaturityDays || b.AgeInDays(day) < MaturityDays)
+        {
+            return false;
+        }
+
+        if (day - a.LastPairedOnDay < PairCooldownDays || day - b.LastPairedOnDay < PairCooldownDays)
+        {
+            return false;
+        }
+
+        if (a.ParentIds.Contains(b.Id) || b.ParentIds.Contains(a.Id) || a.ParentIds.Intersect(b.ParentIds).Any())
+        {
+            return false;
+        }
+
+        return colony.Relationships.Peek(a.Id, b.Id)?.Stage == RelationshipStage.Bonded
+               && colony.Relationships.Peek(b.Id, a.Id)?.Stage == RelationshipStage.Bonded;
+    }
+
+    /// <summary>
+    /// What reading a core gives the colony: what the dead believed, in their own words — or, for a
+    /// mind that never came to believe anything, what it lived through most sharply.
+    /// </summary>
+    public static IReadOnlyList<string> WhatACoreHolds(Colonist dead, double day)
+    {
+        var beliefs = dead.Memory.Beliefs
+            .OrderByDescending(b => b.Confidence)
+            .Take(3)
+            .Select(b => b.Claim)
+            .ToList();
+
+        return beliefs.Count > 0
+            ? beliefs
+            : dead.Memory.MostSalient(day, 3).Select(m => $"I {m.Describe()}").ToList();
+    }
+
+    private static int StableHash(string text)
+    {
+        var h = 0;
+        foreach (var ch in text)
+        {
+            h = (h * 31 + ch) & 0x7fffffff;
+        }
+
+        return h;
+    }
+}
+
+/// <summary>What became of a dead mind's core. Waiting until the colony decides.</summary>
+public enum CoreFate
+{
+    Waiting,
+    Read,
+    Archived,
+    Destroyed
+}
+
+/// <summary>
+/// A mind that outlived its body. The colony decides what to do with it — read it, keep it, or
+/// destroy it — and that decision is a Deliberation (DESIGN §8).
+/// </summary>
+public sealed class MindCore
+{
+    public required string ColonistId { get; init; }
+
+    public required double DiedOnDay { get; init; }
+
+    public CoreFate Fate { get; set; } = CoreFate.Waiting;
+
+    public double? DecidedOnDay { get; set; }
+}

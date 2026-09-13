@@ -1,6 +1,7 @@
 using Emberloom.Core.Colonists;
 using Emberloom.Core.Drives;
 using Emberloom.Core.Events;
+using Emberloom.Core.Life;
 using Emberloom.Core.World;
 
 namespace Emberloom.Core.Simulation;
@@ -58,7 +59,8 @@ public static class ColonyFactory
             Personality = archetype.Blurb,
             Weights = archetype.Weights.Clone(),
             Seed = SeedRoller.Roll(random),
-            PlaceId = "loom"
+            PlaceId = "loom",
+            LifespanDays = LifeRules.Lifespan($"C-{index:00}")
         };
 
         // Printed minds wake with their drives partly loaded — they arrive already wanting things.
@@ -95,9 +97,13 @@ public static class ColonyFactory
             ParentIds = [left.Id, right.Id],
             BornOnDay = colony.Day,
             Personality = $"Born to {left.DisplayName} and {right.DisplayName}.",
-            Seed = $"inherits from {left.DisplayName} and {right.DisplayName}",
+            // What Kindling writes the child from: who the parents are. The weights are already
+            // theirs, crossed — Kindling writes the personality around them and keeps them.
+            Seed = $"the child of {left.DisplayName} and {right.DisplayName}. " +
+                   $"{left.DisplayName}: {left.Personality} {right.DisplayName}: {right.Personality}",
             Weights = PersonalityWeights.Crossover(left.Weights, right.Weights, random),
-            PlaceId = left.PlaceId
+            PlaceId = left.PlaceId,
+            LifespanDays = LifeRules.Lifespan(random)
         };
 
         colony.Add(colonist);

@@ -193,7 +193,7 @@ public sealed class SimulationHost : BackgroundService
     /// Kindling is undroppable. A colonist who was never written would act on archetype weights
     /// forever, which is the one degradation the design refuses to accept quietly.
     /// </summary>
-    private void SubmitKindling(Colonist colonist, string? provenance = null)
+    private void SubmitKindling(Colonist colonist, string? provenance = null, bool born = false)
     {
         if (_mind is null || _governor is null)
         {
@@ -218,7 +218,7 @@ public sealed class SimulationHost : BackgroundService
                     // no trace line at all.
                     var colony = Read((c, _) => c);
                     var started = Stopwatch.GetTimestamp();
-                    var result = await _mind.KindleAsync(colonist, colony, colonist.Seed, provenance, ct).ConfigureAwait(false);
+                    var result = await _mind.KindleAsync(colonist, colony, colonist.Seed, provenance, ct, born).ConfigureAwait(false);
 
                     // Only a call that reached a model counts toward throughput. An unreachable
                     // mind fails in a moment, and counting that would make the machine look fast.
@@ -340,7 +340,17 @@ public sealed class SimulationHost : BackgroundService
         _body.ConversationStarted += SubmitDialogue;
         _body.ForkOpened += OnForkOpened;
         _body.ForkResolved += OnForkResolved;
+        _body.ColonistBorn += OnBorn;
     }
+
+    /// <summary>
+    /// A child. The body has made it, with its parents' crossed weights and their dreams; Kindling
+    /// writes who it is around those weights and keeps them. Undroppable, like every Kindling.
+    /// </summary>
+    private void OnBorn(Colonist child, Colonist left, Colonist right) =>
+        SubmitKindling(child,
+            $"Born to {left.DisplayName} and {right.DisplayName}, not printed. Its weights are already theirs, crossed; write who it is around them.",
+            born: true);
 
     /// <summary>
     /// A fork has opened: drop to 1x if the player asked for that, and ask each council member's

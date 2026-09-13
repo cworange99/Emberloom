@@ -63,7 +63,11 @@ public sealed record ColonistDto(
     IReadOnlyList<string> NameCandidates,
     IReadOnlyDictionary<string, double> Drives,
     IReadOnlyDictionary<string, double> Weights,
-    string DominantDrive)
+    string DominantDrive,
+    bool IsAlive,
+    double LifespanDays,
+    bool IsElder,
+    IReadOnlyList<PersonRefDto> Parents)
 {
     public static ColonistDto From(Colonist colonist, Colony colony) => new(
         colonist.Id,
@@ -71,7 +75,8 @@ public sealed record ColonistDto(
         colonist.Name,
         colonist.DisplayName,
         colonist.Lineage.ToString(),
-        Math.Round(colonist.AgeInDays(colony.Day), 2),
+        // The dead stop ageing.
+        Math.Round(colonist.AgeInDays(colonist.IsAlive ? colony.Day : colonist.DiedOnDay), 2),
         colonist.Mood(colony.Day),
         colonist.PlaceId,
         colonist.Current?.Definition.Kind.ToString(),
@@ -86,7 +91,11 @@ public sealed record ColonistDto(
         colonist.NameCandidates,
         colonist.Drives.Levels.ToSchemaDictionary(),
         colonist.Weights.Vector.ToSchemaDictionary(),
-        DriveTable.Describe(colonist.Drives.Dominant(colonist.Weights)));
+        DriveTable.Describe(colonist.Drives.Dominant(colonist.Weights)),
+        colonist.IsAlive,
+        Math.Round(colonist.LifespanDays, 1),
+        colonist.IsElder,
+        colonist.ParentIds.Select(id => new PersonRefDto(id, colony.Find(id)?.DisplayName ?? id)).ToList());
 }
 
 /// <summary>One line of the feed. <c>Quote</c> is set when the line is someone speaking; the views show it over their head.</summary>
@@ -182,6 +191,7 @@ public sealed record ForkDto(
     double OpenedOnDay,
     bool IsOpen,
     bool? Carried,
+    string? Outcome,
     IReadOnlyList<CouncilSeatDto> Council)
 {
     /// <summary>How long a decided fork stays up, in colony days, so its outcome can be read.</summary>
@@ -205,6 +215,7 @@ public sealed record ForkDto(
             Math.Round(fork.OpenedOnDay, 2),
             fork.IsOpen,
             fork.Carried,
+            fork.Outcome,
             fork.Participants.Select(id =>
             {
                 fork.Votes.TryGetValue(id, out var vote);

@@ -20,6 +20,13 @@ export interface Colonist {
   name: string | null
   displayName: string
   lineage: string
+  isAlive: boolean
+  /** How long this body lasts, in colony days. */
+  lifespanDays: number
+  /** In the last stretch of their life, and slowing. */
+  isElder: boolean
+  /** Empty for a printed mind; the two who made them, for a born one. */
+  parents: PersonRef[]
   ageDays: number
   mood: string
   placeId: string
@@ -115,6 +122,8 @@ export interface ForkState {
   openedOnDay: number
   isOpen: boolean
   carried: boolean | null
+  /** What was decided, once it has been: "yes", "no", or a core's fate. */
+  outcome: string | null
   council: CouncilSeat[]
 }
 
