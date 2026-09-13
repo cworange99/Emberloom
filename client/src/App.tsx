@@ -4,6 +4,7 @@ import { RoomView } from './RoomView'
 import { ForkBanner } from './ForkBanner'
 import { PrintVerb } from './PrintVerb'
 import { PlaceVerbs } from './PlaceVerbs'
+import { ColonyLore } from './ColonyLore'
 import { ColonistDetailView, Roster, type InspectorFocus } from './ColonistPanel'
 import { useColony } from './useColony'
 
@@ -295,7 +296,10 @@ export default function App() {
               placeNames={placeNames}
             />
           ) : (
-            <Roster colonists={state.colonists} selectedId={selectedId} onSelect={openColonist} />
+            <>
+              <ColonyLore myth={state.myth} lexicon={state.lexicon} onSelect={openColonist} />
+              <Roster colonists={state.colonists} selectedId={selectedId} onSelect={openColonist} />
+            </>
           )}
         </aside>
       </div>

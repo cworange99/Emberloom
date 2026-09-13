@@ -7,7 +7,10 @@ public enum CallType
     IdleThought,
     Dialogue,
     Deliberation,
-    Coinage
+    Coinage,
+
+    /// <summary>The colony's story of its makers, told or retold. Colony-level, not any one mind's.</summary>
+    Myth
 }
 
 /// <summary>
@@ -48,7 +51,11 @@ public static class CallBudgets
 
         // Design said ~60. Measured exactly 60 with 2 of 3 truncating — a name plus a sentence
         // of rationale needs more room than it looks.
-        [CallType.Coinage] = 112
+        [CallType.Coinage] = 112,
+
+        // Not in M0. Three or four sentences of story (~110 tokens) and a short list of belief
+        // ids. Set with headroom per the rule above, and to be checked against live traces.
+        [CallType.Myth] = 320
     };
 
     public static int For(CallType call) => MaxTokens[call];

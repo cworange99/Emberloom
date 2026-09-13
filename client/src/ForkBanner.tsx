@@ -6,7 +6,12 @@ import type { ForkState } from './types'
  */
 export function ForkBanner({ fork, onSelect }: { fork: ForkState; onSelect: (id: string) => void }) {
   const spoken = fork.council.filter((seat) => seat.stance !== null).length
-  const count = (stance: 'for' | 'against') => fork.council.filter((seat) => seat.stance === stance).length
+  const count = (stance: 'for' | 'against' | 'abstain') =>
+    fork.council.filter((seat) => seat.stance === stance).length
+
+  // Fork.Needed on the server: a majority of the whole council. Abstaining keeps things as they
+  // are, so the bar is shown — "2 for, 0 against" reads as a yes unless you can see it needed 3.
+  const needed = Math.floor(fork.council.length / 2) + 1
 
   const kicker = fork.isOpen
     ? 'The colony is deciding'
@@ -18,7 +23,7 @@ export function ForkBanner({ fork, onSelect }: { fork: ForkState; onSelect: (id:
       <h3>{fork.question}</h3>
       <p className="fork-meta">
         {fork.isOpen ? `${spoken} of ${fork.council.length} have spoken` : fork.proposal} · {count('for')} for ·{' '}
-        {count('against')} against
+        {count('against')} against · {count('abstain')} abstained · needs {needed} of {fork.council.length}
       </p>
 
       <ol className="fork-council">

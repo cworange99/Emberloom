@@ -12,6 +12,7 @@ using Emberloom.Core.Simulation;
 using Emberloom.Core.World;
 using Emberloom.Core.Forks;
 using Emberloom.Core.Verbs;
+using Emberloom.Core.Culture;
 
 namespace Emberloom.Api;
 
@@ -174,6 +175,7 @@ public sealed class SimulationHost : BackgroundService
             _body = new BodySimulation(_colony, _random);
             AttachBody();
             _lastDialogue.Clear();
+            _lastMythAttempt = double.NegativeInfinity;
             _colony.Feed.Appended += OnEvent;
         }
 
@@ -269,13 +271,17 @@ public sealed class SimulationHost : BackgroundService
 
         var timer = new PeriodicTimer(TimeSpan.FromSeconds(2));
 
-        // The queue is a work buffer, not a firehose. Offering everything every tick would refuse
-        // hundreds of requests a minute and make the drop count meaningless — a drop should mean
-        // "something worth doing lost to something worth more", not "the scheduler shouted again".
-        const int TargetQueueDepth = 6;
-
         while (await timer.WaitForNextTickAsync(stoppingToken).ConfigureAwait(false))
         {
+            // The colony's story is rare and colony-wide, so it is offered whatever the depth; the
+            // governor places it by priority. Everything below waits for room.
+            if (!_mythInFlight
+                && Read((colony, _) => CultureRules.MythDue(colony)
+                                       && colony.Day - _lastMythAttempt >= CultureRules.DaysBetweenTellings / 2))
+            {
+                SubmitMyth();
+            }
+
             var room = TargetQueueDepth - _governor.Stats().QueueDepth;
             if (room <= 0)
             {
@@ -341,6 +347,100 @@ public sealed class SimulationHost : BackgroundService
         _body.ForkOpened += OnForkOpened;
         _body.ForkResolved += OnForkResolved;
         _body.ColonistBorn += OnBorn;
+        _body.Coinable += SubmitCoinage;
+    }
+
+    /// <summary>A word for something found, or for a practice. Droppable: a word can wait, or go unsaid.</summary>
+    private void SubmitCoinage(Occasion occasion)
+    {
+        if (_mind is null || _governor is null || _colony.Find(occasion.ColonistId) is not { } coiner)
+        {
+            return;
+        }
+
+        _governor.Submit(new MindRequest
+        {
+            Call = CallType.Coinage,
+            Priority = CallPriority.Coinage,
+            ColonistId = coiner.Id,
+            Work = async ct =>
+            {
+                var colony = Read((c, _) => c);
+                var started = Stopwatch.GetTimestamp();
+                var result = await _mind.CoinAsync(coiner, colony, occasion, ct).ConfigureAwait(false);
+
+                if (result.Call is not null)
+                {
+                    _deepCalls.Record(Stopwatch.GetElapsedTime(started));
+                }
+
+                Broadcast(Snapshot());
+
+                return new MindCallOutcome
+                {
+                    PromptTokens = result.Call?.PromptTokens ?? 0,
+                    CompletionTokens = result.Call?.CompletionTokens ?? 0,
+                    WasFallback = !result.FromModel
+                };
+            }
+        });
+    }
+
+    /// <summary>
+    /// How deep the scheduler keeps the queue. It is a work buffer, not a firehose: offering
+    /// everything every tick would refuse hundreds of requests a minute and make the drop count
+    /// meaningless — a drop should mean "something worth doing lost to something worth more", not
+    /// "the scheduler shouted again". Off-screen dialogue respects it too; see SubmitDialogue.
+    /// </summary>
+    private const int TargetQueueDepth = 6;
+
+    private volatile bool _mythInFlight;
+    private double _lastMythAttempt = double.NegativeInfinity;
+
+    /// <summary>
+    /// The colony's story of its makers, told or retold. One at a time, and not retried the moment
+    /// a telling fails — an unreachable mind would otherwise be asked again every two seconds.
+    /// </summary>
+    private void SubmitMyth()
+    {
+        _lastMythAttempt = Read((colony, _) => colony.Day);
+
+        var submitted = _governor!.Submit(new MindRequest
+        {
+            Call = CallType.Myth,
+            Priority = CallPriority.Reflection,
+            ColonistId = "colony",
+            Weight = 10,
+            Work = async ct =>
+            {
+                try
+                {
+                    var colony = Read((c, _) => c);
+                    var started = Stopwatch.GetTimestamp();
+                    var result = await _mind!.TellMythAsync(colony, ct).ConfigureAwait(false);
+
+                    if (result.Call is not null)
+                    {
+                        _deepCalls.Record(Stopwatch.GetElapsedTime(started));
+                    }
+
+                    Broadcast(Snapshot());
+
+                    return new MindCallOutcome
+                    {
+                        PromptTokens = result.Call?.PromptTokens ?? 0,
+                        CompletionTokens = result.Call?.CompletionTokens ?? 0,
+                        WasFallback = !result.FromModel
+                    };
+                }
+                finally
+                {
+                    _mythInFlight = false;
+                }
+            }
+        });
+
+        _mythInFlight = submitted;
     }
 
     /// <summary>
@@ -624,6 +724,16 @@ public sealed class SimulationHost : BackgroundService
                           || view.ColonistId == listener.Id
                           || view.PlaceId == place.Id);
 
+        // Off-screen talk only gets words while the mind has room. Live at M7 on the laptop,
+        // every conversation queued a call the moment it began, holding the queue at 31 of 32 for
+        // a whole run: the scheduler never found room to offer a single reflection, nobody formed
+        // a belief, and the myth was never told. Unwatched, a conversation still happens — the
+        // ledger moves and both remember it — it just goes unworded, as it did before M5.
+        if (!watched && _governor.Stats().QueueDepth >= TargetQueueDepth)
+        {
+            return;
+        }
+
         var submitted = _governor.Submit(new MindRequest
         {
             Call = CallType.Dialogue,
@@ -730,7 +840,12 @@ public sealed class SimulationHost : BackgroundService
         GovernorSnapshot(),
         colony.Living.Select(c => ColonistDto.From(c, colony)).ToList(),
         colony.Map.Places.Select(p => PlaceStateDto.From(p, colony)).ToList(),
-        ForkDto.From(colony)));
+        ForkDto.From(colony),
+        MythDto.From(colony),
+        colony.Lexicon
+            .TakeLast(12)
+            .Select(w => new CoinedWordDto(w.Term, w.Meaning, colony.Find(w.CoinedById)?.DisplayName ?? w.CoinedById, w.CoinedById, Math.Round(w.Day, 1)))
+            .ToList()));
 
     public GovernorDto? GovernorSnapshot()
     {

@@ -1,4 +1,5 @@
 using Emberloom.Core.Colonists;
+using Emberloom.Core.Culture;
 using Emberloom.Core.Events;
 using Emberloom.Core.Forks;
 using Emberloom.Core.Memory;
@@ -560,6 +561,132 @@ public sealed class MindService : IDisposable
             {
                 heard.Words = $"{colonist.DisplayName} answered: {result.Line}";
             }
+        });
+
+        return result;
+    }
+
+    /// <summary>
+    /// A word for something found, or for something the colony keeps doing. It goes into every
+    /// prompt from then on. A word the colony already has is not coined twice.
+    /// </summary>
+    public async Task<CoinageResult> CoinAsync(
+        Colonist colonist,
+        Colony colony,
+        Occasion occasion,
+        CancellationToken ct = default)
+    {
+        CoinageResult result;
+
+        try
+        {
+            result = await CoinageCall.ExecuteAsync(_client, colonist, colony, occasion, ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            result = CoinageCall.Fallback();
+        }
+
+        Commit(() =>
+        {
+            var callId = colonist.NextCallId();
+            colonist.RecordCall(Record(
+                callId, "Coinage", "deep", colony, result.Call,
+                result.Term is null ? "no word stuck" : $"coined “{result.Term}” — {result.Meaning}",
+                wasFallback: !result.FromModel));
+
+            if (result.Term is null
+                || colony.Lexicon.Any(w => string.Equals(w.Term, result.Term, StringComparison.OrdinalIgnoreCase)))
+            {
+                return;
+            }
+
+            colony.Lexicon.Add(new CoinedWord
+            {
+                Term = result.Term,
+                Meaning = result.Meaning,
+                CoinedById = colonist.Id,
+                Day = colony.Day,
+                Occasion = occasion.Kind,
+                CallId = callId
+            });
+
+            colony.Log(EventLayer.Mind, $"{colonist.DisplayName} has a word for it now: “{result.Term}”. {result.Meaning}",
+                colonist, placeId: occasion.PlaceId, notable: true);
+        });
+
+        return result;
+    }
+
+    /// <summary>
+    /// Tells, or retells, the colony's story of its makers. The prompt is built under the lock —
+    /// it reads the whole colony — and the telling is written back under it. Beliefs that go
+    /// against the story are flagged, and a belief that no longer does is cleared.
+    /// </summary>
+    public async Task<MythResult> TellMythAsync(Colony colony, CancellationToken ct = default)
+    {
+        var prompt = string.Empty;
+        var evidence = 0;
+
+        Commit(() =>
+        {
+            prompt = MythCall.BuildPrompt(colony);
+            evidence = CultureRules.Evidence(colony);
+        });
+
+        MythResult result;
+
+        try
+        {
+            result = await MythCall.ExecuteAsync(_client, prompt, ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            result = MythCall.Fallback();
+        }
+
+        Commit(() =>
+        {
+            if (!result.FromModel || result.Story is null)
+            {
+                return;
+            }
+
+            var held = colony.Living.SelectMany(c => c.Memory.Beliefs).ToList();
+            var known = held.Select(b => b.Id).ToHashSet();
+            var contradicted = result.ContradictedBy.Where(known.Contains).Distinct().ToList();
+
+            foreach (var belief in held)
+            {
+                belief.ContradictsColonyMyth = contradicted.Contains(belief.Id);
+            }
+
+            var version = colony.MythHistory.Count + 1;
+            colony.MythHistory.Add(new MythTelling
+            {
+                Version = version,
+                Story = result.Story,
+                ToldOnDay = colony.Day,
+                Evidence = evidence,
+                ContradictedBeliefIds = contradicted,
+                Model = result.Call?.Model,
+                Prompt = result.Call?.RequestPrompt,
+                Response = result.Call?.Text
+            });
+
+            colony.Log(EventLayer.Mind,
+                version == 1
+                    ? $"The colony has begun to tell a story about the makers: “{result.Story}”"
+                    : $"The story of the makers, as it is told now: “{result.Story}”",
+                notable: true);
         });
 
         return result;

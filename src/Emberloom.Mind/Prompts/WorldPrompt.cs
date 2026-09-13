@@ -1,5 +1,6 @@
 using System.Text;
 using Emberloom.Core.Colonists;
+using Emberloom.Core.Culture;
 using Emberloom.Core.Drives;
 using Emberloom.Core.Relationships;
 
@@ -37,6 +38,40 @@ public static class WorldPrompt
         could plausibly know. The makers are unknowable; no colonist has ever been told the answer.
         Write plainly. No stage directions, no headings, no lists unless asked for one.
         """;
+
+    /// <summary>
+    /// What the whole colony shares: the story it tells about its makers, and the words it has
+    /// coined. The same for every colonist and changing only at a retelling or a new word, so it
+    /// sits straight after the world rules, where the cache covers it across the whole colony.
+    /// Kept here and sent in full each time — the server is never asked to remember the story.
+    /// </summary>
+    public static string ColonyCulture(Colony colony)
+    {
+        var builder = new StringBuilder();
+
+        if (colony.Myth is { } myth)
+        {
+            builder.AppendLine("[What the colony tells itself about the makers]");
+            builder.AppendLine(myth.Story);
+        }
+
+        var words = colony.Lexicon.TakeLast(CultureRules.LexiconInPrompts).ToList();
+        if (words.Count > 0)
+        {
+            if (builder.Length > 0)
+            {
+                builder.AppendLine();
+            }
+
+            builder.AppendLine("[The colony's own words — use them as they are]");
+            foreach (var word in words)
+            {
+                builder.AppendLine($"- {word.Term}: {word.Meaning}");
+            }
+        }
+
+        return builder.ToString().TrimEnd();
+    }
 
     /// <summary>
     /// A colonist's identity and personality — stable for their whole life apart from slow weight
@@ -173,6 +208,14 @@ public static class WorldPrompt
     {
         var builder = new StringBuilder();
         builder.AppendLine(WorldRules);
+
+        var culture = ColonyCulture(colony);
+        if (culture.Length > 0)
+        {
+            builder.AppendLine();
+            builder.AppendLine(culture);
+        }
+
         builder.AppendLine();
         builder.AppendLine(Colonist(colonist, colony.Day));
 

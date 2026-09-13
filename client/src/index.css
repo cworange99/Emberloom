@@ -1649,3 +1649,64 @@ button {
 .place-verbs i {
   color: var(--muted);
 }
+
+/* ---------- the colony's lore (M7) ----------
+   Above the roster: the story the colony tells about its makers, and its own words. Brass,
+   because both are written by the mind. */
+
+.lore {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--mind-wash);
+}
+
+.lore h3 {
+  margin: 0 0 6px;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--mind-layer);
+}
+
+.lore h3 + .lore-words,
+.lore-myth + h3,
+.lore .row-meta + h3 {
+  margin-top: 10px;
+}
+
+.lore-myth {
+  margin: 0;
+  font-family: var(--body);
+  font-size: 13.5px;
+  font-style: italic;
+  line-height: 1.45;
+  color: var(--ink);
+}
+
+.lore-words {
+  margin: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.lore-words dt {
+  display: inline;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.lore-words dt::after {
+  content: ' ';
+}
+
+.lore-words dd {
+  display: inline;
+  margin: 0;
+  font-family: var(--body);
+  font-size: 12px;
+  color: var(--ink-soft);
+}

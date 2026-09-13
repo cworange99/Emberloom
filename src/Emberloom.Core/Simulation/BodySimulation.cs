@@ -1,5 +1,6 @@
 using Emberloom.Core.Actions;
 using Emberloom.Core.Colonists;
+using Emberloom.Core.Culture;
 using Emberloom.Core.Drives;
 using Emberloom.Core.Events;
 using Emberloom.Core.Forks;
@@ -63,6 +64,51 @@ public sealed class BodySimulation
     public event Action<Colonist, Colonist, Colonist>? ColonistBorn;
 
     public event Action<Colonist>? ColonistDied;
+
+    /// <summary>Something the colony might coin a word for. The host asks a mind for the word.</summary>
+    public event Action<Occasion>? Coinable;
+
+    // ---- culture (M7) -----------------------------------------------------------------------
+
+    /// <summary>A name, the first time they do something they consider worth being named for.</summary>
+    private void EarnAName(Colonist colonist, string deed)
+    {
+        var designation = colonist.DisplayName;
+        if (CultureRules.TakeAName(_colony, colonist) is not { } name)
+        {
+            return;
+        }
+
+        _colony.Log(EventLayer.Body, $"{designation} took the name {name}, after {deed}.", colonist, notable: true);
+        Record(colonist, "took the name", $"{name}, after {deed}", colonist.PlaceId, valence: 0.8, intensity: 0.95);
+    }
+
+    /// <summary>
+    /// Once a day: whether anything has been done so often it has become a practice. One a day at
+    /// most, and each practice once — the colony names a ritual, it does not rename it.
+    /// </summary>
+    private void NoticeRituals()
+    {
+        foreach (var colonist in _colony.Living)
+        {
+            foreach (var memory in colonist.Memory.Episodic)
+            {
+                if (memory.Repeats + 1 < CultureRules.RitualRepeats
+                    || memory.Object is null
+                    || memory.Verb.StartsWith("heard", StringComparison.Ordinal)
+                    || memory.Verb == LifeRules.DreamVerb)
+                {
+                    continue;
+                }
+
+                if (_colony.CoinedOccasions.Add($"ritual:{memory.Verb} {memory.Object}"))
+                {
+                    Coinable?.Invoke(new Occasion(OccasionKind.Ritual, colonist.Id, $"{memory.Verb} {memory.Object}", memory.PlaceId));
+                    return;
+                }
+            }
+        }
+    }
 
     public void Tick()
     {
@@ -311,6 +357,7 @@ public sealed class BodySimulation
             _colony.Log(EventLayer.Body, $"{colonist.DisplayName} reached {step.Name} for the first time.",
                 colonist, step.Id, notable: true);
             Record(colonist, "first reached", step.Name, step.Id, valence: 0.55, intensity: 0.7);
+            EarnAName(colonist, $"being the first to reach {step.Name}");
         }
     }
 
@@ -357,6 +404,7 @@ public sealed class BodySimulation
                         $"{colonist.DisplayName} broke through into {place.Name}.",
                         colonist, place.Id, notable: true);
                     Record(colonist, "opened the way into", place.Name, place.Id, 0.85, 0.95);
+                    EarnAName(colonist, $"opening the way into {place.Name}");
                     ForkRules.HoldTheWayUp(_colony, place);
                 }
 
@@ -465,6 +513,10 @@ public sealed class BodySimulation
             colonist, place.Id, notable: true);
 
         Record(colonist, "recovered an artifact at", place.Name, place.Id, valence: 0.75, intensity: 0.9);
+        EarnAName(colonist, $"finding something of the makers' at {place.Name}");
+
+        // Nobody knows what it is, so somebody has to call it something.
+        Coinable?.Invoke(new Occasion(OccasionKind.Artifact, colonist.Id, place.Name, place.Id));
     }
 
     private void RecordConversation(Colonist colonist, string partnerId, Place place)
@@ -604,10 +656,14 @@ public sealed class BodySimulation
                 break;
         }
 
-        var votes = fork.Votes.Values.ToList();
+        // Abstentions and the bar are spelled out: "2 for, 0 against" read as a bug when it came out
+        // "no", because the three who abstained — and the three it needed — were not on the line.
+        var need = fork.Kind == ForkKind.Core
+            ? $"a fate needed {fork.Needed} of {fork.Participants.Count}"
+            : $"it needed {fork.Needed} of {fork.Participants.Count} for";
         _colony.Log(EventLayer.World,
-            $"Decided: {outcome}, to “{fork.Question}” — " +
-            $"{votes.Count(v => v.Stance == Stance.For)} for, {votes.Count(v => v.Stance == Stance.Against)} against.",
+            $"Decided: {outcome}, to “{fork.Question}” — {fork.Count(Stance.For)} for, " +
+            $"{fork.Count(Stance.Against)} against, {fork.Count(Stance.Abstain)} abstained; {need}.",
             placeId: fork.PlaceId, notable: true);
 
         RememberTheFork(fork);
@@ -640,6 +696,7 @@ public sealed class BodySimulation
         {
             case CoreFate.Read:
                 var held = LifeRules.WhatACoreHolds(dead, _colony.Day);
+                core.Heard = held;
                 foreach (var listener in _colony.Living.ToList())
                 {
                     foreach (var line in held)
@@ -722,6 +779,7 @@ public sealed class BodySimulation
 
         ConsiderPairings();
         KeepUndecidedCores();
+        NoticeRituals();
         LogDailySummary();
     }
 

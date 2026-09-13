@@ -163,4 +163,7 @@ public sealed class MindCore
     public CoreFate Fate { get; set; } = CoreFate.Waiting;
 
     public double? DecidedOnDay { get; set; }
+
+    /// <summary>What the colony heard when it was read. Part of what its story of the makers draws on.</summary>
+    public IReadOnlyList<string> Heard { get; set; } = [];
 }

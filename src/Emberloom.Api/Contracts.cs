@@ -177,7 +177,20 @@ public sealed record ColonyStateDto(
     GovernorDto? Governor,
     IReadOnlyList<ColonistDto> Colonists,
     IReadOnlyList<PlaceStateDto> Places,
-    ForkDto? Fork);
+    ForkDto? Fork,
+    MythDto? Myth,
+    IReadOnlyList<CoinedWordDto> Lexicon);
+
+/// <summary>The colony's story of its makers, as it is told now.</summary>
+public sealed record MythDto(string Story, int Version, double ToldOnDay, int Contradicted)
+{
+    public static MythDto? From(Colony colony) => colony.Myth is { } myth
+        ? new MythDto(myth.Story, myth.Version, Math.Round(myth.ToldOnDay, 1), myth.ContradictedBeliefIds.Count)
+        : null;
+}
+
+/// <summary>One of the colony's own words, and who coined it.</summary>
+public sealed record CoinedWordDto(string Term, string Meaning, string CoinedBy, string CoinedById, double Day);
 
 /// <summary>
 /// The fork the colony is deciding, or the one it has just decided — shown as a banner over the

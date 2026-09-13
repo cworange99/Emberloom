@@ -274,6 +274,36 @@ Expose the governor itself as a live readout: queue depth, tokens/min, calls dro
 | Belief | 5–20 | Mind, at reflection | A durable claim about the world, **with links back to the memories that produced it**. |
 | Myth | 1–5 per colony | Mind, at coinage | Colony-level, inherited by everyone, mutated slightly at every retelling. |
 
+**As built at M7, phase B.**
+
+- **Names.** A colonist takes the first of Kindling's name candidates that nobody living goes
+  by, the first time they find something of the makers', open a way in, or reach somewhere first.
+  This is body only. A mind never written has no candidates and keeps its designation.
+- **Coinage.**
+  - One Coinage call names something just found, or a practice done for the eighth time.
+  - The word joins the colony's lexicon and goes into every prompt afterwards, to be reused
+    verbatim, the ten newest at a time.
+  - A word the colony already has is not coined twice. A sentence where the word should be is
+    refused.
+- **Myth.**
+  - It is colony-level: its system prompt is the world alone. It is built from what the colony
+    has to go on:
+    - artifacts found
+    - fragments revealed
+    - what was read from its dead
+    - the forks it has decided
+  - It also sees the beliefs its colonists hold that bear on the makers.
+  - It is first told once there are three such things. It is retold after three more, and no
+    sooner than three days apart. Each retelling carries the last telling in its own prompt and
+    is asked to drift, not start over.
+  - It names the beliefs that go against it, which lights the inspector's "contradicts the colony
+    myth" flag.
+  - The story sits straight after the world rules in every prompt, where the cache covers it
+    across the whole colony.
+- **The golden rule holds.** The story and the lexicon are kept on this machine and sent in full
+  each time. The server is never told there was an earlier telling; the earlier telling is simply
+  in the prompt.
+
 **The traceable belief** is the feature to build carefully, because it's the one people screenshot.
 A belief is never a free-floating string — it carries the ids of the episodic memories that produced
 it, so the inspector can walk the chain back to the tick where the real thing happened. Nothing in

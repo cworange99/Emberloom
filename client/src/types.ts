@@ -101,6 +101,27 @@ export interface ColonyState {
   places: PlaceState[]
   /** The fork the colony is deciding, or the one it has just decided. */
   fork: ForkState | null
+  /** The story the colony tells about its makers, once it has one. */
+  myth: MythState | null
+  /** The colony's own words, newest last. */
+  lexicon: CoinedWord[]
+}
+
+export interface MythState {
+  story: string
+  /** How many times it has been told. */
+  version: number
+  toldOnDay: number
+  /** Beliefs held in the colony that go against it. */
+  contradicted: number
+}
+
+export interface CoinedWord {
+  term: string
+  meaning: string
+  coinedBy: string
+  coinedById: string
+  day: number
 }
 
 /** One seat on a council. Stance, line and conviction arrive once that member has spoken. */

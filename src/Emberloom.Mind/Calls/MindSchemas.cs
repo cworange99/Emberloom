@@ -94,6 +94,18 @@ public static class MindSchemas
         },
         required: ["name", "rationale"]);
 
+    /// <summary>
+    /// Myth — the story the colony tells about its makers, and which of the beliefs it was shown
+    /// go against it. Those are the colonists who are right and outnumbered, or wrong and alone.
+    /// </summary>
+    public static JsonNode Myth() => Object(
+        properties: new JsonObject
+        {
+            ["story"] = String("The story as the colony tells it aloud. Three or four sentences."),
+            ["contradicted_by"] = Array(String())
+        },
+        required: ["story", "contradicted_by"]);
+
     // ---- builders ---------------------------------------------------------
 
     /// <summary>The seven personality weights, as multipliers on baseline drive urgency.</summary>

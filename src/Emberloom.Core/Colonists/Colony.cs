@@ -1,3 +1,4 @@
+using Emberloom.Core.Culture;
 using Emberloom.Core.Events;
 using Emberloom.Core.Forks;
 using Emberloom.Core.Life;
@@ -97,6 +98,18 @@ public sealed class Colony
 
     /// <summary>Every dead mind's core, and what the colony decided to do with it.</summary>
     public List<MindCore> Cores { get; } = [];
+
+    /// <summary>The colony's own words, oldest first. Each one goes into prompts verbatim.</summary>
+    public List<CoinedWord> Lexicon { get; } = [];
+
+    /// <summary>Every telling of the story the colony tells about its makers, oldest first.</summary>
+    public List<MythTelling> MythHistory { get; } = [];
+
+    /// <summary>The story as it is told now, if the colony has one yet.</summary>
+    public MythTelling? Myth => MythHistory.Count == 0 ? null : MythHistory[^1];
+
+    /// <summary>Occasions already offered for a word, so the same practice is not named twice.</summary>
+    public HashSet<string> CoinedOccasions { get; } = [];
 
     public IReadOnlyList<Colonist> Colonists => _colonists;
 
