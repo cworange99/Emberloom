@@ -24,8 +24,14 @@ public enum GameSpeed
 /// </summary>
 public sealed class SimulationClock
 {
-    /// <summary>Ticks per real second at 1×. A colony-day is two real minutes at normal speed.</summary>
-    public const double TicksPerRealSecondAt1X = 2.0;
+    /// <summary>
+    /// Ticks per real second at 1×: a colony-day is one real hour at normal speed. Decided 13
+    /// September 2026, after the M7 overnight run. It was two real minutes, which made a 40-day
+    /// life shorter than an hour — too quick for anyone to come to know the people in it. At 1×
+    /// the colony now keeps the pace of lives you can follow; the faster speeds are for the
+    /// experiment, and cost thought per colony-day accordingly.
+    /// </summary>
+    public const double TicksPerRealSecondAt1X = Colony.TicksPerDay / 3600.0;
 
     private double _accumulator;
 

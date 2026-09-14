@@ -184,10 +184,13 @@ public static class ForkRules
     /// </summary>
     public const double TimeoutDays = 3.0;
 
-    /// <summary>A question the colony said no to comes back, but not the next morning.</summary>
-    public const double PrintAskAgainDays = 6.0;
+    /// <summary>
+    /// A question the colony said no to comes back, but not the next morning: about five real days
+    /// at 1×. It was 6 colony days while a day was two minutes — a "no" that held for twelve.
+    /// </summary>
+    public const double PrintAskAgainDays = 120;
 
-    public const double AscendAskAgainDays = 8.0;
+    public const double AscendAskAgainDays = 160;
 
     /// <summary>
     /// The fork the colony should face now, if any. Only one at a time; a way up, when there is one,

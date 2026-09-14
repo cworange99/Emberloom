@@ -57,7 +57,8 @@ public class ProvisionTests
     public void WhenTheLoomRunsDryTheNewestGoesOutFirst()
     {
         var (colony, body) = Start();
-        colony.LoomCharge = 2;
+        // Enough for half a day of both, so it runs dry inside the loop.
+        colony.LoomCharge = ProvisionRules.LightPerDay;
         colony.LoomChargePerDay = 0;
         PlayerVerbs.Provide(colony, body, ProvideKind.Light, "substation");
         PlayerVerbs.Provide(colony, body, ProvideKind.Warmth, "shelter-under");
@@ -160,7 +161,7 @@ public class ProvisionTests
         var result = PlayerVerbs.Reveal(colony, body, shown, "charge-lines");
 
         Assert.True(result.Ok);
-        Assert.Equal(rate + 0.8, colony.LoomChargePerDay, precision: 6);
+        Assert.Equal(rate + Revelations.ChargeLinesBoost, colony.LoomChargePerDay, precision: 6);
         Assert.Equal(shown.Id, colony.Revealed["charge-lines"]);
 
         var memory = shown.Memory.FindEpisodic(result.Memory!.Id)!;
@@ -169,7 +170,7 @@ public class ProvisionTests
 
         // Irreversible, and once: nobody else can be shown it again.
         Assert.False(PlayerVerbs.Reveal(colony, body, colony.Colonists[1], "charge-lines").Ok);
-        Assert.Equal(rate + 0.8, colony.LoomChargePerDay, precision: 6);
+        Assert.Equal(rate + Revelations.ChargeLinesBoost, colony.LoomChargePerDay, precision: 6);
     }
 
     [Fact]

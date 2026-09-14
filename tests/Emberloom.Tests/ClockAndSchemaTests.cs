@@ -141,9 +141,12 @@ public class ClockTests
         var clock = new SimulationClock();
         clock.SetSpeed(GameSpeed.Normal);
 
-        // 2 ticks per real second at 1x, so ten 100ms frames is 2 ticks, not 0.
+        // A colony-day is an hour at 1x, so a tick is fifteen real seconds and no single 100 ms
+        // frame is worth one. Thirty seconds of frames must still add up to two ticks, not 0.
+        // One frame over, so floating-point summing cannot land at 1.9999 and floor to one tick.
+        var frames = (int)Math.Ceiling(2 / SimulationClock.TicksPerRealSecondAt1X * 10) + 1;
         var total = 0;
-        for (var i = 0; i < 10; i++)
+        for (var i = 0; i < frames; i++)
         {
             total += clock.TicksFor(TimeSpan.FromMilliseconds(100));
         }

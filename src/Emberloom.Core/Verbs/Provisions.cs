@@ -20,13 +20,13 @@ public sealed record Provision(ProvisionKind Kind, string PlaceId, double CostPe
 public static class ProvisionRules
 {
     /// <summary>
-    /// A day's light, or a day's warmth. Against a trickle of 3.2 a day, two of them leave barely
-    /// enough to print again — which is the point: Provide and Print draw on the same charge, and
-    /// every lamp kept burning is a mind not printed.
+    /// A day's light, or a day's warmth: a third of the Loom's trickle each, so two of them leave
+    /// barely enough to print again — which is the point: Provide and Print draw on the same
+    /// charge, and every lamp kept burning is a mind not printed. Scaled with the trickle.
     /// </summary>
-    public const double LightPerDay = 1.0;
+    public const double LightPerDay = 1.0 * 40 / Life.LifeRules.BaseLifespanDays;
 
-    public const double WarmthPerDay = 1.0;
+    public const double WarmthPerDay = 1.0 * 40 / Life.LifeRules.BaseLifespanDays;
 
     /// <summary>A door that will not open, opened. Paid once, and dear.</summary>
     public const double DoorCost = 15;

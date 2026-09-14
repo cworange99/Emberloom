@@ -11,12 +11,16 @@ namespace Emberloom.Core.Life;
 public static class LifeRules
 {
     /// <summary>
-    /// A life, in colony days. A starting figure, not a measured one: at 3x a 40-day life is about
-    /// 27 real minutes, at 10x about 8. The overnight run at the end of M7 is what should set it —
-    /// long enough that a mind reflects its way to beliefs worth passing on, short enough that a
-    /// night sees several generations.
+    /// A life, in colony days: about three real months at 1×, where a colony-day is an hour — long
+    /// enough for someone to come to know the people in it (decided 13 September 2026). At the
+    /// Overnight speed a life is about nine hours. It was 40 days while a day was two minutes, and
+    /// the overnight run showed that far too quick to love anyone in.
+    /// <para>
+    /// Everything else about a life below is kept as the same share of it that the headless sim
+    /// showed holds a colony steady at 8 to 16: stretch the life, and those stretch with it.
+    /// </para>
     /// </summary>
-    public const double BaseLifespanDays = 40;
+    public const double BaseLifespanDays = 2160;
 
     /// <summary>Lives vary by this much either way, so a generation does not die in one afternoon.</summary>
     public const double LifespanSpread = 0.2;
@@ -28,13 +32,13 @@ public static class LifeRules
     public const double ElderWearPerDay = 0.4;
 
     /// <summary>
-    /// Nobody pairs in their first days — they have to have become someone first. Measured with
-    /// the headless sim: at 6 days a colony reached 8 generations in 120 days, a new one every
-    /// fortnight, faster than anyone could reflect their way to a belief worth inheriting.
+    /// Nobody pairs until they have become someone: 30% of a life. Measured with the headless sim
+    /// while a life was 40 days — at 15% a colony reached 8 generations in 3 lives, faster than
+    /// anyone could reflect their way to a belief worth inheriting; at 30% it held steady.
     /// </summary>
-    public const double MaturityDays = 12;
+    public const double MaturityDays = BaseLifespanDays * 0.3;
 
-    public const double PairCooldownDays = 12;
+    public const double PairCooldownDays = BaseLifespanDays * 0.3;
 
     /// <summary>
     /// How long a core waits for the colony before it is kept, unread, by default. Deaths can come
@@ -43,8 +47,11 @@ public static class LifeRules
     /// </summary>
     public const double UndecidedCoreDays = 6;
 
-    /// <summary>A bonded pair's chance, each day, of a successor. Pairing is cheap, not constant.</summary>
-    public const double PairChancePerDay = 0.35;
+    /// <summary>
+    /// A bonded pair's chance, each day, of a successor. Pairing is cheap, not constant: a pair
+    /// that can waits about 7% of a life on average, as it did at 0.35 a day in a 40-day life.
+    /// </summary>
+    public const double PairChancePerDay = 0.35 * 40 / BaseLifespanDays;
 
     /// <summary>The city has room, but not endless room — and every mind costs the governor.</summary>
     public const int PopulationCap = 20;

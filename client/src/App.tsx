@@ -152,7 +152,7 @@ export default function App() {
             <dt>Charge</dt>
             <dd title="The Loom's charge, and what your light and warmth cost it each day">
               {state.loomCharge.toFixed(0)}
-              {state.upkeepPerDay > 0 && <span className="of">−{state.upkeepPerDay.toFixed(0)}/d</span>}
+              {state.upkeepPerDay > 0 && <span className="of">−{state.upkeepPerDay.toFixed(2)}/d</span>}
             </dd>
           </div>
           <div className="readout">

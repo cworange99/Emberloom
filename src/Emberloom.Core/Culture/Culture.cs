@@ -75,7 +75,11 @@ public static class CultureRules
     /// <summary>A retelling waits for this much more to go on, and at least a few days.</summary>
     public const int RetellAfterEvidence = 3;
 
-    public const double DaysBetweenTellings = 3;
+    /// <summary>
+    /// The overnight run retold the story every three or four colony days — 158 tellings, most
+    /// of them word for word. With lives in months, a telling a month is plenty.
+    /// </summary>
+    public const double DaysBetweenTellings = 30;
 
     /// <summary>How many of the colony's newest words go into a prompt. The rest are still theirs.</summary>
     public const int LexiconInPrompts = 10;

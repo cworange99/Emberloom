@@ -335,9 +335,15 @@ archive it, or destroy it. That decision is a Deliberation.
 **As built at M7, phase A.** All of this is body. A colony with no mind still has generations, and
 the headless sim shows them: 12 in 240 colony days, with the population holding between 8 and 14.
 
-- **Lifespans.** A life is 40 colony days, give or take a fifth. For its last 15% the colonist
-  slows and rests more.
-  - That figure is a placeholder. The overnight run should set it.
+- **Lifespans.** A life is 2,160 colony days, give or take a fifth: about three real months at
+  1×, where a colony-day is an hour. For its last 15% the colonist slows and rests more.
+  - It started as 40 days while a day was two real minutes, which made a life shorter than an
+    hour. After the overnight run, Jeremy slowed the day to an hour and set a life to months, so
+    that someone could come to know and love the people in it (13 September 2026). The faster
+    speeds are for the experiment.
+  - Everything else about a life is kept as the same share of it that the sim showed holds a
+    colony steady: maturity and the pairing cooldown at 30% of a life, the Loom's trickle at
+    about five prints' worth per life, light and warmth at a third of that trickle each.
   - A printed mind's lifespan comes from its designation, not the colony's random stream, so
     adding lives did not reshuffle existing colonies.
 - **Death.** Whoever was close has lost someone; everyone else has heard.
@@ -350,12 +356,12 @@ the headless sim shows them: 12 in 240 colony days, with the population holding 
   - A core nobody gets to within six days is kept, unread. Otherwise, with cores outranking
     prints, a backlog of cores held every Print fork off in the sim.
 - **Pairing.**
-  - A pair must be bonded both ways, both 12 days old or more, not slowing, and not already
+  - A pair must be bonded both ways, both past 30% of a life, not slowing, and not already
     family.
-  - Each such pair has a 35% chance of a child each day. There is at most one birth a day and a
-    cap of 20 colonists.
-  - A maturity of 6 days produced a generation every fortnight, faster than anyone could reflect
-    their way to a belief worth inheriting.
+  - Each such pair waits on average about 7% of a life for a child. There is at most one birth a
+    day and a cap of 20 colonists.
+  - A maturity of 15% of a life produced a generation every fortnight of a 40-day life, faster
+    than anyone could reflect their way to a belief worth inheriting.
 - **Inheritance.**
   - A child's weights are its parents', crossed, and Kindling writes a personality around them
     without overwriting them.
@@ -532,7 +538,7 @@ watchable — on its own.
 |---|---|
 | **Client** | React + TypeScript over a headless .NET 8 sim behind HTTP/WebSocket. A Unity client stays possible later at no architectural cost. |
 | **Agency** | Influence only. Five verbs, no orders. The job queue is designed so direct assignment could be enabled behind a setting later. |
-| **Time** | Fully player-controlled, with the thinking budget as the natural cost of speed, and forks protected from being skipped. |
+| **Time** | Fully player-controlled, with the thinking budget as the natural cost of speed, and forks protected from being skipped. At 1× a colony-day is one real hour and a life about three real months, decided 13 September 2026: lives someone can come to know. The faster speeds are for the experiment. |
 | **Setting** | The Loom in a reclaimed city. Printed minds kept as the mechanic. |
 | **Hardware** | RTX 5070 is the target. The laptop is a development floor, and plays through hosted inference rather than its own mind — decided 10 September 2026 at M4, on the measurements in §2. |
 | **Presentation** | **Low-poly 3D in Three.js**, decided 9 September 2026 after a 2D tile spike was built and rejected. Kenney CC0 kits now, custom art later if the game earns it. Two views — city and cutaway room — with click-through between them. §11 has the reasoning. |
@@ -543,7 +549,12 @@ watchable — on its own.
 - **Decided at M0 — which models, and what the real budget is.** Every throughput figure in this
   document is an estimate for the hardware class rather than a measurement.
 - **Decided at M7 — whether this is a product.** Judgeable only after a long unattended run produces
-  a myth worth reading.
+  a myth worth reading. *Judged 13 September 2026:* the overnight run went on for 648 colony days,
+  about sixteen generations, and retold its story 158 times. Jeremy found the myth compelling
+  enough to go on with, though vague. The retellings drifted early, then settled into near word
+  for word; the colony's beliefs converged on the myth's own words ("masonry", "the drift", "the
+  gray"). Marketability is left for later. The game was begun as an experiment in an AI
+  civilisation and how it evolves, which is why simulation mode needs no interference at all.
 - **Worth checking early — the name.** *What They Left Running* is worth a trademark and storefront
   search before it hardens into filenames.
 

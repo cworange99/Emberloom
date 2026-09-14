@@ -223,7 +223,15 @@ public sealed class BodySimulation
     /// memories arriving in the child as dreams it half-believes and cannot source. This is how a
     /// grudge outlives the person who formed it.
     /// </summary>
-    private void Bear(Colonist left, Colonist right)
+    /// <summary>
+    /// A successor for two colonists, if they can pair — without the daily chance, which is
+    /// ConsiderPairings'. With lives in months that chance is small, and a test that waited on the
+    /// dice would wait hundreds of colony days.
+    /// </summary>
+    public Colonist? TryPair(Colonist left, Colonist right) =>
+        LifeRules.CanPair(_colony, left, right) ? Bear(left, right) : null;
+
+    private Colonist Bear(Colonist left, Colonist right)
     {
         var child = ColonyFactory.Pair(_colony, left, right, _random);
         left.LastPairedOnDay = right.LastPairedOnDay = _colony.Day;
@@ -247,6 +255,7 @@ public sealed class BodySimulation
         Record(right, "had a child with", left.DisplayName, right.PlaceId, valence: 0.8, intensity: 0.95, with: left.Id);
 
         ColonistBorn?.Invoke(child, left, right);
+        return child;
     }
 
     private void AdvanceWorld()

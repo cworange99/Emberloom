@@ -26,6 +26,9 @@ public sealed record Revelation(
 /// </summary>
 public static class Revelations
 {
+    /// <summary>What knowing where the charge comes from adds to the Loom's trickle: a quarter again.</summary>
+    public const double ChargeLinesBoost = 0.8 * 40 / Life.LifeRules.BaseLifespanDays;
+
     public static readonly IReadOnlyList<Revelation> All =
     [
         new("ledger", "a page of the Loom's ledger",
@@ -37,7 +40,7 @@ public static class Revelations
             "Behind the Loom Floor, its cables run down into the ground, not up to the light. Something under the city feeds it.",
             Valence: 0.3,
             Unlocks: "The Loom gathers charge faster, now that someone knows what it drinks from.",
-            Apply: colony => colony.LoomChargePerDay += 0.8),
+            Apply: colony => colony.LoomChargePerDay += ChargeLinesBoost),
 
         new("stair-seal", "how the stairwell was sealed",
             "The East Stairwell was sealed from above, not below, with tools none of them have, by someone who meant it to stay shut.",

@@ -48,7 +48,12 @@ public sealed class Colony
     /// </summary>
     public double LoomCharge { get; set; } = 40;
 
-    public double LoomChargePerDay { get; set; } = 3.2;
+    /// <summary>
+    /// The Loom's trickle, per colony-day. About 128 charge in a life — five prints' worth, as it
+    /// was at 3.2 a day in a 40-day life. Scaled with the lifespan so that stretching lives did not
+    /// fill the city with prints: a print is still rare in a life, not rare in an afternoon.
+    /// </summary>
+    public double LoomChargePerDay { get; set; } = 3.2 * 40 / LifeRules.BaseLifespanDays;
 
     public const double PrintCost = 25;
 

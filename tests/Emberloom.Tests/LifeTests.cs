@@ -115,18 +115,19 @@ public class LifeTests
         var (colony, body) = Start();
         var left = colony.Colonists[0];
         var right = colony.Colonists[1];
-        left.LifespanDays = right.LifespanDays = 400;
         Bond(colony, left, right);
+
+        // A couple of days lived, so the parents have memories to pass on; then straight to
+        // adulthood, rather than simulating hundreds of colony days to get there.
+        RunDays(body, 2);
+        colony.Tick = (long)((LifeRules.MaturityDays + 1) * Colony.TicksPerDay);
 
         (Colonist Child, Colonist A, Colonist B)? born = null;
         body.ColonistBorn += (child, a, b) => born ??= (child, a, b);
 
-        for (var day = 0; day < 40 && colony.Colonists.All(c => !c.ParentIds.Contains(left.Id)); day++)
-        {
-            RunDays(body, 1);
-        }
+        var child = body.TryPair(left, right);
 
-        var child = colony.Colonists.First(c => c.ParentIds.Contains(left.Id));
+        Assert.NotNull(child);
         Assert.Equal(LineageKind.Paired, child.Lineage);
         Assert.Equal(new[] { left.Id, right.Id }, child.ParentIds);
         Assert.NotNull(born);

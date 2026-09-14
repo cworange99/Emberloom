@@ -3,7 +3,7 @@ import type { Place, PlaceState } from './types'
 import { UNREACHABLE } from './ColonistPanel'
 
 /** ProvisionRules on the server, which is what actually refuses what the Loom cannot afford. */
-const PER_DAY = 1
+const PER_DAY = 0.02
 const DOOR_COST = 15
 
 /**
