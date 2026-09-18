@@ -315,7 +315,10 @@ function viewFromHash(): View {
 }
 
 function formatTimeOfDay(fraction: number) {
-  const totalMinutes = Math.floor(fraction * 24 * 60)
+  // Rounded, not floored: the fraction arrives rounded to four decimals, so flooring turned a
+  // step of exactly six colony minutes into a readout that crept 5, 7, 6 — which read as the
+  // clock itself being erratic. Wrapped, so 23:59.6 shows 00:00 rather than 24:00.
+  const totalMinutes = Math.round(fraction * 24 * 60) % (24 * 60)
   const hours = Math.floor(totalMinutes / 60)
   const minutes = totalMinutes % 60
   return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`
