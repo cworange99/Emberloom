@@ -284,6 +284,46 @@ public class CultureTests
         Assert.Contains(colony.Feed.Recent(5), e => e.Layer == EventLayer.Mind && e.Text.StartsWith("The colony has begun to tell a story"));
     }
 
+    /// <summary>
+    /// The story is a file a person can rewrite. What the file says is what the colony tells, and
+    /// what it writes out reads back as the same story.
+    /// </summary>
+    [Fact]
+    public void TheStoryGoesOutToItsFileAndComesBack()
+    {
+        var (colony, _) = Start();
+
+        // An untold story leaves nothing to read back — an empty file is no story, not an empty one.
+        Assert.Equal(string.Empty, MythFile.ReadStory(MythFile.Compose(colony)));
+
+        const string written = "The makers walked into the sea, and left the Loom counting the ones who stayed.";
+        Assert.True(CultureRules.TellByHand(colony, written));
+
+        var file = MythFile.Compose(colony);
+        Assert.Contains(MythFile.Heading, file);
+        Assert.Contains("by hand", file);
+        Assert.Equal(written, MythFile.ReadStory(file));
+    }
+
+    [Fact]
+    public void AStoryWrittenByHandIsTheStoryFromThenOn()
+    {
+        var (colony, _) = Start();
+        const string written = "The makers walked into the sea, and left the Loom counting the ones who stayed.";
+
+        Assert.True(CultureRules.TellByHand(colony, written));
+
+        Assert.Equal(written, colony.Myth!.Story);
+        Assert.True(colony.Myth.ByHand);
+        Assert.Contains(written, WorldPrompt.SystemFor(colony.Colonists[0], colony));
+        Assert.Contains(colony.Feed.Recent(5), e => e.Layer == EventLayer.Player && e.Text.Contains("told differently now"));
+
+        // The same story again is not a new telling, and neither is a scrap.
+        Assert.False(CultureRules.TellByHand(colony, $"  {written}  "));
+        Assert.False(CultureRules.TellByHand(colony, "hm"));
+        Assert.Single(colony.MythHistory);
+    }
+
     [Fact]
     public async Task WithNoMindThereIsNoStory()
     {

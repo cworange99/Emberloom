@@ -30,3 +30,6 @@ src/Emberloom.Api/wwwroot/
 # `npm run build` empties wwwroot. Kept out of the repository on purpose: they reach a machine
 # by fetch script or installer. See assets/README.md.
 assets/kit/
+
+# The colony writes its story here for you to rewrite; it belongs to a run, not the repo.
+story.md

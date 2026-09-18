@@ -182,10 +182,10 @@ public sealed record ColonyStateDto(
     IReadOnlyList<CoinedWordDto> Lexicon);
 
 /// <summary>The colony's story of its makers, as it is told now.</summary>
-public sealed record MythDto(string Story, int Version, double ToldOnDay, int Contradicted)
+public sealed record MythDto(string Story, int Version, double ToldOnDay, int Contradicted, bool ByHand)
 {
     public static MythDto? From(Colony colony) => colony.Myth is { } myth
-        ? new MythDto(myth.Story, myth.Version, Math.Round(myth.ToldOnDay, 1), myth.ContradictedBeliefIds.Count)
+        ? new MythDto(myth.Story, myth.Version, Math.Round(myth.ToldOnDay, 1), myth.ContradictedBeliefIds.Count, myth.ByHand)
         : null;
 }
 

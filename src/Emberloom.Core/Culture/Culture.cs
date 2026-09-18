@@ -1,4 +1,5 @@
 using Emberloom.Core.Colonists;
+using Emberloom.Core.Events;
 using Emberloom.Core.Forks;
 using Emberloom.Core.Life;
 
@@ -56,6 +57,9 @@ public sealed record MythTelling
     /// <summary>Beliefs held in the colony that go against this telling.</summary>
     public IReadOnlyList<string> ContradictedBeliefIds { get; init; } = [];
 
+    /// <summary>True when a person wrote this telling by hand, rather than a mind telling it.</summary>
+    public bool ByHand { get; init; }
+
     public string? Model { get; init; }
 
     public string? Prompt { get; init; }
@@ -111,6 +115,33 @@ public static class CultureRules
             ? evidence >= FirstTellingEvidence
             : evidence - colony.Myth.Evidence >= RetellAfterEvidence
               && colony.Day - colony.Myth.ToldOnDay >= DaysBetweenTellings;
+    }
+
+    /// <summary>
+    /// Takes up a story written by hand (see <see cref="MythFile"/>). It becomes the telling the
+    /// colony goes by — it reaches every prompt, and the next retelling drifts from it rather than
+    /// from what a model wrote. False when the file holds nothing new.
+    /// </summary>
+    public static bool TellByHand(Colony colony, string story)
+    {
+        story = story.Trim();
+
+        if (story.Length < 20 || story == colony.Myth?.Story)
+        {
+            return false;
+        }
+
+        colony.MythHistory.Add(new MythTelling
+        {
+            Version = colony.MythHistory.Count + 1,
+            Story = story,
+            ToldOnDay = colony.Day,
+            Evidence = Evidence(colony),
+            ByHand = true
+        });
+
+        colony.Log(EventLayer.Player, $"The story of the makers is told differently now: “{story}”", notable: true);
+        return true;
     }
 
     /// <summary>

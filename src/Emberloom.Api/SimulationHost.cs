@@ -122,6 +122,9 @@ public sealed class SimulationHost : BackgroundService
         // laptop's live reflections came in at about a quarter of this figure.
         _benchmarkCallsPerMinute = configuration.GetValue("Simulation:SustainedCallsPerMinute", 4.8);
 
+        // Where the colony's story lives, so it can be read and rewritten by hand.
+        _storyPath = Path.GetFullPath(configuration.GetValue("Myth:StoryFile", "story.md")!);
+
         _random = new Random(seed);
         _colony = ColonyFactory.Create(colonists, _random);
         _body = new BodySimulation(_colony, _random);
@@ -176,6 +179,11 @@ public sealed class SimulationHost : BackgroundService
             AttachBody();
             _lastDialogue.Clear();
             _lastMythAttempt = double.NegativeInfinity;
+
+            // A new colony reads the story file again: a story left there by hand is one it can
+            // begin with, rather than something the restart quietly threw away.
+            _storyWrittenAt = default;
+            _storyOnDisk = string.Empty;
             _colony.Feed.Appended += OnEvent;
         }
 
@@ -397,6 +405,83 @@ public sealed class SimulationHost : BackgroundService
     private volatile bool _mythInFlight;
     private double _lastMythAttempt = double.NegativeInfinity;
 
+    // ---- the story, on disk ------------------------------------------------------------------
+
+    private readonly string _storyPath;
+    private string _storyOnDisk = string.Empty;
+    private DateTime _storyWrittenAt;
+
+    /// <summary>
+    /// Writes the colony's story out after every telling, so there is always a file to read — and
+    /// to rewrite. What is written is what the colony is telling now.
+    /// </summary>
+    private void WriteStory()
+    {
+        try
+        {
+            var text = Read((colony, _) => MythFile.Compose(colony));
+            File.WriteAllText(_storyPath, text);
+            _storyOnDisk = text;
+            _storyWrittenAt = File.GetLastWriteTimeUtc(_storyPath);
+        }
+        catch (IOException ex)
+        {
+            _logger.LogWarning(ex, "Could not write the colony's story to {Path}.", _storyPath);
+        }
+    }
+
+    /// <summary>
+    /// Takes up a story rewritten by hand. Checked a couple of times a second against the file's
+    /// timestamp, which costs nothing; the colony's own writes are recognised by their contents and
+    /// ignored, so writing the file back cannot loop. A story seeded before the colony starts is
+    /// picked up the same way, which is how a new colony can begin with one you wrote.
+    /// </summary>
+    private void ReadStoryIfChanged()
+    {
+        try
+        {
+            if (!File.Exists(_storyPath))
+            {
+                WriteStory();
+                return;
+            }
+
+            var writtenAt = File.GetLastWriteTimeUtc(_storyPath);
+            if (writtenAt == _storyWrittenAt)
+            {
+                return;
+            }
+
+            _storyWrittenAt = writtenAt;
+
+            var text = File.ReadAllText(_storyPath);
+            if (text == _storyOnDisk)
+            {
+                return;
+            }
+
+            _storyOnDisk = text;
+            var taken = false;
+            var story = MythFile.ReadStory(text);
+
+            lock (_gate)
+            {
+                taken = CultureRules.TellByHand(_colony, story);
+            }
+
+            if (taken)
+            {
+                _logger.LogInformation("The colony's story was rewritten by hand, in {Path}.", _storyPath);
+                Broadcast(Snapshot());
+                WriteStory();
+            }
+        }
+        catch (IOException)
+        {
+            // Half-written, most likely: an editor saving. The next pass will read it.
+        }
+    }
+
     /// <summary>
     /// The colony's story of its makers, told or retold. One at a time, and not retried the moment
     /// a telling fails — an unreachable mind would otherwise be asked again every two seconds.
@@ -422,6 +507,11 @@ public sealed class SimulationHost : BackgroundService
                     if (result.Call is not null)
                     {
                         _deepCalls.Record(Stopwatch.GetElapsedTime(started));
+                    }
+
+                    if (result.FromModel)
+                    {
+                        WriteStory();
                     }
 
                     Broadcast(Snapshot());
@@ -790,9 +880,19 @@ public sealed class SimulationHost : BackgroundService
 
         var timer = new PeriodicTimer(Interval);
         var last = DateTimeOffset.UtcNow;
+        var frames = 0;
+
+        _logger.LogInformation("The colony's story is at {Path}. Edit it and the colony tells it that way.", _storyPath);
 
         while (await timer.WaitForNextTickAsync(stoppingToken).ConfigureAwait(false))
         {
+            // Twice a second, whatever the speed: a story rewritten by hand should take hold
+            // while the player is still looking at the file.
+            if (++frames % 5 == 0)
+            {
+                ReadStoryIfChanged();
+            }
+
             var now = DateTimeOffset.UtcNow;
             var elapsed = now - last;
             last = now;

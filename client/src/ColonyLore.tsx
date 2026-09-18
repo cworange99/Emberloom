@@ -23,6 +23,7 @@ export function ColonyLore({
             What the colony tells itself{' '}
             <span className="tagline mind">
               told {myth.version === 1 ? 'once' : `${myth.version} times`} · d{myth.toldOnDay.toFixed(0)}
+              {myth.byHand && ' · written by you'}
             </span>
           </h3>
           <p className="lore-myth">{myth.story}</p>

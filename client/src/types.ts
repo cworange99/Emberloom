@@ -114,6 +114,8 @@ export interface MythState {
   toldOnDay: number
   /** Beliefs held in the colony that go against it. */
   contradicted: number
+  /** True when this telling was written by hand in the story file, rather than told by a mind. */
+  byHand: boolean
 }
 
 export interface CoinedWord {
