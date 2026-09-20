@@ -64,6 +64,8 @@ export interface Clock {
   speedLabel: string
   autoSlowOnEvent: boolean
   throttledByGovernor: boolean
+  /** True while a fork is holding the speed at 1×. It comes back when the colony decides. */
+  slowedForEvent: boolean
   colonyDaysPerRealMinute: number
   callsPerColonyDay: number | null
   sustainedCallsPerMinute: number

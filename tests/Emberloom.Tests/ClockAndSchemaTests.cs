@@ -136,6 +136,83 @@ public class ClockTests
     }
 
     [Fact]
+    public void TheSpeedComesBackWhenTheColonyHasDecided()
+    {
+        var clock = new SimulationClock { AutoSlowOnEvent = true };
+        clock.SetSpeed(GameSpeed.Fastest);
+
+        clock.SlowForEvent();
+        Assert.Equal(GameSpeed.Normal, clock.Speed);
+        Assert.True(clock.SlowedForEvent);
+
+        // Without this the auto-slow was a one-way drop: the first fork of a long run pinned the
+        // colony at 1x for the rest of it, and a run left at 60x was found crawling hours later.
+        clock.ResumeAfterEvent();
+        Assert.Equal(GameSpeed.Fastest, clock.Speed);
+        Assert.False(clock.SlowedForEvent);
+    }
+
+    [Fact]
+    public void OvernightIsNeverSlowedForADecision()
+    {
+        var clock = new SimulationClock { AutoSlowOnEvent = true };
+        clock.SetSpeed(GameSpeed.Overnight);
+
+        // Overnight means nobody is watching. Slowing down so that somebody looks up is meaningless
+        // at a speed defined by there being nobody there.
+        clock.SlowForEvent();
+
+        Assert.Equal(GameSpeed.Overnight, clock.Speed);
+        Assert.False(clock.SlowedForEvent);
+    }
+
+    [Fact]
+    public void APlayersSpeedDuringADecisionOutlastsTheResume()
+    {
+        var clock = new SimulationClock { AutoSlowOnEvent = true };
+        clock.SetSpeed(GameSpeed.Fastest);
+        clock.SlowForEvent();
+
+        clock.SetSpeed(GameSpeed.Fast);
+        clock.ResumeAfterEvent();
+
+        // Theirs wins, the same rule the governor's throttle follows.
+        Assert.Equal(GameSpeed.Fast, clock.Speed);
+        Assert.False(clock.SlowedForEvent);
+    }
+
+    [Fact]
+    public void ChoosingOneTimesDuringADecisionIsKept()
+    {
+        var clock = new SimulationClock { AutoSlowOnEvent = true };
+        clock.SetSpeed(GameSpeed.Fastest);
+        clock.SlowForEvent();
+
+        // The auto-slow is already holding 1x, so this looks like no change at all — and used to
+        // be treated as one, which let the resume put 60x back over the player's own choice.
+        clock.SetSpeed(GameSpeed.Normal);
+        clock.ResumeAfterEvent();
+
+        Assert.Equal(GameSpeed.Normal, clock.Speed);
+    }
+
+    [Fact]
+    public void AThrottleDuringADecisionDoesNotLoseTheSpeedBehindBoth()
+    {
+        var clock = new SimulationClock { AutoSlowOnEvent = true };
+        clock.SetSpeed(GameSpeed.Fastest);
+
+        clock.SlowForEvent();
+        clock.ThrottleForThought();
+
+        // The throttle sees 1x and declines to save it; the fork's own memory is what restores.
+        Assert.False(clock.ThrottledByGovernor);
+
+        clock.ResumeAfterEvent();
+        Assert.Equal(GameSpeed.Fastest, clock.Speed);
+    }
+
+    [Fact]
     public void TicksAccumulateAcrossPartialFrames()
     {
         var clock = new SimulationClock();

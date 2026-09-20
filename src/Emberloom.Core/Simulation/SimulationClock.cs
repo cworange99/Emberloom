@@ -39,9 +39,18 @@ public sealed class SimulationClock
 
     /// <summary>
     /// Drops to 1× when a Deliberation fires, the way a strategy game halts on an alert. The
-    /// player looks up because something is being decided.
+    /// player looks up because something is being decided — and the speed they were at comes back
+    /// when the fork resolves.
     /// </summary>
     public bool AutoSlowOnEvent { get; set; } = true;
+
+    /// <summary>
+    /// True while a fork is holding the speed down. Like a governor throttle, and unlike the
+    /// player's own choice, it is temporary.
+    /// </summary>
+    public bool SlowedForEvent { get; private set; }
+
+    private GameSpeed _speedBeforeEvent = GameSpeed.Normal;
 
     /// <summary>
     /// Set by the governor when it cannot serve an undroppable call at the current speed. A colony
@@ -69,17 +78,20 @@ public sealed class SimulationClock
     {
         lock (_gate)
         {
-            // "No change" only when there is no throttle to end. Choosing 1x while throttled used to
-            // count as no change — the throttle was already holding 1x — so the throttle stayed and
-            // put back the faster speed on release, overruling what the player had just picked.
-            if (Speed == speed && !ThrottledByGovernor)
+            // "No change" only when there is nothing temporary to end. Choosing 1x while throttled
+            // used to count as no change — the throttle was already holding 1x — so the throttle
+            // stayed and put back the faster speed on release, overruling what the player had just
+            // picked. A fork's auto-slow holds 1x the same way and has to end the same way.
+            if (Speed == speed && !ThrottledByGovernor && !SlowedForEvent)
             {
                 return;
             }
 
             Speed = speed;
             _speedBeforeThrottle = speed;
+            _speedBeforeEvent = speed;
             ThrottledByGovernor = false;
+            SlowedForEvent = false;
         }
 
         SpeedChanged?.Invoke(speed);
@@ -122,13 +134,62 @@ public sealed class SimulationClock
         SpeedChanged?.Invoke(restored);
     }
 
-    /// <summary>Auto-slow when a Deliberation fires. Distinct from a governor throttle.</summary>
+    /// <summary>
+    /// Auto-slow when a Deliberation fires. Distinct from a governor throttle, and — since 19
+    /// September 2026 — temporary in the same way: it remembers the speed it interrupted and
+    /// <see cref="ResumeAfterEvent"/> gives it back. It used to be a one-way drop with no
+    /// counterpart anywhere, so the first fork of a long run pinned the colony at 1× for the rest
+    /// of it, and a run left at 60× overnight was found crawling in the morning.
+    /// <para>
+    /// Never at Overnight, which is defined as nobody watching. Slowing down to make a player look
+    /// up is meaningless when the whole point of the speed is that there is no player there.
+    /// </para>
+    /// </summary>
     public void SlowForEvent()
     {
-        if (AutoSlowOnEvent && Speed > GameSpeed.Normal)
+        if (!AutoSlowOnEvent || Speed <= GameSpeed.Normal || Speed == GameSpeed.Overnight)
         {
-            SetSpeed(GameSpeed.Normal);
+            return;
         }
+
+        lock (_gate)
+        {
+            // A governor throttle already has the speed put away; taking it again here would save
+            // the 1x the throttle is holding and give that back as the "restored" speed.
+            if (ThrottledByGovernor || SlowedForEvent)
+            {
+                return;
+            }
+
+            _speedBeforeEvent = Speed;
+            Speed = GameSpeed.Normal;
+            SlowedForEvent = true;
+        }
+
+        SpeedChanged?.Invoke(GameSpeed.Normal);
+    }
+
+    /// <summary>
+    /// The fork is decided; give back the speed it interrupted. Does nothing if the player chose a
+    /// speed in the meantime — theirs always wins, the same rule the throttle follows.
+    /// </summary>
+    public void ResumeAfterEvent()
+    {
+        GameSpeed restored;
+
+        lock (_gate)
+        {
+            if (!SlowedForEvent)
+            {
+                return;
+            }
+
+            restored = _speedBeforeEvent;
+            Speed = restored;
+            SlowedForEvent = false;
+        }
+
+        SpeedChanged?.Invoke(restored);
     }
 
     /// <summary>How many ticks to run for a given slice of real time. Zero while paused.</summary>

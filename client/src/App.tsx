@@ -96,7 +96,7 @@ export default function App() {
       <header className="topbar">
         <div className="brand">
           What They Left Running
-          <span>M6 · player verbs</span>
+          <span>M7 · generations</span>
         </div>
 
         <div className="speeds" role="group" aria-label="Simulation speed">
@@ -111,13 +111,20 @@ export default function App() {
           ))}
         </div>
 
-        <label className="toggle">
+        <label
+          className="toggle"
+          title={
+            clock.slowedForEvent
+              ? 'Slowed to 1× while the colony decides. Your speed comes back when it does — or pick one now and it stays.'
+              : 'Drop to 1× when the colony has something to decide, then go back to the speed you were at.'
+          }
+        >
           <input
             type="checkbox"
             checked={clock.autoSlowOnEvent}
             onChange={(e) => void setAutoSlow(e.target.checked)}
           />
-          auto-slow
+          auto-slow{clock.slowedForEvent && <span className="of"> · deciding</span>}
         </label>
 
         <label className="toggle">

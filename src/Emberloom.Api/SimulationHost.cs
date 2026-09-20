@@ -180,6 +180,10 @@ public sealed class SimulationHost : BackgroundService
         // new session and a new file; nothing about this one is carried into it.
         WriteChronicle(ended: true);
 
+        // A fork holding the speed down belongs to the colony being replaced. Nothing will ever
+        // resolve it now, so the hold is released here or the new colony crawls at 1x forever.
+        Clock.ResumeAfterEvent();
+
         lock (_gate)
         {
             _colony.Feed.Appended -= OnEvent;
@@ -720,9 +724,14 @@ public sealed class SimulationHost : BackgroundService
         }
     }
 
-    /// <summary>A newly printed mind needs writing. Kindling is undroppable, like the vote that made it.</summary>
+    /// <summary>
+    /// The colony has decided. A newly printed mind needs writing — Kindling is undroppable, like
+    /// the vote that made it — and whatever speed the auto-slow interrupted comes back.
+    /// </summary>
     private void OnForkResolved(Fork fork, Colonist? printed)
     {
+        Clock.ResumeAfterEvent();
+
         if (printed is not null)
         {
             SubmitKindling(printed);

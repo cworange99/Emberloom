@@ -122,6 +122,10 @@ public sealed record ClockDto(
     string SpeedLabel,
     bool AutoSlowOnEvent,
     bool ThrottledByGovernor,
+
+    /// True while a fork is holding the speed at 1×. Temporary — the speed comes back when the
+    /// colony decides — so the client can say so rather than look like the buttons stopped working.
+    bool SlowedForEvent,
     double ColonyDaysPerRealMinute,
     /// Null when paused: contemplation per colony-day is unbounded when no colony-days pass,
     /// and infinity is not a number JSON can carry (System.Text.Json throws on it, which used
@@ -139,6 +143,7 @@ public sealed record ClockDto(
         SimulationClock.Label(clock.Speed),
         clock.AutoSlowOnEvent,
         clock.ThrottledByGovernor,
+        clock.SlowedForEvent,
         Math.Round(clock.ColonyDaysPerRealMinute, 3),
         clock.Speed == GameSpeed.Paused
             ? null

@@ -538,7 +538,7 @@ watchable — on its own.
 |---|---|
 | **Client** | React + TypeScript over a headless .NET 8 sim behind HTTP/WebSocket. A Unity client stays possible later at no architectural cost. |
 | **Agency** | Influence only. Five verbs, no orders. The job queue is designed so direct assignment could be enabled behind a setting later. |
-| **Time** | Fully player-controlled, with the thinking budget as the natural cost of speed, and forks protected from being skipped. At 1× a colony-day is one real hour and a life about three real months, decided 13 September 2026: lives someone can come to know. The faster speeds are for the experiment. |
+| **Time** | Fully player-controlled, with the thinking budget as the natural cost of speed, and forks protected from being skipped. At 1× a colony-day is one real hour and a life about three real months, decided 13 September 2026: lives someone can come to know. The faster speeds are for the experiment. A fork's auto-slow is an interruption, not a new setting — it gives the speed back when the colony decides, and never fires at Overnight, which is defined as nobody watching (19 September 2026). |
 | **Setting** | The Loom in a reclaimed city. Printed minds kept as the mechanic. |
 | **Hardware** | RTX 5070 is the target. The laptop is a development floor, and plays through hosted inference rather than its own mind — decided 10 September 2026 at M4, on the measurements in §2. |
 | **Presentation** | **Low-poly 3D in Three.js**, decided 9 September 2026 after a 2D tile spike was built and rejected. Kenney CC0 kits now, custom art later if the game earns it. Two views — city and cutaway room — with click-through between them. §11 has the reasoning. |
