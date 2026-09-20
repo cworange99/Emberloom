@@ -227,7 +227,14 @@ public class ChronicleTests
 
         var text = chronicle.Compose(colony, new ChronicleStamp(DateTimeOffset.Now, TimeSpan.FromHours(2), "1×", 0, 0, 0));
 
-        Assert.Contains("No mind was reached this session", text);
+        Assert.Contains("No mind is configured", text);
         Assert.Contains("### Day 2", text);
+
+        // A mind that is there but has not finished its first call is a third thing, and saying
+        // the colony had no mind would be a lie told at the very moment someone first looks.
+        var waiting = chronicle.Compose(colony,
+            new ChronicleStamp(DateTimeOffset.Now, TimeSpan.Zero, "1×", 0, 0, 0, Ended: false, MindConfigured: true));
+
+        Assert.Contains("nothing served yet", waiting);
     }
 }

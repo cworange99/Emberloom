@@ -162,14 +162,17 @@ public sealed class SessionChronicle
         text.AppendLine($"- The Loom holds {colony.LoomCharge:F0} charge{(colony.UpkeepPerDay > 0 ? $", spending {colony.UpkeepPerDay:F2} a day on what you provide" : string.Empty)} · {colony.ArtifactsRecovered} pieces of the makers' recovered");
         text.AppendLine($"- {colony.Lexicon.Count} words of their own · the story {(colony.Myth is null ? "still untold" : $"told {Times(colony.Myth.Version)}")} · {colony.ForkHistory.Count} forks decided{(colony.OpenFork is not null ? ", one open now" : string.Empty)}");
 
-        if (stamp.Served > 0 || stamp.Dropped > 0 || stamp.Fallbacks > 0)
+        // Three states, not two: a colony with no mind configured is a supported way to play, and
+        // must not read the same as one whose first call has simply not come back yet.
+        text.AppendLine(stamp switch
         {
-            text.AppendLine($"- The mind: {stamp.Served} calls served, {stamp.Dropped} refused for something worth more, {stamp.Fallbacks} fell back on a template");
-        }
-        else
-        {
-            text.AppendLine("- No mind was reached this session — the body ran on its own.");
-        }
+            { Served: 0, Dropped: 0, Fallbacks: 0, MindConfigured: false } =>
+                "- No mind is configured — the body is running on its own, as it is built to.",
+            { Served: 0, Dropped: 0, Fallbacks: 0 } =>
+                "- The mind: nothing served yet.",
+            _ =>
+                $"- The mind: {stamp.Served} calls served, {stamp.Dropped} refused for something worth more, {stamp.Fallbacks} fell back on a template"
+        });
 
         text.AppendLine();
         text.AppendLine("## The story, as it is told now");
@@ -333,7 +336,8 @@ public sealed record ChronicleStamp(
     int Served,
     int Dropped,
     int Fallbacks,
-    bool Ended = false);
+    bool Ended = false,
+    bool MindConfigured = false);
 
 /// <summary>
 /// Putting the record on disk. Written whole to a neighbouring file and then moved over the real

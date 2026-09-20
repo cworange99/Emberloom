@@ -445,7 +445,8 @@ public sealed class SimulationHost : BackgroundService
             _governor?.Stats().Served ?? 0,
             _governor?.Stats().Dropped ?? 0,
             _governor?.Stats().Fallbacks ?? 0,
-            ended);
+            ended,
+            MindConfigured);
 
         lock (_gate)
         {
