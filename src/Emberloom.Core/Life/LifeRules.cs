@@ -120,6 +120,28 @@ public static class LifeRules
     }
 
     /// <summary>
+    /// The deepest line of descent: a printed mind is generation one, its children two. Counted
+    /// over everyone who has ever lived, because a line that died out still happened.
+    /// </summary>
+    public static int Generations(Colony colony)
+    {
+        var depth = new Dictionary<string, int>();
+
+        int Of(Colonist colonist) => depth.TryGetValue(colonist.Id, out var known)
+            ? known
+            : depth[colonist.Id] = colonist.ParentIds.Count == 0
+                ? 1
+                : 1 + colonist.ParentIds
+                    .Select(colony.Find)
+                    .Where(parent => parent is not null)
+                    .Select(parent => Of(parent!))
+                    .DefaultIfEmpty(0)
+                    .Max();
+
+        return colony.Colonists.Count == 0 ? 0 : colony.Colonists.Max(Of);
+    }
+
+    /// <summary>
     /// What reading a core gives the colony: what the dead believed, in their own words — or, for a
     /// mind that never came to believe anything, what it lived through most sharply.
     /// </summary>

@@ -13,6 +13,7 @@ using Emberloom.Core.World;
 using Emberloom.Core.Forks;
 using Emberloom.Core.Verbs;
 using Emberloom.Core.Culture;
+using Emberloom.Core.Chronicle;
 
 namespace Emberloom.Api;
 
@@ -125,12 +126,18 @@ public sealed class SimulationHost : BackgroundService
         // Where the colony's story lives, so it can be read and rewritten by hand.
         _storyPath = Path.GetFullPath(configuration.GetValue("Myth:StoryFile", "story.md")!);
 
+        // And where the account of this session goes. Nothing in the colony survives the process,
+        // so this file is the only thing a session leaves behind.
+        _chronicleFolder = Path.GetFullPath(configuration.GetValue("Chronicle:Folder", "chronicles")!);
+        _chronicleEnabled = configuration.GetValue("Chronicle:Enabled", true);
+
         _random = new Random(seed);
         _colony = ColonyFactory.Create(colonists, _random);
         _body = new BodySimulation(_colony, _random);
         AttachBody();
 
         _colony.Feed.Appended += OnEvent;
+        _chronicle = new SessionChronicle(seed, colonists, DateTimeOffset.Now);
         QueueKindlingForEveryone();
     }
 
@@ -169,6 +176,10 @@ public sealed class SimulationHost : BackgroundService
 
     public void Restart(int colonists, int seed)
     {
+        // The colony that is about to be thrown away gets its last page first. A new colony is a
+        // new session and a new file; nothing about this one is carried into it.
+        WriteChronicle(ended: true);
+
         lock (_gate)
         {
             _colony.Feed.Appended -= OnEvent;
@@ -185,6 +196,9 @@ public sealed class SimulationHost : BackgroundService
             _storyWrittenAt = default;
             _storyOnDisk = string.Empty;
             _colony.Feed.Appended += OnEvent;
+
+            _chronicle = new SessionChronicle(seed, colonists, DateTimeOffset.Now);
+            _chronicleWrittenAt = DateTimeOffset.MinValue;
         }
 
         QueueKindlingForEveryone();
@@ -404,6 +418,97 @@ public sealed class SimulationHost : BackgroundService
 
     private volatile bool _mythInFlight;
     private double _lastMythAttempt = double.NegativeInfinity;
+
+    // ---- the account of this session, on disk -------------------------------------------------
+
+    private readonly string _chronicleFolder;
+    private readonly bool _chronicleEnabled;
+    private SessionChronicle _chronicle;
+    private DateTimeOffset _chronicleWrittenAt = DateTimeOffset.MinValue;
+
+    /// <summary>Where this session's record is being written, for anyone who wants to go and read it.</summary>
+    public string ChroniclePath => Path.Combine(_chronicleFolder, _chronicle.FileName);
+
+    /// <summary>The record as it stands, for anyone who would rather read it here than on disk.</summary>
+    public string ComposeChronicle() => Compose(ended: false).Text;
+
+    /// <summary>
+    /// The record and the chronicle that owns it. Composed under the colony lock because it reads
+    /// the colony; writing it out happens outside, because a disk is slower than a tick.
+    /// </summary>
+    private (SessionChronicle Chronicle, string Text) Compose(bool ended)
+    {
+        var stamp = new ChronicleStamp(
+            DateTimeOffset.Now,
+            DateTimeOffset.Now - _chronicle.StartedAt,
+            SimulationClock.Label(Clock.Speed),
+            _governor?.Stats().Served ?? 0,
+            _governor?.Stats().Dropped ?? 0,
+            _governor?.Stats().Fallbacks ?? 0,
+            ended);
+
+        lock (_gate)
+        {
+            return (_chronicle, _chronicle.Compose(_colony, stamp));
+        }
+    }
+
+    /// <summary>Amends the file. Everything notable that has happened is in it once this returns.</summary>
+    private void WriteChronicle(bool ended = false)
+    {
+        if (!_chronicleEnabled)
+        {
+            return;
+        }
+
+        var (chronicle, text) = Compose(ended);
+
+        try
+        {
+            ChronicleFile.Save(_chronicleFolder, chronicle.FileName, text);
+            chronicle.MarkWritten();
+            _chronicleWrittenAt = DateTimeOffset.Now;
+        }
+        catch (IOException ex)
+        {
+            _logger.LogWarning(ex, "Could not write the colony's record to {Path}.", _chronicleFolder);
+        }
+    }
+
+    /// <summary>
+    /// Folds finished colony days into the record, and amends the file. Days are closed one at a
+    /// time even when a frame covered several, so an Overnight run's record has every day in it.
+    /// </summary>
+    private void KeepTheRecord()
+    {
+        if (!_chronicleEnabled)
+        {
+            return;
+        }
+
+        var today = Read((colony, _) => (int)colony.Day);
+        var closed = false;
+
+        while (_chronicle.LastDayClosed < today)
+        {
+            var day = _chronicle.LastDayClosed + 1;
+            lock (_gate)
+            {
+                _chronicle.CloseDay(_colony, day);
+            }
+
+            closed = true;
+        }
+
+        // Every colony day, and in between whenever something notable has happened and the last
+        // amendment is old enough — a colony day is a real hour at 1×, and this file exists for the
+        // stop nobody planned.
+        if (closed
+            || (_chronicle.HasNews && DateTimeOffset.Now - _chronicleWrittenAt >= ChronicleRules.AtMostEvery))
+        {
+            WriteChronicle();
+        }
+    }
 
     // ---- the story, on disk ------------------------------------------------------------------
 
@@ -884,6 +989,14 @@ public sealed class SimulationHost : BackgroundService
 
         _logger.LogInformation("The colony's story is at {Path}. Edit it and the colony tells it that way.", _storyPath);
 
+        // Written before the first tick, so a session that falls over in its first minute has still
+        // left something behind.
+        if (_chronicleEnabled)
+        {
+            WriteChronicle();
+            _logger.LogInformation("This colony's record is being kept at {Path}.", ChroniclePath);
+        }
+
         while (await timer.WaitForNextTickAsync(stoppingToken).ConfigureAwait(false))
         {
             // Twice a second, whatever the speed: a story rewritten by hand should take hold
@@ -900,6 +1013,9 @@ public sealed class SimulationHost : BackgroundService
             var ticks = Clock.TicksFor(elapsed);
             if (ticks <= 0)
             {
+                // Still amend the record while paused: what was spoken or decided just before
+                // someone hit pause is exactly what they will want to have been written down.
+                KeepTheRecord();
                 continue;
             }
 
@@ -922,8 +1038,22 @@ public sealed class SimulationHost : BackgroundService
                 _logger.LogError(ex, "Simulation tick failed.");
             }
 
+            KeepTheRecord();
             Broadcast(Snapshot());
         }
+    }
+
+    /// <summary>
+    /// A last amendment on the way out, marked as the end. This is the orderly case; the whole
+    /// point of the file is that the disorderly one has already been written to within a couple of
+    /// minutes of wherever it stopped.
+    /// </summary>
+    public override async Task StopAsync(CancellationToken cancellationToken)
+    {
+        await base.StopAsync(cancellationToken).ConfigureAwait(false);
+
+        WriteChronicle(ended: true);
+        _logger.LogInformation("This colony's record is at {Path}.", ChroniclePath);
     }
 
     public ColonyStateDto Snapshot() => Read((colony, body) => new ColonyStateDto(
@@ -1000,8 +1130,13 @@ public sealed class SimulationHost : BackgroundService
         }
     }
 
-    private void OnEvent(ColonyEvent colonyEvent) =>
+    private void OnEvent(ColonyEvent colonyEvent)
+    {
+        // The record sees every line the feed does, and keeps the notable ones. Cheap, and on the
+        // path everything already takes — a death or a vote is in the record before the frame ends.
+        _chronicle.Notice(colonyEvent);
         Broadcast(new { type = "event", payload = EventDto.From(colonyEvent) });
+    }
 
     private void Broadcast(ColonyStateDto state) =>
         Broadcast(new { type = "state", payload = state });

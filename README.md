@@ -143,6 +143,17 @@ earlier ones. A banner over the view shows the argument as it happens. It carrie
 majority of the whole council votes for it; abstaining keeps things as they are. With no mind at all the fork still gets decided after three
 colony-days, on where each member's personality leans, and the banner says no mind answered.
 
+**What a session leaves behind.** Nothing in a colony survives the process — that is by design for
+the colony and no use at all for the account of it. So every session keeps its own record in
+`chronicles/`, one Markdown file per colony, amended at the end of every colony day and, in
+between, whenever something notable has happened and the last amendment is two minutes old. It
+opens with where the colony stands now — who is alive, what it believes, the story as it is told —
+and then has the days in order. It is written by the body alone: no model call, so a colony running
+with no Ollama at all still leaves one. The file is written whole to a scratch name and moved into
+place, because the stop it exists for is the one nobody planned. `GET /api/chronicle` returns the
+same text without going to find the file, and `Chronicle:Folder` in `appsettings.json` says where
+they go.
+
 ## The 3D views
 
 The main view is the colony itself, in low-poly 3D (`client/src/city/`):

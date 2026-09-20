@@ -302,6 +302,14 @@ app.MapGet("/api/verbs/revelations", () => sim.ListRevelations());
 app.MapPost("/api/verbs/reveal", (RevealRequest request) =>
     VerbReply(sim.Reveal(request.RevelationId, request.ColonistId)));
 
+// ---- the account of this session --------------------------------------------
+
+// The same text the game is keeping on disk, composed fresh. Reading it here costs nothing and
+// means a player can catch up on a colony they left running without going to find the file.
+app.MapGet("/api/chronicle", () => Results.Text(sim.ComposeChronicle(), "text/markdown"));
+
+app.MapGet("/api/chronicle/path", () => Results.Ok(new { path = sim.ChroniclePath }));
+
 static IResult VerbReply(VerbResult outcome) => outcome.Ok
     ? Results.Ok(new { colonistId = outcome.Colonist?.Id, memoryId = outcome.Memory?.Id })
     : Results.Conflict(new { error = outcome.Refusal });
