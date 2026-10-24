@@ -276,7 +276,9 @@ app.MapPost("/api/view", (ViewRequest request) =>
 
 app.MapPost("/api/restart", (RestartRequest request) =>
 {
-    sim.Restart(Math.Clamp(request.Colonists ?? 8, 1, 60), request.Seed ?? Random.Shared.Next());
+    // The mode is chosen here and never again: see ColonyMode.
+    var mode = Enum.TryParse<ColonyMode>(request.Mode, ignoreCase: true, out var chosen) ? chosen : ColonyMode.Hybrid;
+    sim.Restart(Math.Clamp(request.Colonists ?? 4, 1, 60), request.Seed ?? Random.Shared.Next(), mode);
     return Results.Ok(sim.Snapshot());
 });
 
@@ -292,6 +294,13 @@ app.MapPost("/api/verbs/print", (PrintRequest request) => VerbReply(sim.Print(re
 
 // A rolled seed, for the Print form's "roll one". Nothing is printed until the form is sent.
 app.MapGet("/api/verbs/seed", () => Results.Ok(new { seed = SeedRoller.Roll(Random.Shared) }));
+
+// Ask: the one verb that stands. Everything else happens once and is over.
+app.MapPost("/api/verbs/ask", (AskRequest request) =>
+    VerbReply(sim.Ask(request.Verb, request.PlaceId, request.ColonistId, request.Strength)));
+
+app.MapPost("/api/verbs/unask", (AskRequest request) =>
+    VerbReply(sim.Unask(request.Verb, request.PlaceId, request.ColonistId)));
 
 app.MapPost("/api/verbs/provide", (ProvisionRequest request) => VerbReply(sim.Provide(request.Kind, request.PlaceId)));
 
@@ -392,7 +401,9 @@ static async Task Send(WebSocket socket, object message, JsonSerializerOptions o
 
 internal sealed record SpeedRequest(string Speed);
 internal sealed record AutoSlowRequest(bool Enabled);
-internal sealed record RestartRequest(int? Colonists, int? Seed);
+internal sealed record RestartRequest(int? Colonists, int? Seed, string? Mode);
+
+internal sealed record AskRequest(string Verb, string? PlaceId, string? ColonistId, double? Strength);
 internal sealed record ViewRequest(string? PlaceId, string? ColonistId);
 internal sealed record SpeakRequest(string ColonistId, string? Text);
 internal sealed record PrintRequest(string? Seed);

@@ -17,9 +17,12 @@ public static class ColonyFactory
     /// A new colony. The seed is passed in as well as being the random stream's, because names are
     /// derived from it rather than drawn from the stream — see <see cref="Names"/>.
     /// </summary>
-    public static Colony Create(int colonists, Random random, int seed = 0)
+    public static Colony Create(int colonists, Random random, int seed = 0, ColonyMode mode = ColonyMode.Hybrid)
     {
-        var colony = new Colony(CityMap.CreateDefault()) { Seed = seed };
+        // The mode is chosen here and nowhere else: it is init-only on Colony because a research
+        // run has to be a research run from the first tick to the last, or it is not evidence of
+        // anything. See ColonyMode.
+        var colony = new Colony(CityMap.CreateDefault()) { Seed = seed, Mode = mode };
 
         for (var i = 0; i < colonists; i++)
         {

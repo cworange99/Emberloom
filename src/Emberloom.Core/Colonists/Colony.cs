@@ -219,6 +219,13 @@ public sealed class Colony
     /// <summary>How light a place is, counting any light the player keeps burning there.</summary>
     public double LightAt(Place place) => IsLit(place.Id) ? 1.0 : place.Light;
 
+    /// <summary>
+    /// What the player has asked for and the colony has not stopped hearing — M16. Beside
+    /// Provisions because they are the same kind of thing: something the player keeps running, that
+    /// the colony notices, and that costs them nothing to ignore.
+    /// </summary>
+    public List<Verbs.Intent> Intents { get; } = [];
+
     /// <summary>What the provisions cost, in charge per colony-day.</summary>
     public double UpkeepPerDay => Provisions.Sum(p => p.CostPerDay);
 

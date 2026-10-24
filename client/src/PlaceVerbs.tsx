@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { Place, PlaceState } from './types'
+import type { ColonyState, Intent, Place, PlaceState } from './types'
 import { UNREACHABLE } from './ColonistPanel'
 
 /** ProvisionRules on the server, which is what actually refuses what the Loom cannot afford. */
@@ -11,7 +11,32 @@ const DOOR_COST = 15
  * and a way into a place that will not open. Everything runs on the Loom's charge, which is the
  * same charge a print needs.
  */
-export function PlaceVerbs({ place, state, charge }: { place: Place; state: PlaceState | undefined; charge: number }) {
+/** What can be asked for at a place, by what the place is. Matches the server's ActionCatalog. */
+const ASKABLE: Record<string, string[]> = {
+  Loom: ['Tend'],
+  Clearing: ['Forage'],
+  Ruin: ['Salvage'],
+  Stairwell: ['Clear'],
+  Site: ['Build'],
+  Shelter: ['Rest'],
+  Dwelling: ['Rest'],
+  Hall: ['Gather'],
+  Plaza: ['Talk'],
+}
+
+export function PlaceVerbs({
+  place,
+  state,
+  charge,
+  mode,
+  intents,
+}: {
+  place: Place
+  state: PlaceState | undefined
+  charge: number
+  mode: ColonyState['mode']
+  intents: Intent[]
+}) {
   const [status, setStatus] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -27,6 +52,23 @@ export function PlaceVerbs({ place, state, charge }: { place: Place; state: Plac
       })
       const body = (await response.json().catch(() => null)) as { error?: string } | null
       setStatus(response.ok ? null : (body?.error ?? 'The Loom would not do that.'))
+    } catch {
+      setStatus(UNREACHABLE)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const ask = async (verb: string, standing: boolean) => {
+    setBusy(true)
+    try {
+      const response = await fetch(`/api/verbs/${standing ? 'unask' : 'ask'}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ verb, placeId: place.id, strength: 1 }),
+      })
+      const body = (await response.json().catch(() => null)) as { error?: string } | null
+      setStatus(response.ok ? null : (body?.error ?? 'The colony would not hear that.'))
     } catch {
       setStatus(UNREACHABLE)
     } finally {
@@ -73,6 +115,23 @@ export function PlaceVerbs({ place, state, charge }: { place: Place; state: Plac
         ))}
 
       {!blocked && !canLight && !canWarm && <i>Nothing here the Loom can change.</i>}
+
+      {/* M16: asking is not ordering. In simulation nothing is offered at all. */}
+      {mode !== 'Simulation' &&
+        (ASKABLE[state?.kind ?? place.kind] ?? []).map((verb) => {
+          const standing = intents.find((i) => i.verb === verb && i.placeId === place.id)
+
+          return standing ? (
+            <button key={verb} className="is-on" disabled={busy} onClick={() => void ask(verb, true)}>
+              stop asking for {verb.toLowerCase()} here
+            </button>
+          ) : (
+            <button key={verb} disabled={busy} onClick={() => void ask(verb, false)}>
+              ask for {verb.toLowerCase()} here
+            </button>
+          )
+        })}
+
       {status && <span className="verb-status">{status}</span>}
     </div>
   )

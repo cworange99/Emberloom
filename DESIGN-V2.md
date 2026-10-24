@@ -667,6 +667,78 @@ sometimes fails confusingly.*
 actually wins, bucketed by drive urgency. You want a curve, not a cliff — and the starving-colonist case
 must visibly override at every strength.
 
+### M16's measured outcome — 24 October 2026
+
+Three modes, chosen when a colony is created and fixed for its life, and the standing `Intent`
+primitive. **One code path at three strengths** — `IntentRules.Reach` is 0.0 in Simulation, 0.8 in
+Hybrid, 3.0 in Directed, and there is no branch on mode anywhere in the body. A Simulation run
+evaluates the same term and multiplies by one, so a research run is provably this binary rather than
+a different build.
+
+`Colony.Mode` is init-only, and `ModeTests` asserts that by reflection rather than assuming it: a run
+that could change mode halfway is not evidence of anything, and nothing else in the codebase would
+notice that setter being loosened.
+
+#### The riskiest assumption: influence or an order?
+
+The scope's worry was that a multiplicative term would read as an order that sometimes fails
+confusingly. `--intent` puts one standing request on everybody — *tend the Loom, for ever* — and
+counts who listens, bucketed by how badly the colonist needed something else. 600 days, seed 4:
+
+| reach | asked wins | when pressed | (pressed ticks) | when easy | work | rest | wellbeing |
+|---|---|---|---|---|---|---|---|
+| 0.00 | 32.1% | 56.8% | 169 | 27.2% | 47.4% | 26.5% | 0.378 |
+| 0.25 | 34.4% | 35.5% | 31 | 29.2% | 49.1% | 24.2% | 0.376 |
+| 0.50 | 36.2% | — | 0 | 31.7% | 50.5% | 21.9% | 0.390 |
+| **0.80** (Hybrid) | **38.1%** | — | 0 | 33.9% | 51.9% | 19.7% | 0.426 |
+| 1.50 | 41.8% | — | 0 | 41.2% | 54.8% | 17.8% | 0.469 |
+| **3.00** (Directed) | **48.9%** | — | 0 | 50.1% | 59.6% | 16.3% | 0.459 |
+| 6.00 | 57.5% | 42.4% | 1,378 | 60.5% | 65.6% | 13.4% | 0.421 |
+| 15.00 | 65.3% | 35.7% | 49,478 | 69.7% | 72.4% | 10.6% | 0.349 |
+
+**A curve, not a cliff**, across sixty-fold of reach — so the term does read as influence.
+
+**But the first run of this sweep caught the promise being broken.** Before the fix, a colonist under
+real pressure did what they were asked **76.8% of the time at reach 15**, against 56.8% with no
+intent at all — the opposite of "a starving colonist still eats first". The strength was simply
+outrunning the need, and no choice of constant fixes that, because the failure is at the top of the
+range and the constant is at the bottom.
+
+So the promise is **structural now rather than tuned**: an intent's pull is multiplied by
+`1 − urgency`, clamped, so it fades as the need rises and is worth nothing once something is urgent.
+Urgency is already squared, so this bites late — a colonist with everything merely unsatisfied hears
+you perfectly well. After it, the "when pressed" column falls *below* the no-intent baseline at every
+reach with a non-empty bucket (35.5%, 42.4%, 35.7% against 56.8%): somebody who badly needs something
+else is now **less** likely to do what you asked than someone choosing freely. It holds at reaches
+nobody has measured, which a tuned constant would not.
+
+Two other things the sweep showed, both worth keeping:
+
+- **Being ordered about all day is bad for you.** Wellbeing at reach 15 was 0.101 before the fix —
+  worse than anything M12 measured — because an intent strong enough to override need drives
+  everybody into permanent urgency. It recovered to 0.349 with the fade, and the Directed setting of
+  3.0 actually reads *better* than no intent at all (0.459 against 0.378), because what is being
+  asked for happens to relieve something.
+- **An intent eats sleep.** Rest falls monotonically from 26.5% to 10.6% across the range. Nothing
+  else in v2 has moved Rest this far, which puts it beside M13's venue as the second thing that can.
+
+#### What it added
+
+- `Intent(verb, placeId, colonistId, strength, expiresOnDay)` on `Colony` beside `Provisions`,
+  because they are the same kind of thing: something the player keeps running that the colony
+  notices and that costs it nothing to ignore.
+- **Intents expire**, after 20 colony days, and at most four stand at once. A standing instruction
+  nobody remembers giving is how a simulation quietly becomes a puppet show. The same request twice
+  is one request restated, so an order cannot be assembled out of repeated suggestions.
+- **In Hybrid the colony's own decisions outrank the player's** — an intent whose subject is under an
+  open fork is not heard at all, which is the same rule that already refuses a Print verb while a
+  Print vote is open. In Directed they do not.
+- **`PlayerVerbs.NobodyInterferes`** guards all five existing verbs plus Ask, so a Simulation colony
+  refuses every one of them for its whole life with a sentence the client already knows how to show.
+- `POST /api/verbs/ask` and `/unask`, `mode` on `/api/restart`, a mode picker beside *new colony*,
+  and an "ask for … here" button in each room that knows what can be asked for there.
+
+
 ## M17 — Rooms that look like what the building is
 
 **Delivers.** Interiors that read as what the sign says, and an art-kit fetch script so a fresh clone

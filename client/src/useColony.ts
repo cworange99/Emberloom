@@ -119,12 +119,13 @@ export function useColony() {
     })
   }, [])
 
-  const restart = useCallback(async (colonists: number) => {
+  /** The mode is chosen here and never again — see ColonyMode on the server. */
+  const restart = useCallback(async (colonists: number, mode: ColonyState['mode']) => {
     setEvents([])
     await fetch('/api/restart', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ colonists, seed: Math.floor(Math.random() * 100000) }),
+      body: JSON.stringify({ colonists, mode, seed: Math.floor(Math.random() * 100000) }),
     })
   }, [])
 

@@ -184,7 +184,7 @@ public sealed class SimulationHost : BackgroundService
         }
     }
 
-    public void Restart(int colonists, int seed)
+    public void Restart(int colonists, int seed, ColonyMode mode = ColonyMode.Hybrid)
     {
         // The colony that is about to be thrown away gets its last page first. A new colony is a
         // new session and a new file; nothing about this one is carried into it.
@@ -199,7 +199,7 @@ public sealed class SimulationHost : BackgroundService
             _colony.Feed.Appended -= OnEvent;
 
             _random = new ColonyRandom(seed);
-            _colony = ColonyFactory.Create(colonists, _random, seed);
+            _colony = ColonyFactory.Create(colonists, _random, seed, mode);
             _body = new BodySimulation(_colony, _random);
             AttachBody();
             _lastDialogue.Clear();
@@ -929,6 +929,39 @@ public sealed class SimulationHost : BackgroundService
     }
 
     /// <summary>Provide: light, warmth, or a door. Body only — nothing here waits on a mind.</summary>
+    public VerbResult Ask(string verb, string? placeId, string? colonistId, double? strength)
+    {
+        if (!Enum.TryParse<ActionKind>(verb, ignoreCase: true, out var what))
+        {
+            return VerbResult.Refused($"Nobody here knows how to '{verb}'.");
+        }
+
+        VerbResult outcome;
+        lock (_gate)
+        {
+            outcome = PlayerVerbs.Ask(_colony, what, placeId, colonistId, strength ?? 1.0);
+        }
+
+        Broadcast(Snapshot());
+        return outcome;
+    }
+
+    public VerbResult Unask(string verb, string? placeId, string? colonistId)
+    {
+        if (!Enum.TryParse<ActionKind>(verb, ignoreCase: true, out var what))
+        {
+            return VerbResult.Refused($"Nobody here knows how to '{verb}'.");
+        }
+
+        lock (_gate)
+        {
+            _colony.Intents.RemoveAll(i => i.Verb == what && i.PlaceId == placeId && i.ColonistId == colonistId);
+        }
+
+        Broadcast(Snapshot());
+        return new VerbResult(true);
+    }
+
     public VerbResult Provide(string kind, string placeId)
     {
         if (!Enum.TryParse<ProvideKind>(kind, ignoreCase: true, out var what))
@@ -1196,6 +1229,8 @@ public sealed class SimulationHost : BackgroundService
         colony.StoresOverflowing,
         Math.Round(colony.Shortfall, 3),
         colony.Beds,
+        colony.Mode.ToString(),
+        colony.Intents.Select(i => IntentDto.From(i, colony)).ToList(),
         colony.ArtifactsRecovered,
         colony.Living.Count(),
         body.ActionsCompleted,

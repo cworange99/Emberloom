@@ -4,6 +4,7 @@ using Emberloom.Core.Drives;
 using Emberloom.Core.Events;
 using Emberloom.Core.Life;
 using Emberloom.Core.Simulation;
+using Emberloom.Core.Verbs;
 using Emberloom.Core.World;
 
 // M1 — the body, with no mind at all.
@@ -38,6 +39,9 @@ for (var i = 0; i < args.Length; i++)
             return 0;
         case "--despair":
             Despair(days, colonists, seed);
+            return 0;
+        case "--intent":
+            Intents(days, colonists, seed);
             return 0;
         default:
             Console.Error.WriteLine($"Unrecognised argument: {args[i]}");
@@ -336,6 +340,81 @@ return 0;
 /// drives low and the top of the stack — Standing, Meaning, Wonder — carrying the pressure.
 /// </para>
 /// </summary>
+/// <summary>
+/// How far an intent should reach — M16's riskiest assumption, which is that a multiplicative term
+/// reads as *influence* rather than as an order that sometimes fails confusingly.
+/// <para>
+/// What is wanted is a curve rather than a cliff: the fraction of ticks the asked-for action wins
+/// should rise smoothly with the strength, and a colonist who badly needs something else should
+/// override at every strength. The second column is the test that matters — if a starving colonist
+/// does what they were told, the term is an order and the mode is a lie.
+/// </para>
+/// </summary>
+static void Intents(int days, int colonists, int seed)
+{
+    Console.WriteLine($"Intent sweep — {days} colony-days, {colonists} founders, seed {seed}");
+    Console.WriteLine("Asking everyone to Tend the Loom, forever, and counting who listens.");
+    Console.WriteLine();
+    Console.WriteLine($"{"reach",6} {"asked wins",11} {"when pressed",13} {"(of)",9} {"when easy",10} {"work",6} {"rest",6} {"well",6}");
+
+    foreach (var reach in new[] { 0.0, 0.25, 0.5, 0.8, 1.5, 3.0, 6.0, 15.0 })
+    {
+        var random = new ColonyRandom(seed);
+        var colony = ColonyFactory.Create(colonists, random, seed, ColonyMode.Directed);
+        var body = new BodySimulation(colony, random);
+
+        // One standing request, renewed for ever, so the measurement is of the term rather than of
+        // the expiry. Strength 1 and the reach under test: the product is what the scorer sees.
+        IntentRules.ReachOverride = reach;
+
+        var asked = 0L;
+        var total = 0L;
+        var pressedAsked = 0L;
+        var pressed = 0L;
+        var easyAsked = 0L;
+        var easy = 0L;
+        var buckets = new Dictionary<string, long>();
+
+        for (var tick = 0; tick < days * Colony.TicksPerDay; tick++)
+        {
+            colony.Intents.Clear();
+            colony.Intents.Add(new Intent(ActionKind.Tend, null, null, 1.0, colony.Day + 10));
+
+            body.Tick();
+
+            foreach (var colonist in colony.Living)
+            {
+                var doing = colonist.Current?.Definition.Kind;
+                var dominant = colonist.Drives.Dominant(colonist.Weights);
+                var urgency = colonist.Drives.Urgency(dominant, colonist.Weights[dominant]);
+
+                total++;
+                if (doing == ActionKind.Tend) { asked++; }
+
+                // "Pressed" is the starving-colonist case the mode promise rests on.
+                if (urgency > 0.6) { pressed++; if (doing == ActionKind.Tend) { pressedAsked++; } }
+                else if (urgency < 0.2) { easy++; if (doing == ActionKind.Tend) { easyAsked++; } }
+
+                var bucket = colonist.Current is not { } action ? "idle"
+                    : colonist.PlaceId != action.Target.Id ? "travel"
+                    : action.Definition.Kind.ToString();
+                buckets[bucket] = buckets.GetValueOrDefault(bucket) + 1;
+            }
+        }
+
+        double Share(params string[] kinds) => total == 0 ? 0 : kinds.Sum(k => buckets.GetValueOrDefault(k)) / (double)total;
+
+        Console.WriteLine(
+            $"{reach,6:F2} {(total == 0 ? 0 : (double)asked / total),11:P1} "
+            + $"{(pressed == 0 ? 0 : (double)pressedAsked / pressed),13:P1} {pressed,9:N0} "
+            + $"{(easy == 0 ? 0 : (double)easyAsked / easy),10:P1} "
+            + $"{Share("Forage", "Salvage", "Clear", "Build", "Tend"),6:P1} {Share("Rest"),6:P1} "
+            + $"{colony.Living.Select(c => c.Wellbeing).DefaultIfEmpty(0).Average(),6:F3}");
+    }
+
+    IntentRules.ReachOverride = null;
+}
+
 /// <summary>
 /// How hard despair should shorten a life — M15's one real feedback loop, and the only sweep in the
 /// project looking for a cliff rather than a value.

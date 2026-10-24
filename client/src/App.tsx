@@ -1,3 +1,4 @@
+import type { ColonyState } from './types'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { CityView } from './CityView'
 import { RoomView } from './RoomView'
@@ -17,11 +18,19 @@ const SPEEDS: Array<{ value: string; label: string }> = [
   { value: 'Overnight', label: 'overnight' },
 ]
 
+/** What each mode means, in the colony's own terms. Fixed when a colony is created. */
+const MODE_MEANS: Record<ColonyState['mode'], string> = {
+  Simulation: 'Nobody interferes. Every verb is refused and nothing you ask carries any weight.',
+  Hybrid: 'Influence without orders. What you ask weighs a little, and the colony can overrule you.',
+  Directed: 'What you ask weighs a lot — but somebody in real need still does their own thing.',
+}
+
 export default function App() {
   const { world, state, events, connected, speech, setSpeed, setAutoSlow, restart } = useColony()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [focus, setFocus] = useState<InspectorFocus>({ tab: 'now' })
   const [follow, setFollow] = useState(true)
+  const [mode, setMode] = useState<ColonyState['mode']>('Hybrid')
   const [view, setView] = useState<View>(() => viewFromHash())
 
   // The view lives in the URL hash, so the browser's back button leaves a room and a reload stays
@@ -96,7 +105,7 @@ export default function App() {
       <header className="topbar">
         <div className="brand">
           What They Left Running
-          <span>M12 · how a life is going</span>
+          <span>M16 · modes and intents</span>
         </div>
 
         <div className="speeds" role="group" aria-label="Simulation speed">
@@ -132,7 +141,19 @@ export default function App() {
           follow feed
         </label>
 
-        <button className="back" onClick={() => void restart(4)}>
+        <label className="toggle" title={MODE_MEANS[mode]}>
+          <select value={mode} onChange={(e) => setMode(e.target.value as ColonyState['mode'])}>
+            <option value="Simulation">simulation</option>
+            <option value="Hybrid">hybrid</option>
+            <option value="Directed">directed</option>
+          </select>
+        </label>
+
+        <button
+          className="back"
+          onClick={() => void restart(4, mode)}
+          title={`A new colony in ${mode.toLowerCase()} mode, fixed for its whole life.`}
+        >
           new colony
         </button>
 
@@ -271,6 +292,8 @@ export default function App() {
                 place={roomPlace}
                 state={state.places.find((p) => p.id === roomPlace.id)}
                 charge={state.loomCharge}
+                mode={state.mode}
+                intents={state.intents}
               />
             )}
           </div>

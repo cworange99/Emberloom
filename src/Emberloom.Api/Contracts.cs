@@ -4,6 +4,7 @@ using Emberloom.Core.Drives;
 using Emberloom.Core.Events;
 using Emberloom.Core.Life;
 using Emberloom.Core.Simulation;
+using Emberloom.Core.Verbs;
 using Emberloom.Core.World;
 
 namespace Emberloom.Api;
@@ -210,6 +211,10 @@ public sealed record ColonyStateDto(
     bool StoresOverflowing,
     double Shortfall,
     int Beds,
+
+    /// <summary>M16: how far the player reaches into this colony, and what they have asked of it.</summary>
+    string Mode,
+    IReadOnlyList<IntentDto> Intents,
     int ArtifactsRecovered,
     int Population,
     int ActionsCompleted,
@@ -220,6 +225,19 @@ public sealed record ColonyStateDto(
     ForkDto? Fork,
     MythDto? Myth,
     IReadOnlyList<CoinedWordDto> Lexicon);
+
+/// <summary>One standing request, and how far it is currently reaching.</summary>
+public sealed record IntentDto(string Verb, string? PlaceId, string? ColonistId, double Strength, double Reach, double ExpiresOnDay, string Reads)
+{
+    public static IntentDto From(Intent intent, Colony colony) => new(
+        intent.Verb.ToString(),
+        intent.PlaceId,
+        intent.ColonistId,
+        intent.Strength,
+        Math.Round(intent.Strength * IntentRules.Reach(colony.Mode), 2),
+        Math.Round(intent.ExpiresOnDay, 1),
+        intent.Describe(colony));
+}
 
 /// <summary>The colony's story of its makers, as it is told now.</summary>
 public sealed record MythDto(string Story, int Version, double ToldOnDay, int Contradicted, bool ByHand)

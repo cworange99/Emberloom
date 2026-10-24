@@ -97,6 +97,17 @@ export interface Governor {
   throttling: boolean
 }
 
+export interface Intent {
+  verb: string
+  placeId: string | null
+  colonistId: string | null
+  strength: number
+  /** strength × what the mode multiplies it by; 0 in Simulation. */
+  reach: number
+  expiresOnDay: number
+  reads: string
+}
+
 export interface ColonyState {
   tick: number
   day: number
@@ -114,6 +125,9 @@ export interface ColonyState {
   /** M15: what fraction of the day's draw went unpaid, and how many beds the colony has. */
   shortfall: number
   beds: number
+  /** M16: how far the player reaches into this colony, and what they have asked of it. */
+  mode: 'Simulation' | 'Hybrid' | 'Directed'
+  intents: Intent[]
   artifactsRecovered: number
   population: number
   actionsCompleted: number

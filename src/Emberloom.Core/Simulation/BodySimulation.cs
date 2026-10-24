@@ -334,6 +334,17 @@ public sealed class BodySimulation
         _colony.Shortfall = wanted <= 0 ? 0 : Math.Clamp(-_colony.LoomCharge / wanted, 0, 1);
         _colony.LoomCharge = Math.Max(0, _colony.LoomCharge);
 
+        // An intent nobody remembers giving is how a simulation quietly becomes a puppet show.
+        for (var i = _colony.Intents.Count - 1; i >= 0; i--)
+        {
+            if (_colony.Day >= _colony.Intents[i].ExpiresOnDay)
+            {
+                _colony.Log(EventLayer.World,
+                    $"The colony has stopped hearing what was asked of it — {_colony.Intents[i].Describe(_colony)}.");
+                _colony.Intents.RemoveAt(i);
+            }
+        }
+
         // What there is nowhere to keep is not kept. Noticed once when it starts and once when it
         // stops, because a colony watching its own work spoil is a reason to raise a granary, and
         // a line a tick would be a flood rather than a reason.

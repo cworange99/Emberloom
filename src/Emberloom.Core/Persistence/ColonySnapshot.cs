@@ -61,6 +61,8 @@ public sealed record ColonySnapshot
 
     public double ProducingToday { get; init; }
 
+    public IReadOnlyList<Verbs.Intent> Intents { get; init; } = [];
+
     public double Shortfall { get; init; }
 
     public bool StoresOverflowing { get; init; }
@@ -103,6 +105,7 @@ public sealed record ColonySnapshot
         DrawPerHeadPerDay = colony.DrawPerHeadPerDay,
         ProducedPerDay = colony.ProducedPerDay,
         ProducingToday = colony.ProducingToday,
+        Intents = colony.Intents.ToList(),
         Shortfall = colony.Shortfall,
         StoresOverflowing = colony.StoresOverflowing,
         ArtifactsRecovered = colony.ArtifactsRecovered,
@@ -185,6 +188,7 @@ public sealed record ColonySnapshot
 
         colony.Lexicon.AddRange(Lexicon);
         colony.MythHistory.AddRange(MythHistory);
+        colony.Intents.AddRange(Intents);
         colony.ForkHistory.AddRange(ForkHistory.Select(f => f.Rebuild()));
         colony.OpenFork = OpenFork?.Rebuild();
 

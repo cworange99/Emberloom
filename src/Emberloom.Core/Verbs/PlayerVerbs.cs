@@ -1,3 +1,4 @@
+using Emberloom.Core.Actions;
 using Emberloom.Core.Colonists;
 using Emberloom.Core.Drives;
 using Emberloom.Core.Events;
@@ -37,8 +38,72 @@ public static class PlayerVerbs
     /// as anything the body records, so it is near the top of the next reflection's batch and can
     /// become a belief. Nobody else hears it.
     /// </summary>
+    /// <summary>
+    /// Whether the player may reach into this colony at all — M16. A colony begun as a simulation
+    /// refuses every verb for its whole life, which is what makes a research run evidence of
+    /// anything: the mode is fixed at creation and there is no way to change it afterwards.
+    /// </summary>
+    public static VerbResult? NobodyInterferes(Colony colony) => colony.Mode == ColonyMode.Simulation
+        ? VerbResult.Refused("This colony was begun as a simulation. Nothing reaches into it, including you.")
+        : null;
+
+    /// <summary>
+    /// Ask: a standing request the colony hears and may ignore — M16, and the only verb that is not
+    /// a one-off. It is one more term in the utility score, so what it does is make something more
+    /// attractive rather than make it happen; <see cref="IntentRules"/> holds how far it reaches
+    /// and why somebody in real need cannot hear it at all.
+    /// </summary>
+    public static VerbResult Ask(
+        Colony colony,
+        ActionKind verb,
+        string? placeId,
+        string? colonistId,
+        double strength)
+    {
+        if (NobodyInterferes(colony) is { } no)
+        {
+            return no;
+        }
+
+        if (placeId is not null && colony.Map.Find(placeId) is null)
+        {
+            return VerbResult.Refused($"There is nowhere called '{placeId}'.");
+        }
+
+        var who = colonistId is null ? null : colony.Find(colonistId);
+        if (colonistId is not null && who is not { IsAlive: true })
+        {
+            return VerbResult.Refused("There is nobody here by that name.");
+        }
+
+        var intent = new Intent(
+            verb,
+            placeId,
+            colonistId,
+            Math.Clamp(strength, 0, 1),
+            colony.Day + IntentRules.LastsDays);
+
+        // The same request twice is one request, restated — otherwise asking repeatedly would
+        // multiply the term against itself and an order could be assembled out of suggestions.
+        colony.Intents.RemoveAll(i => i.Verb == intent.Verb && i.PlaceId == intent.PlaceId && i.ColonistId == intent.ColonistId);
+        colony.Intents.Add(intent);
+
+        while (colony.Intents.Count > IntentRules.AtMostStanding)
+        {
+            colony.Intents.RemoveAt(0);
+        }
+
+        colony.Log(EventLayer.World, $"Something has asked the colony for this — {intent.Describe(colony)}.", notable: true);
+        return new VerbResult(true, Colonist: who);
+    }
+
     public static VerbResult Speak(Colony colony, BodySimulation body, Colonist colonist, string text)
     {
+        if (NobodyInterferes(colony) is { } refused)
+        {
+            return refused;
+        }
+
         var words = text.Trim();
 
         if (words.Length == 0)
@@ -71,6 +136,11 @@ public static class PlayerVerbs
     /// </summary>
     public static VerbResult Print(Colony colony, BodySimulation body, Random random, string? seed)
     {
+        if (NobodyInterferes(colony) is { } refused)
+        {
+            return refused;
+        }
+
         if (colony.OpenFork is { Kind: ForkKind.Print, IsOpen: true })
         {
             return VerbResult.Refused("The colony is deciding that right now. Let them finish.");
@@ -121,6 +191,11 @@ public static class PlayerVerbs
     /// </summary>
     public static VerbResult Provide(Colony colony, BodySimulation body, ProvideKind kind, string placeId)
     {
+        if (NobodyInterferes(colony) is { } refused)
+        {
+            return refused;
+        }
+
         var place = colony.Map.Find(placeId);
         if (place is null)
         {
@@ -211,6 +286,11 @@ public static class PlayerVerbs
     /// </summary>
     public static VerbResult Withhold(Colony colony, BodySimulation body, ProvisionKind kind, string placeId)
     {
+        if (NobodyInterferes(colony) is { } refused)
+        {
+            return refused;
+        }
+
         var provision = colony.Provisions.FirstOrDefault(p => p.Kind == kind && p.PlaceId == placeId);
         if (provision is null)
         {
@@ -249,6 +329,11 @@ public static class PlayerVerbs
     /// </summary>
     public static VerbResult Reveal(Colony colony, BodySimulation body, Colonist colonist, string revelationId)
     {
+        if (NobodyInterferes(colony) is { } refused)
+        {
+            return refused;
+        }
+
         var revelation = Revelations.Find(revelationId);
         if (revelation is null)
         {

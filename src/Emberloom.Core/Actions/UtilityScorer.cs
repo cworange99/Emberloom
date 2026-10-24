@@ -264,6 +264,14 @@ public sealed class UtilityScorer
             modifier *= 0.5;
         }
 
+        // M16: what the player asked for, as one more term beside the darkness and the danger
+        // rather than as a branch. The mode is a strength — zero in Simulation, so the term is
+        // evaluated and multiplies by one, and a research run is provably this same binary.
+        foreach (var intent in colony.Intents)
+        {
+            modifier *= 1.0 + Verbs.IntentRules.Pull(intent, colony, colonist, definition.Kind, place.Id);
+        }
+
         if (!place.IsExplored)
         {
             modifier *= 1.0 + 0.4 * colonist.Weights[Drive.Wonder];
