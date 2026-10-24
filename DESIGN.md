@@ -272,7 +272,7 @@ Expose the governor itself as a live readout: queue depth, tokens/min, calls dro
 | Episodic | thousands | Body, every tick | Structured rows with valence and intensity. Salience decays; low-salience rows are pruned. |
 | Consolidated | dozens | Mind, at reflection | A written memory standing in for a batch of episodic rows. Embedded for retrieval. |
 | Belief | 5–20 | Mind, at reflection | A durable claim about the world, **with links back to the memories that produced it**. |
-| Myth | 1–5 per colony | Mind, at coinage | Colony-level, inherited by everyone, mutated slightly at every retelling. |
+| Myth | 1–5 per colony | Mind, when the colony has enough new to go on | Colony-level, inherited by everyone, retold to account for what has happened since. |
 
 **As built at M7, phase B.**
 
@@ -294,8 +294,15 @@ Expose the governor itself as a live readout: queue depth, tokens/min, calls dro
     - the forks it has decided
   - It also sees the beliefs its colonists hold that bear on the makers.
   - It is first told once there are three such things. It is retold after three more, and no
-    sooner than three days apart. Each retelling carries the last telling in its own prompt and
-    is asked to drift, not start over.
+    sooner than thirty colony days apart — the overnight run retold it every three or four days,
+    158 times, and with lives in months a telling a month is plenty.
+  - Each retelling carries the last telling in its own prompt, **and what is new since it**: the
+    evidence is split into what the colony has long had to go on and what has happened since, and
+    the task asks for a story that accounts for the new rather than one that keeps the old. Told
+    only to drift, which is what it was asked for before M18, it did not drift at all — 158
+    tellings came back near word for word, because nothing in the prompt gave it a reason to
+    change. The diff is assembled host-side from colony state; the server is told nothing and
+    remembers nothing.
   - It names the beliefs that go against it, which lights the inspector's "contradicts the colony
     myth" flag.
   - The story sits straight after the world rules in every prompt, where the cache covers it

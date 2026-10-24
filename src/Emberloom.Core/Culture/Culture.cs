@@ -54,6 +54,28 @@ public sealed record MythTelling
     /// <summary>How much the colony had to go on when this was told. A retelling waits for more.</summary>
     public required int Evidence { get; init; }
 
+    /// <summary>
+    /// What the colony had found and been shown when this was told — M18, and the whole of what
+    /// makes a retelling a retelling rather than a restatement.
+    /// <para>
+    /// The prompt used to hand a mind the previous telling and the complete evidence list with no
+    /// mark on either, while instructing it to keep most of how it was last told. There was nothing
+    /// in it to change the story, so across 158 tellings the story did not change: near word for
+    /// word, every time. Cores and forks can be diffed against <see cref="ToldOnDay"/> because they
+    /// carry the day they happened; artifacts are a bare count and revelations a set, so what there
+    /// was then is recorded here.
+    /// </para>
+    /// <para>
+    /// Kept on the telling, host-side. This is the shape that most tempts a server-side cache —
+    /// "tell the model what is new since last time" sounds like something the server should
+    /// remember — and the golden rule is that it must not. The diff is assembled from colony state
+    /// and goes out in the prompt like everything else.
+    /// </para>
+    /// </summary>
+    public int ArtifactsThen { get; init; }
+
+    public IReadOnlyList<string> RevealedThen { get; init; } = [];
+
     /// <summary>Beliefs held in the colony that go against this telling.</summary>
     public IReadOnlyList<string> ContradictedBeliefIds { get; init; } = [];
 
@@ -137,6 +159,8 @@ public static class CultureRules
             Story = story,
             ToldOnDay = colony.Day,
             Evidence = Evidence(colony),
+            ArtifactsThen = colony.ArtifactsRecovered,
+            RevealedThen = colony.Revealed.Keys.ToList(),
             ByHand = true
         });
 

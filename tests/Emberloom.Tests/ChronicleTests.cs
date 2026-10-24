@@ -96,27 +96,94 @@ public class ChronicleTests
         Assert.Contains("where it stopped", text);
     }
 
+    /// <summary>
+    /// M18: the record is budgeted in lines, not in colony-days. The old constant kept the last 60
+    /// days, which is speed-blind in the wrong direction — a colony day is an hour at 1× and
+    /// fifteen real seconds at Overnight, so the same number meant two and a half months of
+    /// watching or a quarter of an hour of it.
+    /// </summary>
     [Fact]
-    public void OldDaysKeepTheirTallyAndLoseTheirLines()
+    public void AQuietColonyKeepsItsWholeLife()
     {
         var (colony, _, chronicle) = Start();
 
-        for (var day = 1; day <= ChronicleRules.DetailDays + 5; day++)
+        // One line a day for three times as many days as the old window kept, and well under the
+        // line budget: nothing should age out at all.
+        for (var day = 1; day <= 200; day++)
         {
             colony.Log(EventLayer.World, $"Something happened on day {day}.", notable: true);
             chronicle.CloseDay(colony, day);
         }
 
-        // Every colony day rewrites the whole file. Unbounded detail would have an Overnight run
-        // writing megabytes every few real seconds by the second week.
-        Assert.Empty(chronicle.Days[0].Lines);
-        Assert.Equal(1, chronicle.Days[0].Number);
-        Assert.NotEmpty(chronicle.Days[^1].Lines);
+        Assert.All(chronicle.Days, d => Assert.Single(d.Lines));
+
+        var text = chronicle.Compose(colony, Stamp());
+        Assert.Contains("Something happened on day 1.", text);
+        Assert.Contains("Something happened on day 200.", text);
+    }
+
+    /// <summary>
+    /// And a busy one is thinned rather than cut off: a day gives up its lines down to one before
+    /// any day gives up its last, so a long run reads as a thinning instead of a cliff.
+    /// </summary>
+    [Fact]
+    public void ABusyColonyIsThinnedOldestFirst()
+    {
+        var (colony, _, chronicle) = Start();
+
+        var days = (ChronicleRules.LinesKept / ChronicleRules.LinesPerDay) + 40;
+        for (var day = 1; day <= days; day++)
+        {
+            for (var i = 0; i < ChronicleRules.LinesPerDay; i++)
+            {
+                colony.Log(EventLayer.World, $"On day {day}, thing {i}.", notable: true);
+            }
+
+            chronicle.CloseDay(colony, day);
+        }
+
+        // Every colony day rewrites the whole file, so something has to bound it.
+        Assert.True(chronicle.Days.Sum(d => d.Lines.Count) <= ChronicleRules.LinesKept);
+
+        // The oldest is thinned, the newest is whole, and the thinned day still says one thing.
+        Assert.Single(chronicle.Days[0].Lines);
+        Assert.Equal(ChronicleRules.LinesPerDay, chronicle.Days[^1].Lines.Count);
+        Assert.True(chronicle.Days[0].DroppedCount > 0);
 
         var text = chronicle.Compose(colony, Stamp());
         Assert.Contains("### Day 1 —", text);
-        Assert.DoesNotContain("Something happened on day 1.", text);
-        Assert.Contains($"Something happened on day {ChronicleRules.DetailDays + 5}.", text);
+        Assert.Contains("On day 1, thing 0.", text);
+        Assert.DoesNotContain("On day 1, thing 5.", text);
+    }
+
+    /// <summary>
+    /// What was lost is said in words rather than counted. A bare "and 7 more things happened"
+    /// tells a reader that something did and nothing about what.
+    /// </summary>
+    [Fact]
+    public void WhatTheRecordGivesUpIsSummarisedRatherThanDiscarded()
+    {
+        var (colony, _, chronicle) = Start();
+
+        for (var i = 0; i < ChronicleRules.LinesPerDay; i++)
+        {
+            colony.Log(EventLayer.World, $"Kept {i}.", notable: true);
+        }
+
+        colony.Log(EventLayer.Body, "Someone did a thing.", notable: true);
+        colony.Log(EventLayer.Body, "Someone did another thing.", notable: true);
+        colony.Log(EventLayer.Mind, "Someone thought something.", notable: true);
+
+        chronicle.CloseDay(colony, 1);
+
+        var day = Assert.Single(chronicle.Days);
+        Assert.Equal(3, day.DroppedCount);
+        Assert.Equal(2, day.Dropped[EventLayer.Body]);
+        Assert.Equal(1, day.Dropped[EventLayer.Mind]);
+
+        var text = chronicle.Compose(colony, Stamp());
+        Assert.Contains("2 things people did", text);
+        Assert.Contains("1 thing people thought or said", text);
     }
 
     [Fact]
@@ -133,8 +200,8 @@ public class ChronicleTests
 
         var day = Assert.Single(chronicle.Days);
         Assert.Equal(ChronicleRules.LinesPerDay, day.Lines.Count);
-        Assert.Equal(4, day.Dropped);
-        Assert.Contains("and 4 more things happened", chronicle.Compose(colony, Stamp()));
+        Assert.Equal(4, day.DroppedCount);
+        Assert.Contains("and 4 things people did", chronicle.Compose(colony, Stamp()));
     }
 
     [Fact]

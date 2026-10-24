@@ -319,6 +319,77 @@ public class CultureTests
     }
 
     /// <summary>
+    /// M18: a retelling is told what is new since the last one.
+    /// <para>
+    /// The prompt used to hand a mind the previous telling and the whole evidence list with no mark
+    /// on either, while instructing it to keep most of how it was last told. There was nothing in
+    /// it that could change the story, and across 158 tellings in the overnight run the story did
+    /// not change — near word for word, every time. What is new is now marked as new, and the task
+    /// asks for a story that accounts for it.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void ARetellingIsToldWhatHasHappenedSince()
+    {
+        var (colony, body) = Start();
+        colony.ArtifactsRecovered = 2;
+
+        colony.MythHistory.Add(new MythTelling
+        {
+            Version = 1,
+            Story = "The makers wove the world and went away.",
+            ToldOnDay = colony.Day,
+            Evidence = CultureRules.Evidence(colony),
+            ArtifactsThen = colony.ArtifactsRecovered,
+            RevealedThen = colony.Revealed.Keys.ToList()
+        });
+
+        // Two things the colony did not have when it last told the story.
+        colony.ArtifactsRecovered = 5;
+        PlayerVerbs.Reveal(colony, body, colony.Colonists[0], "ledger");
+
+        var prompt = MythCall.BuildPrompt(colony);
+
+        Assert.Contains("[What has happened since it was last told]", prompt);
+        Assert.Contains("The makers wove the world and went away.", prompt);
+
+        // The new evidence is under the new heading, and the old is not.
+        var since = prompt[prompt.IndexOf("[What has happened since it was last told]", StringComparison.Ordinal)..];
+        Assert.Contains(Revelations.Find("ledger")!.Shown, since);
+        Assert.Contains("three more pieces", since);
+
+        // And the instruction now gives it a reason to change rather than to repeat.
+        Assert.Contains("accounts for what has happened since", prompt);
+        Assert.DoesNotContain("Keep most of how it was last told", prompt);
+    }
+
+    /// <summary>
+    /// And nothing is new when nothing has happened — a colony that has found nothing since is not
+    /// handed an empty heading to invent something under.
+    /// </summary>
+    [Fact]
+    public void ARetellingWithNothingNewIsNotToldThereIs()
+    {
+        var (colony, _) = Start();
+        colony.ArtifactsRecovered = 2;
+
+        colony.MythHistory.Add(new MythTelling
+        {
+            Version = 1,
+            Story = "The makers wove the world and went away.",
+            ToldOnDay = colony.Day,
+            Evidence = CultureRules.Evidence(colony),
+            ArtifactsThen = colony.ArtifactsRecovered,
+            RevealedThen = colony.Revealed.Keys.ToList()
+        });
+
+        var prompt = MythCall.BuildPrompt(colony);
+
+        Assert.DoesNotContain("[What has happened since it was last told]", prompt);
+        Assert.Contains("[What the colony has long had to go on]", prompt);
+    }
+
+    /// <summary>
     /// The golden rule, for the myth: the earlier telling travels in the request. The server is
     /// never told there was one.
     /// </summary>

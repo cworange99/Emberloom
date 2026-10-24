@@ -19,15 +19,38 @@ public sealed record Revelation(
 /// vividly as anything the body records and can pass it on only by talking. The colony keeps a
 /// record of what has been shown, for the myth system to read at M7.
 /// <para>
-/// PLACEHOLDER CONTENT. These five were written to exercise the verb, not as the game's lore:
-/// the fragments themselves are Jeremy's to author. Anything that unlocks a capability says so in
-/// <see cref="Revelation.Unlocks"/>, and the body change is in <see cref="Revelation.Apply"/>.
+/// PLACEHOLDER CONTENT, still — these five were written to exercise the verb, not as the game's
+/// lore, and the fragments themselves are Jeremy's to author. Anything that unlocks a capability
+/// says so in <see cref="Revelation.Unlocks"/>, and the body change is in
+/// <see cref="Revelation.Apply"/>.
+/// <para>
+/// What M18 *did* settle is the two mechanical effects, which the scope flagged as needing
+/// re-deciding alongside whatever prose replaces these. <c>stair-seal</c> halves what is left of
+/// the East Stairwell and still means what it says. <c>charge-lines</c> did not: see
+/// <see cref="ChargeLinesBoost"/>. Both effects are independent of the words, so new prose can be
+/// dropped in over them without touching the body.
+/// </para>
 /// </para>
 /// </summary>
 public static class Revelations
 {
-    /// <summary>What knowing where the charge comes from adds to the Loom's trickle: a quarter again.</summary>
-    public const double ChargeLinesBoost = 0.8 * 40 / Life.LifeRules.BaseLifespanDays;
+    /// <summary>
+    /// What knowing where the charge comes from adds to the Loom's own trickle, per colony-day.
+    /// <para>
+    /// **Re-decided at M18, because M14 had quietly made it a lie.** It used to be 0.0148 a day — a
+    /// quarter again of the flat trickle the Loom had in version 1. M14 took that trickle to zero
+    /// and gave the colony an economy instead: labour feeds the Loom now, at something between 1
+    /// and 3 a day depending on how many grown people there are. Against that, the old boost was
+    /// noise, and the line the player is shown — "the Loom gathers charge faster" — was no longer
+    /// true of anything they could measure.
+    /// </para>
+    /// <para>
+    /// A quarter of what four founders produce in a day, which is a real gift to a young colony and
+    /// a rounding error to a grown one. That is the right shape for a revelation: the makers' leavings
+    /// matter most to the people who have least.
+    /// </para>
+    /// </summary>
+    public const double ChargeLinesBoost = 0.25;
 
     public static readonly IReadOnlyList<Revelation> All =
     [

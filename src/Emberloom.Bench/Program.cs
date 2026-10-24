@@ -22,6 +22,18 @@ if (args.Length > 0 && args[0] == "--stakes")
     return await StakesProbe.RunAsync(where, model, samples, probeCts.Token);
 }
 
+if (args.Length > 0 && args[0] == "--myth")
+{
+    using var mythCts = new CancellationTokenSource();
+    Console.CancelKeyPress += (_, e) => { e.Cancel = true; mythCts.Cancel(); };
+
+    var mythModel = args.Length > 1 ? args[1] : "llama3.2:3b";
+    var tellings = args.Length > 2 ? int.Parse(args[2]) : 6;
+    var at = args.Length > 3 ? new Uri(args[3]) : new Uri("http://localhost:11434");
+
+    return await MythProbe.RunAsync(at, mythModel, tellings, mythCts.Token);
+}
+
 var options = CliOptions.Parse(args);
 if (options is null)
 {

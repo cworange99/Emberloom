@@ -105,7 +105,7 @@ export default function App() {
       <header className="topbar">
         <div className="brand">
           What They Left Running
-          <span>M17 · rooms that look like it</span>
+          <span>M18 · the record and the story</span>
         </div>
 
         <div className="speeds" role="group" aria-label="Simulation speed">

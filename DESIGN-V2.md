@@ -855,6 +855,103 @@ tells you what you wanted to know.
 - **The five placeholder fragments in `Revelations.cs` get real content**, Jeremy's to author. Two carry
   mechanical effects (`charge-lines`, `stair-seal`) that need re-deciding alongside the prose.
 
+### M18's outcome — 24 October 2026
+
+Four carried-over items. Three are done; the fourth is Jeremy's and is flagged below.
+
+#### The detail window is a budget in lines, not colony-days
+
+`ChronicleRules.DetailDays = 60` was speed-blind in the wrong direction. A colony day is an hour of
+real time at 1× and **fifteen real seconds at Overnight**, so the same constant meant two and a half
+months of watching or a quarter of an hour of it. The 3,787-day run kept quotable lines for sixty
+days and bare tallies for three thousand seven hundred and twenty-seven.
+
+`ChronicleRules.LinesKept = 900` instead. A quiet colony keeps its whole life; a busy one keeps the
+stretch that had things in it. It also bounds the file *directly*, which is what the old constant
+was really for — the whole record is rewritten every time it is amended, so an unbounded one at
+Overnight would be rewriting megabytes every few seconds.
+
+#### What the record gives up is summarised rather than discarded
+
+Both the overflow past a day's twelve lines and the lines an aged-out day lost were thrown away as a
+bare number: *"and 7 more things happened."* That tells a reader something happened and nothing
+about what.
+
+- A day now gives up its lines **in two steps**. First it is thinned to the line it opened with and
+  the rest become a tally; only when every day has been thinned and the record is *still* over
+  budget does the oldest give up its last line. A long run reads as a thinning rather than a cliff:
+  one line a day five thousand days back, twelve last week, and nowhere a stretch that claims
+  nothing happened when something did.
+- What was lost is described by **layer**, which is the one piece of structure every line carries
+  and so the only thing that can be said about a line without having read it: *"and 4 things people
+  did, 2 things people thought or said."*
+
+#### The myth is told what is new since the last telling
+
+The prompt handed a mind the previous telling and the complete evidence list with no mark on either,
+while instructing it to *"keep most of how it was last told"*. There was nothing in it that could
+change the story, so across 158 tellings nothing did.
+
+The evidence is now split into **what the colony has long had to go on** and **what has happened
+since it was last told**, and the task asks for a story that *accounts for* the new rather than one
+that keeps the old. Cores and forks carry the day they happened and are diffed against the telling's
+own day; artifacts are a count and revelations a set, so `MythTelling` records what there was
+(`ArtifactsThen`, `RevealedThen`).
+
+**Golden rule.** This is the shape that most tempts a server-side cache, because "tell the model
+what is new since last time" sounds like something the server should be remembering. It is not. The
+diff is assembled host-side from colony state and goes out in the prompt like everything else.
+
+**Measured, with `Emberloom.Bench --myth`** — six tellings against llama3.2:3b, the colony finding
+more between each:
+
+| telling | kept from the one before |
+|---|---|
+| 1 | — |
+| 2 | 42% |
+| 3 | 97% |
+| 4 | 74% |
+| 5 | 78% |
+| 6 | 89% |
+
+**Mean 76% kept, against the near-100% that was observed before.** The story genuinely moves: it
+opens with "the Guardians of the Forest" protecting the land from a great darkness and arrives six
+tellings later at "the makers, wise and kind", with the Loom's purpose rewritten twice on the way.
+Telling 3 is the shape of the old failure surviving in miniature — it kept everything and appended a
+sentence rather than revising — and the rest are revisions.
+
+**One honest limit.** The retellings change, but at 3B they do not visibly change *because of the
+specific new evidence*. A ledger of struck-through designations and a stairwell sealed from above
+were marked as new, and the story stayed warm and green. The mechanism is right and the model is the
+ceiling; the thing to watch when a larger deep lane is affordable is whether the new evidence starts
+showing up in the words. Worth noting too that the drift trends toward *blandness* — each telling is
+a little gentler and vaguer than the last, which is the model's own pull rather than the prompt's.
+
+#### The two DESIGN §7 errors
+
+- The tier table said the myth is written *"at coinage"*. It is not; it is written when the colony
+  has enough new to go on. Corrected, along with "mutated slightly at every retelling", which is
+  what the code was asked to do and provably did not.
+- §7 said retellings come no sooner than *three days* apart. The code says thirty, and has since the
+  overnight run told the story 158 times. Corrected, with the reason.
+
+#### Still Jeremy's: the five fragments
+
+`Revelations.cs` still says PLACEHOLDER CONTENT and still should. The five were written to exercise
+the verb, and the prose is Jeremy's to author.
+
+What M18 *did* settle is the pair of mechanical effects the scope flagged as needing re-deciding,
+because one of them had quietly become a lie. **`charge-lines` promised "the Loom gathers charge
+faster" and added 0.0148 a day** — a quarter again of v1's flat trickle. M14 took that trickle to
+zero and gave the colony an economy instead, where labour feeds the Loom at between 1 and 3 a day.
+Against that, the old boost was noise and the promise was false. It is now **0.25 a day**: a quarter
+of what four founders make, which is a real gift to a young colony and a rounding error to a grown
+one — the right shape for a revelation, since the makers' leavings should matter most to the people
+who have least. `stair-seal` halves what is left of the East Stairwell and still means what it says.
+
+Both effects are independent of the words, so new prose drops in over them without touching the body.
+
+
 ## M19 — The title
 
 Rename last. The trademark and storefront search that DESIGN §13 flagged in September — "worth checking
@@ -916,9 +1013,9 @@ happens to be what separates it from the one existing use.
 
 | Item | Home |
 |---|---|
-| Chronicle detail window is speed-blind; dropped lines discarded | M18 |
-| Myth retellings converge — prompt never says what is new | M18 |
-| `Revelations.cs` holds five placeholders | M18 |
+| Chronicle detail window is speed-blind; dropped lines discarded | **Done at M18** |
+| Myth retellings converge — prompt never says what is new | **Done at M18 — measured at 76% kept, was ~100%** |
+| `Revelations.cs` holds five placeholders | **Still open — Jeremy's to author.** Their two mechanical effects were re-decided at M18 |
 | No persistence of any kind | M11 |
 | Trace text retention capped at 40 calls, early calls unrecoverable | M11 |
 | Art kits need a fetch script or installer | **Done at M17 — assets/fetch-kits.ps1** |
@@ -930,8 +1027,8 @@ happens to be what separates it from the one existing use.
 | `PopulationCap = 20` is a thinking budget masquerading as a constant | Decided at M14 |
 | Core forks have no ask-again cooldown while Print and Ascend do | Name it at M10; probably intentional |
 | Marketability still deferred | After M17, when it can be seen |
-| DESIGN §7 says retellings come 3 days apart; code says 30 | Fix with M18 |
-| DESIGN §7 tier table misdescribes Myth as written "at coinage" | Fix with M18 |
+| DESIGN §7 says retellings come 3 days apart; code says 30 | **Fixed at M18** |
+| DESIGN §7 tier table misdescribes Myth as written "at coinage" | **Fixed at M18** |
 | `README.md:1` has a stray duplicated M1 table row above the title | Fix in M8 |
 | `SeedRoller`'s doc comment is stale (M5 and M6 shipped) | Fix in M8 |
 

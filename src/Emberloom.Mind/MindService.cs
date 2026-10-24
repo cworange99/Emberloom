@@ -677,6 +677,11 @@ public sealed class MindService : IDisposable
                 Story = result.Story,
                 ToldOnDay = colony.Day,
                 Evidence = evidence,
+
+                // What the colony had to go on at this moment, so the next telling can be told
+                // what is new rather than handed the lot again. See MythTelling.ArtifactsThen.
+                ArtifactsThen = colony.ArtifactsRecovered,
+                RevealedThen = colony.Revealed.Keys.ToList(),
                 ContradictedBeliefIds = contradicted,
                 Model = result.Call?.Model,
                 Prompt = result.Call?.RequestPrompt,

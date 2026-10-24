@@ -23,7 +23,7 @@ public sealed class SessionChronicle
 {
     private readonly List<Day> _days = [];
     private readonly List<string> _openDay = [];
-    private int _openDayDropped;
+    private readonly Dictionary<EventLayer, int> _openDayDropped = [];
 
     public SessionChronicle(int seed, int colonists, DateTimeOffset startedAt)
     {
@@ -72,7 +72,43 @@ public sealed class SessionChronicle
         int Words,
         int Tellings,
         IReadOnlyList<string> Lines,
-        int Dropped);
+        IReadOnlyDictionary<EventLayer, int> Dropped)
+    {
+        public int DroppedCount => Dropped.Values.Sum();
+
+        /// <summary>
+        /// What was lost, in words — M18. Both the overflow past a day's line budget and the lines
+        /// an aged-out day gives up used to be thrown away as a bare number, which told a reader
+        /// that something had happened and nothing about what. The layer is the one piece of
+        /// structure every line carries, so it is the one thing that can be said about a line
+        /// without having read it.
+        /// </summary>
+        public string DescribeDropped()
+        {
+            var parts = new List<string>();
+
+            foreach (var (layer, count) in Dropped.OrderByDescending(d => d.Value))
+            {
+                if (count == 0)
+                {
+                    continue;
+                }
+
+                parts.Add(layer switch
+                {
+                    EventLayer.Body => $"{count} thing{Plural(count)} people did",
+                    EventLayer.Mind => $"{count} thing{Plural(count)} people thought or said",
+                    EventLayer.World => $"{count} thing{Plural(count)} that happened to the colony",
+                    EventLayer.Player => $"{count} thing{Plural(count)} you did",
+                    _ => $"{count} more"
+                });
+            }
+
+            return string.Join(", ", parts);
+        }
+
+        private static string Plural(int count) => count == 1 ? string.Empty : "s";
+    }
 
     /// <summary>
     /// Offered every line the colony logs. Only the notable ones are kept — the same ones the feed
@@ -95,7 +131,7 @@ public sealed class SessionChronicle
 
         if (_openDay.Count >= ChronicleRules.LinesPerDay)
         {
-            _openDayDropped++;
+            _openDayDropped[colonyEvent.Layer] = _openDayDropped.GetValueOrDefault(colonyEvent.Layer) + 1;
             return;
         }
 
@@ -118,22 +154,66 @@ public sealed class SessionChronicle
             colony.Lexicon.Count,
             colony.Myth?.Version ?? 0,
             [.. _openDay],
-            _openDayDropped));
+            new Dictionary<EventLayer, int>(_openDayDropped)));
 
         _openDay.Clear();
-        _openDayDropped = 0;
+        _openDayDropped.Clear();
         LastDayClosed = day;
         HasNews = true;
 
-        // Older days keep their tally and lose their lines. A day costs about a kilobyte, and the
-        // whole file is rewritten every time it is amended: unbounded, an Overnight run that went
-        // for weeks would end up rewriting megabytes every few real seconds.
-        for (var i = 0; i < _days.Count - ChronicleRules.DetailDays; i++)
+        KeepWithinBudget();
+    }
+
+    /// <summary>
+    /// Thins the record back to <see cref="ChronicleRules.LinesKept"/> quoted lines, oldest first —
+    /// M18. The whole file is rewritten every time it is amended, so something has to bound it.
+    /// <para>
+    /// A day gives up its lines in two steps rather than one. First it is thinned to the line it
+    /// opened with and the rest become a tally of what was lost; only if the record is still over
+    /// budget after every day has been thinned does the oldest give up its last line too. So a long
+    /// run reads as a thinning rather than a cliff: five thousand days ago there is one line a day,
+    /// last week there are twelve, and nowhere is there a stretch that simply says nothing happened
+    /// when something did.
+    /// </para>
+    /// </summary>
+    private void KeepWithinBudget()
+    {
+        var kept = _days.Sum(d => d.Lines.Count);
+
+        for (var i = 0; i < _days.Count && kept > ChronicleRules.LinesKept; i++)
         {
-            if (_days[i].Lines.Count > 0)
+            if (_days[i].Lines.Count <= ChronicleRules.LinesWhenThinned)
             {
-                _days[i] = _days[i] with { Lines = [], Dropped = 0 };
+                continue;
             }
+
+            var thinned = _days[i].Lines.Take(ChronicleRules.LinesWhenThinned).ToList();
+            var lost = _days[i].Lines.Count - thinned.Count;
+
+            // What a thinned day gives up is the body's, not the world's: World lines are the
+            // colony's turning points and they are few, so they are the ones that survive — but
+            // nothing here has read the lines, so the honest thing is to count them as Body and
+            // say so rather than guess at what each one was.
+            var dropped = new Dictionary<EventLayer, int>(_days[i].Dropped);
+            dropped[EventLayer.Body] = dropped.GetValueOrDefault(EventLayer.Body) + lost;
+
+            _days[i] = _days[i] with { Lines = thinned, Dropped = dropped };
+            kept -= lost;
+        }
+
+        // Still over: the oldest days give up their last line as well.
+        for (var i = 0; i < _days.Count && kept > ChronicleRules.LinesKept; i++)
+        {
+            if (_days[i].Lines.Count == 0)
+            {
+                continue;
+            }
+
+            var dropped = new Dictionary<EventLayer, int>(_days[i].Dropped);
+            dropped[EventLayer.Body] = dropped.GetValueOrDefault(EventLayer.Body) + _days[i].Lines.Count;
+
+            kept -= _days[i].Lines.Count;
+            _days[i] = _days[i] with { Lines = [], Dropped = dropped };
         }
     }
 
@@ -300,8 +380,8 @@ public sealed class SessionChronicle
 
             if (day.Lines.Count == 0)
             {
-                text.AppendLine(day.Dropped > 0 || day.Number <= LastDayClosed - ChronicleRules.DetailDays
-                    ? "_Kept as a tally only; the detail of this day has aged out._"
+                text.AppendLine(day.DroppedCount > 0
+                    ? $"_Kept as a tally only — {day.DescribeDropped()}, none of them written down any more._"
                     : "_Nothing worth writing down._");
                 continue;
             }
@@ -311,9 +391,9 @@ public sealed class SessionChronicle
                 text.AppendLine($"- {line}");
             }
 
-            if (day.Dropped > 0)
+            if (day.DroppedCount > 0)
             {
-                text.AppendLine($"- _and {day.Dropped} more things happened._");
+                text.AppendLine($"- _and {day.DescribeDropped()}._");
             }
         }
 
@@ -389,11 +469,29 @@ public static class ChronicleFile
 
 public static class ChronicleRules
 {
-    /// <summary>How many recent days keep their lines. Older days keep their tally. See CloseDay.</summary>
-    public const int DetailDays = 60;
+    /// <summary>
+    /// How many quoted lines the whole record keeps — M18, and a budget in lines rather than in
+    /// colony-days on purpose.
+    /// <para>
+    /// It used to be the last 60 days, which is speed-blind in the wrong direction: a colony day is
+    /// an hour at 1× and fifteen real seconds at Overnight, so the same constant meant two and a
+    /// half months of watching or fifteen minutes of it. The 3,787-day run kept quotable lines for
+    /// sixty days and bare tallies for three thousand seven hundred and twenty-seven.
+    /// </para>
+    /// <para>
+    /// A line budget is speed-blind in the right direction instead. A quiet colony keeps its whole
+    /// life; a busy one keeps the stretch that had things in it. And it bounds the file directly,
+    /// which is what the old constant was really for — the whole thing is rewritten every time it
+    /// is amended, so an unbounded record at Overnight would rewrite megabytes every few seconds.
+    /// </para>
+    /// </summary>
+    public const int LinesKept = 900;
 
     /// <summary>Lines kept for one day. Beyond this a day is counted rather than quoted.</summary>
     public const int LinesPerDay = 12;
+
+    /// <summary>What a day is thinned to when the record is over budget, before it loses its lines entirely.</summary>
+    public const int LinesWhenThinned = 1;
 
     public const int DeadShown = 20;
 
