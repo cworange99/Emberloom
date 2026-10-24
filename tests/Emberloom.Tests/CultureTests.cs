@@ -66,30 +66,115 @@ public class CultureTests
     // ---- names --------------------------------------------------------------------------------
 
     [Fact]
-    public void ADeedEarnsTheFirstNameNobodyLivingHas()
+    public void KindlingsCandidatesAreASafetyNetNotThePath()
     {
         var (colony, _) = Start();
         var first = colony.Colonists[0];
         var second = colony.Colonists[1];
-        first.NameCandidates = ["Ash", "Reed"];
-        second.NameCandidates = ["Ash", "Flint"];
 
-        Assert.Equal("Ash", CultureRules.TakeAName(colony, first));
-        Assert.Equal("Flint", CultureRules.TakeAName(colony, second));
-
-        // Once named, a colonist keeps the name.
+        // Everyone arrives named, so there is nothing for TakeAName to do. It survives for a
+        // colonist built outside ColonyFactory — a test, or a save written before M9.
         Assert.Null(CultureRules.TakeAName(colony, first));
-        Assert.Equal("Ash", first.DisplayName);
+
+        first.Name = null;
+        first.NameCandidates = ["Ash", "Reed"];
+        second.Name = "Ash";
+
+        Assert.Equal("Reed", CultureRules.TakeAName(colony, first));
+        Assert.Null(CultureRules.TakeAName(colony, first));
     }
 
     [Fact]
-    public void AMindNobodyWroteKeepsItsDesignation()
+    public void AMindNobodyWroteStillHasAName()
     {
         var (colony, _) = Start();
         var unwritten = colony.Colonists[0];
 
-        Assert.Null(CultureRules.TakeAName(colony, unwritten));
-        Assert.Equal(unwritten.Designation, unwritten.DisplayName);
+        // The M9 fix, and the golden rule in one line. Kindling's fallback returns no candidates
+        // at all, so before this a colonist printed while Ollama was unreachable could never be
+        // named — a colony with no mind was a colony of numbers.
+        Assert.Empty(unwritten.NameCandidates);
+        Assert.NotNull(unwritten.Name);
+        Assert.NotEqual(unwritten.Designation, unwritten.DisplayName);
+    }
+
+    [Fact]
+    public void EveryColonistIsNamedWhenItIsMade()
+    {
+        var (colony, _) = Start();
+        var random = new Random(3);
+
+        var printed = ColonyFactory.Print(colony, random, chargeIsFree: true);
+        var born = ColonyFactory.Pair(colony, colony.Colonists[0], colony.Colonists[1], random);
+
+        Assert.NotNull(printed!.Name);
+        Assert.NotNull(born.Name);
+
+        // Nobody shares a name. Over a long run the generator will collide eventually; Names.Unused
+        // walks the hash rather than the random stream, so collisions cost a name, not determinism.
+        var names = colony.Colonists.Select(c => c.Name).ToList();
+        Assert.Equal(names.Count, names.Distinct(StringComparer.OrdinalIgnoreCase).Count());
+    }
+
+    [Fact]
+    public void TheSameSeedGrowsTheSamePeopleAndADifferentSeedDoesNot()
+    {
+        var first = ColonyFactory.Create(4, new Random(4), seed: 4).Colonists.Select(c => c.Name).ToList();
+        var same = ColonyFactory.Create(4, new Random(4), seed: 4).Colonists.Select(c => c.Name).ToList();
+        var other = ColonyFactory.Create(4, new Random(99), seed: 99).Colonists.Select(c => c.Name).ToList();
+
+        Assert.Equal(first, same);
+
+        // Without the colony's seed mixed in, every colony ever started shared one cast: C-01 was
+        // Arima in all of them, because the name came from the designation alone.
+        Assert.NotEqual(first, other);
+    }
+
+    [Fact]
+    public void NamesArePronounceableAndLookLikeNames()
+    {
+        var colony = ColonyFactory.Create(4, new Random(11), seed: 11);
+        var random = new Random(11);
+
+        for (var i = 0; i < 40; i++)
+        {
+            ColonyFactory.Print(colony, random, chargeIsFree: true);
+        }
+
+        foreach (var name in colony.Colonists.Select(c => c.Name!))
+        {
+            Assert.InRange(name.Length, 4, 12);
+            Assert.Equal(char.ToUpperInvariant(name[0]), name[0]);
+            Assert.DoesNotContain(name, n => char.IsDigit(n) && name.Length <= 8);
+
+            // Three vowels or three consonants in a row is a sound nobody would say twice.
+            var letters = name.TakeWhile(char.IsLetter).ToList();
+            for (var i = 2; i < letters.Count; i++)
+            {
+                var vowels = letters.Skip(i - 2).Take(3).Count(c => "aeiouyAEIOUY".Contains(c));
+                Assert.InRange(vowels, 1, 2);
+            }
+        }
+    }
+
+    [Fact]
+    public void ADeedBecomesAnEpithetRatherThanAName()
+    {
+        var (colony, body) = Start();
+        var namesBefore = colony.Colonists.ToDictionary(c => c.Id, c => c.DisplayName);
+
+        // Which colonist is first to anything is the scorer's business, so this waits for the
+        // colony rather than for one person.
+        for (var tick = 0; tick < 40 * Colony.TicksPerDay && !colony.Colonists.Any(c => c.Epithet is not null); tick++)
+        {
+            body.Tick();
+        }
+
+        // The deeds are one-shot per place and run out; a name must not depend on them. What a
+        // deed buys now is being known for something, which is what it was always worth.
+        var known = colony.Colonists.Where(c => c.Epithet is not null).ToList();
+        Assert.NotEmpty(known);
+        Assert.All(known, c => Assert.Equal(namesBefore[c.Id], c.DisplayName));
     }
 
     // ---- rituals and words --------------------------------------------------------------------
@@ -187,6 +272,7 @@ public class CultureTests
     {
         var (colony, _) = Start();
         var finder = colony.Colonists[0];
+        finder.Name = null;
         finder.NameCandidates = ["spark"];
 
         Assert.Equal("Spark", CultureRules.TakeAName(colony, finder));

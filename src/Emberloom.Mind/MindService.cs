@@ -73,6 +73,7 @@ public sealed class MindService : IDisposable
         var seed = new KindlingSeed
         {
             Designation = colonist.Designation,
+            Name = colonist.DisplayName,
             Seed = seedText,
             Provenance = provenance,
             Born = born

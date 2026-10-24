@@ -33,6 +33,13 @@ public sealed class Colonist
 
     public string DisplayName => Name ?? Designation;
 
+    /// <summary>
+    /// What they are known for, if they have done something worth it — "opening the way into the
+    /// Ninth Floor". Set once, by the first such deed. Not everyone has one, and that is the point:
+    /// it is the distinction a name used to be, now that a name is simply everyone's.
+    /// </summary>
+    public string? Epithet { get; set; }
+
     public required LineageKind Lineage { get; init; }
 
     public IReadOnlyList<string> ParentIds { get; init; } = [];

@@ -47,6 +47,9 @@ public sealed record ColonistDto(
     string Designation,
     string? Name,
     string DisplayName,
+
+    /// What they are known for, if they have done something worth it. Most people have none.
+    string? Epithet,
     string Lineage,
     double AgeDays,
     string Mood,
@@ -74,6 +77,7 @@ public sealed record ColonistDto(
         colonist.Designation,
         colonist.Name,
         colonist.DisplayName,
+        colonist.Epithet,
         colonist.Lineage.ToString(),
         // The dead stop ageing.
         Math.Round(colonist.AgeInDays(colonist.IsAlive ? colony.Day : colonist.DiedOnDay), 2),

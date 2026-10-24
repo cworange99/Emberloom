@@ -550,9 +550,14 @@ function NowTab({ detail, links }: { detail: ColonistDetail; links: Links }) {
           )}
         </h3>
         <p className="personality">{detail.personality}</p>
+        {colonist.epithet && (
+          <p className="row-meta" style={{ marginTop: 10 }}>
+            known for <b>{colonist.epithet}</b>
+          </p>
+        )}
         {colonist.nameCandidates.length > 0 && (
           <p className="row-meta" style={{ marginTop: 10 }}>
-            may one day take the name{' '}
+            might have been called{' '}
             {colonist.nameCandidates.map((n, i) => (
               <span key={n}>
                 {i > 0 && ' · '}

@@ -1,4 +1,5 @@
 using Emberloom.Core.Colonists;
+using Emberloom.Core.Culture;
 using Emberloom.Core.Drives;
 using Emberloom.Core.Events;
 using Emberloom.Core.Life;
@@ -12,9 +13,13 @@ namespace Emberloom.Core.Simulation;
 /// </summary>
 public static class ColonyFactory
 {
-    public static Colony Create(int colonists, Random random)
+    /// <summary>
+    /// A new colony. The seed is passed in as well as being the random stream's, because names are
+    /// derived from it rather than drawn from the stream — see <see cref="Names"/>.
+    /// </summary>
+    public static Colony Create(int colonists, Random random, int seed = 0)
     {
-        var colony = new Colony(CityMap.CreateDefault());
+        var colony = new Colony(CityMap.CreateDefault()) { Seed = seed };
 
         for (var i = 0; i < colonists; i++)
         {
@@ -60,7 +65,11 @@ public static class ColonyFactory
             Weights = archetype.Weights.Clone(),
             Seed = SeedRoller.Roll(random),
             PlaceId = "loom",
-            LifespanDays = LifeRules.Lifespan($"C-{index:00}")
+            LifespanDays = LifeRules.Lifespan($"C-{index:00}"),
+
+            // Named from the first tick, since M9. The designation stays on them as what the Loom
+            // called them, and the inspector still shows it; the name is what everyone else uses.
+            Name = Names.Unused($"C-{index:00}", colony)
         };
 
         // Printed minds wake with their drives partly loaded — they arrive already wanting things.
@@ -103,7 +112,11 @@ public static class ColonyFactory
                    $"{left.DisplayName}: {left.Personality} {right.DisplayName}: {right.Personality}",
             Weights = PersonalityWeights.Crossover(left.Weights, right.Weights, random),
             PlaceId = left.PlaceId,
-            LifespanDays = LifeRules.Lifespan(random)
+            LifespanDays = LifeRules.Lifespan(random),
+
+            // A child is named by its parents, at once — the one thing every colony in every
+            // culture does, and the thing v1 made them earn.
+            Name = Names.Unused($"C-{index:00}", colony)
         };
 
         colony.Add(colonist);

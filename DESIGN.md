@@ -528,6 +528,10 @@ watchable — on its own.
 | **M6** | **Player verbs.** Print, Speak, Reveal, Provide, Withhold. | First genuinely playable version. |
 | **M7** | **Generations.** Pairing with weight crossover, inheritance dreams, ageing, death, cores, Coinage. Then a long unattended run overnight. | The long game — and what decides whether this is worth selling. |
 
+**M0–M7 are done.** The build order from M8 onward lives in [DESIGN-V2.md](DESIGN-V2.md), written 23
+October 2026 — civilisation building, names at birth, wellbeing and an economy, persistence, and the
+three play modes. Where that document and this one disagree about something shipped after M7, it wins.
+
 ---
 
 ## 13. Settled & still open

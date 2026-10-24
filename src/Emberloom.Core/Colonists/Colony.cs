@@ -29,6 +29,13 @@ public sealed class Colony
 
     public CityMap Map { get; }
 
+    /// <summary>
+    /// What this colony was grown from. Kept so that anything derived rather than drawn — names,
+    /// so far — can vary between colonies without taking numbers out of the random stream, which
+    /// would reshuffle everything downstream of wherever it was taken.
+    /// </summary>
+    public int Seed { get; set; }
+
     public RelationshipLedger Relationships { get; } = new();
 
     public EventFeed Feed { get; } = new();

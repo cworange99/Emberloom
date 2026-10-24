@@ -81,6 +81,7 @@ public class KindlingTests
         var result = await KindlingCall.ExecuteAsync(client, new KindlingSeed
         {
             Designation = "C-09",
+            Name = "Vael",
             Seed = "steady, watches before acting"
         });
 
@@ -104,6 +105,7 @@ public class KindlingTests
         await KindlingCall.ExecuteAsync(client, new KindlingSeed
         {
             Designation = "C-09",
+            Name = "Vael",
             Seed = "steady, watches before acting"
         });
 
@@ -132,7 +134,7 @@ public class KindlingTests
         var handler = new StubHandler(Envelope(GoodKindling));
         using var client = new OllamaClient(Options(), new HttpClient(handler));
 
-        await KindlingCall.ExecuteAsync(client, new KindlingSeed { Designation = "C-09", Seed = "x" });
+        await KindlingCall.ExecuteAsync(client, new KindlingSeed { Designation = "C-09", Name = "Vael", Seed = "x" });
 
         Assert.Contains("\"think\":false", handler.LastRequestBody!.Replace(" ", string.Empty));
     }
@@ -147,6 +149,7 @@ public class KindlingTests
         var result = await KindlingCall.ExecuteAsync(client, new KindlingSeed
         {
             Designation = "C-09",
+            Name = "Vael",
             Seed = "steady"
         });
 
@@ -158,7 +161,7 @@ public class KindlingTests
     public void TheFallbackIsStableForTheSameColonist()
     {
         // A colonist must not change identity if the mind comes back later.
-        var seed = new KindlingSeed { Designation = "C-09", Seed = "steady" };
+        var seed = new KindlingSeed { Designation = "C-09", Name = "Vael", Seed = "steady" };
 
         var first = KindlingCall.Fallback(seed);
         var second = KindlingCall.Fallback(seed);
@@ -288,6 +291,7 @@ public class KindlingPromptTests
         var prompt = KindlingCall.BuildPrompt(new KindlingSeed
         {
             Designation = "C-09",
+            Name = "Vael",
             Seed = "drawn to the parts of the city nobody has opened"
         });
 
@@ -303,7 +307,7 @@ public class KindlingPromptTests
     [Fact]
     public void ThePromptAsksForARestrainedSpreadRatherThanEverythingAtOnce()
     {
-        var prompt = KindlingCall.BuildPrompt(new KindlingSeed { Designation = "C-09", Seed = "steady" });
+        var prompt = KindlingCall.BuildPrompt(new KindlingSeed { Designation = "C-09", Name = "Vael", Seed = "steady" });
 
         Assert.Contains("1.4 to 1.8", prompt);
         Assert.Contains("0.4 to 0.7", prompt);

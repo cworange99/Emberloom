@@ -70,17 +70,26 @@ public sealed class BodySimulation
 
     // ---- culture (M7) -----------------------------------------------------------------------
 
-    /// <summary>A name, the first time they do something they consider worth being named for.</summary>
+    /// <summary>
+    /// What a colonist becomes known for, the first time they do something worth being known for.
+    /// <para>
+    /// Until M9 this was how a colonist got a *name* at all, and the three deeds that reach here
+    /// are each one-shot per place: they ran out, and late generations died as numbers. Everyone is
+    /// named at birth now, so a deed is an epithet instead — the thing said after the name, which
+    /// is what a deed was always worth. Still only the first: a person is known for one thing.
+    /// </para>
+    /// </summary>
     private void EarnAName(Colonist colonist, string deed)
     {
-        var designation = colonist.DisplayName;
-        if (CultureRules.TakeAName(_colony, colonist) is not { } name)
+        if (colonist.Epithet is not null)
         {
             return;
         }
 
-        _colony.Log(EventLayer.Body, $"{designation} took the name {name}, after {deed}.", colonist, notable: true);
-        Record(colonist, "took the name", $"{name}, after {deed}", colonist.PlaceId, valence: 0.8, intensity: 0.95);
+        colonist.Epithet = deed;
+
+        _colony.Log(EventLayer.Body, $"{colonist.DisplayName} will be known for {deed}.", colonist, notable: true);
+        Record(colonist, "became known for", deed, colonist.PlaceId, valence: 0.8, intensity: 0.95);
     }
 
     /// <summary>

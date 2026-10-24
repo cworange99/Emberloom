@@ -145,9 +145,14 @@ public static class CultureRules
     }
 
     /// <summary>
-    /// A colonist takes a name the first time they do something worth being named for — the first
-    /// of Kindling's candidates nobody living already goes by. A mind never written has none to
-    /// take, and keeps its designation.
+    /// Takes one of Kindling's name candidates, if the colonist somehow has no name yet.
+    /// <para>
+    /// Since M9 everyone is named at birth by <see cref="Names"/>, so this is a safety net rather
+    /// than the path — it fires only for a colonist built outside <c>ColonyFactory</c>, which in
+    /// practice means a test or a loaded save from before names existed. Kindling still writes
+    /// candidates, and they are kept on the colonist: what a written mind would have called itself
+    /// is worth having on the record even when the Loom named it first.
+    /// </para>
     /// </summary>
     public static string? TakeAName(Colony colony, Colonist colonist)
     {

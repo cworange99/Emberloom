@@ -235,7 +235,8 @@ public sealed class SessionChronicle
                 : colonist.Lineage.ToString().ToLowerInvariant();
 
             text.AppendLine(
-                $"- **{colonist.DisplayName}** — {lineage}, {colonist.AgeInDays(colony.Day):F0} of about {colonist.LifespanDays:F0} days{(colonist.IsElder ? ", slowing" : string.Empty)}. {colonist.Personality}");
+                $"- **{colonist.DisplayName}**{(colonist.Epithet is { } known ? $", known for {known}," : string.Empty)} {lineage}, " +
+                $"{colonist.AgeInDays(colony.Day):F0} of about {colonist.LifespanDays:F0} days{(colonist.IsElder ? ", slowing" : string.Empty)}. {colonist.Personality}");
         }
 
         var dead = colony.Colonists
@@ -253,7 +254,9 @@ public sealed class SessionChronicle
             {
                 var core = colony.Cores.FirstOrDefault(c => c.ColonistId == colonist.Id);
                 var fate = core is null ? "no core" : core.Fate.ToString().ToLowerInvariant();
-                text.AppendLine($"- **{colonist.DisplayName}** — day {colonist.DiedOnDay:F0}, {colonist.AgeInDays(colonist.DiedOnDay):F0} days old, core {fate}.");
+                text.AppendLine(
+                    $"- **{colonist.DisplayName}** — day {colonist.DiedOnDay:F0}, {colonist.AgeInDays(colonist.DiedOnDay):F0} days old, core {fate}." +
+                    (colonist.Epithet is { } known ? $" Known for {known}." : string.Empty));
             }
 
             if (dead.Count > ChronicleRules.DeadShown)

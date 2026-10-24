@@ -19,6 +19,8 @@ export interface Colonist {
   designation: string
   name: string | null
   displayName: string
+  /** What they are known for, if they have done something worth it. Most people have none. */
+  epithet: string | null
   lineage: string
   isAlive: boolean
   /** How long this body lasts, in colony days. */

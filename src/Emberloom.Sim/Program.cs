@@ -8,9 +8,14 @@ using Emberloom.Core.Simulation;
 //
 // Runs the colony headless and prints the event feed. Zero model calls: this is the fallback the
 // whole architecture leans on, and it has to be watchable on its own.
+//
+// M8 — and the instrument V2's balance is settled with. Every claim in the V2 scope about overwork,
+// leisure and work-life balance is a claim about how a colonist's day divides, and until now nothing
+// measured that: action *completions* were counted, which says nothing, because a Talk is 12 ticks
+// and a Rest is 48. The time-use table below is the number those milestones are judged against.
 
 var days = 30;
-var colonists = 8;
+var colonists = 4;
 var seed = 4;
 var diagnose = false;
 
@@ -22,7 +27,7 @@ for (var i = 0; i < args.Length; i++)
         case "--days" or "-d" when next is not null: days = int.Parse(next); i++; break;
         case "--colonists" or "-c" when next is not null: colonists = int.Parse(next); i++; break;
         case "--seed" or "-s" when next is not null: seed = int.Parse(next); i++; break;
-        case "--diagnose": diagnose = true; break;
+        case "--diagnose" or "--quiet" or "-q": diagnose = true; break;
         case "--sweep":
             Sweep(days, colonists, seed);
             return 0;
@@ -33,11 +38,21 @@ for (var i = 0; i < args.Length; i++)
 }
 
 var random = new Random(seed);
-var colony = ColonyFactory.Create(colonists, random);
+var colony = ColonyFactory.Create(colonists, random, seed);
 var body = new BodySimulation(colony, random);
 
 var completions = new Dictionary<ActionKind, int>();
 var decisions = 0;
+
+// How the day actually divides. Counted in colonist-ticks, which is the only honest unit: an
+// action's share of the day is its duration times how often it is chosen, and completions alone
+// hide that. Travel and idle are counted too — the scope's leisure question is really "what is
+// left after the necessary", and travel is a large part of the answer.
+var timeUse = new Dictionary<string, long>();
+var leisurePerColonist = new Dictionary<string, (long Free, long Total)>();
+var population = new List<int>();
+var driveTotals = DriveTable.All.ToDictionary(d => d, _ => 0.0);
+var driveSamples = 0;
 
 colony.Feed.Appended += e =>
 {
@@ -52,6 +67,38 @@ for (var tick = 0; tick < days * Colony.TicksPerDay; tick++)
     var before = colony.Living.Select(c => (c.Id, c.Current?.Definition.Kind, c.Current?.TicksElapsed)).ToList();
 
     body.Tick();
+
+    foreach (var colonist in colony.Living)
+    {
+        // Travelling is checked first: a colonist walking to a forage patch has Forage as their
+        // current action but is not foraging, and counting the walk as work would overstate work
+        // by however far the city is wide.
+        var bucket = colonist.Current is not { } action ? "idle"
+            : colonist.PlaceId != action.Target.Id ? "travel"
+            : action.Definition.Kind.ToString();
+
+        timeUse[bucket] = timeUse.GetValueOrDefault(bucket) + 1;
+
+        var (free, total) = leisurePerColonist.GetValueOrDefault(colonist.Id);
+        leisurePerColonist[colonist.Id] = (free + (IsFree(bucket) ? 1 : 0), total + 1);
+    }
+
+    if (colony.Tick % Colony.TicksPerDay == 0)
+    {
+        population.Add(colony.Living.Count());
+
+        // Drives sampled over the whole run, not read off the final tick: the last tick is one
+        // arbitrary moment and says nothing about whether the colony was ever under pressure.
+        if (colony.Living.Any())
+        {
+            foreach (var drive in DriveTable.All)
+            {
+                driveTotals[drive] += colony.Living.Average(c => c.Drives[drive]);
+            }
+
+            driveSamples++;
+        }
+    }
 
     foreach (var colonist in colony.Living)
     {
@@ -89,6 +136,85 @@ Console.WriteLine("Actions completed");
 foreach (var (kind, count) in completions.OrderByDescending(p => p.Value))
 {
     Console.WriteLine($"  {kind,-14} {count,6}");
+}
+
+var colonistTicks = timeUse.Values.Sum();
+if (colonistTicks > 0)
+{
+    Console.WriteLine();
+    Console.WriteLine($"=== how the day divides ({colonistTicks:N0} colonist-ticks) ===");
+
+    foreach (var (label, kinds) in Classes())
+    {
+        var share = kinds.Sum(k => timeUse.GetValueOrDefault(k)) * 100.0 / colonistTicks;
+        var parts = kinds.Count == 1
+            ? string.Empty
+            : "   " + string.Join("  ", kinds
+                .Select(k => (Kind: k, Share: timeUse.GetValueOrDefault(k) * 100.0 / colonistTicks))
+                .Where(x => x.Share > 0)
+                .OrderByDescending(x => x.Share)
+                .Select(x => $"{x.Kind.ToLowerInvariant()} {x.Share:F1}"));
+
+        Console.WriteLine($"  {label,-12} {share,5:F1}%{parts}");
+    }
+
+    var discretionary = timeUse.Where(p => IsFree(p.Key)).Sum(p => p.Value) * 100.0 / colonistTicks;
+    Console.WriteLine($"  {"",-12} ------");
+    Console.WriteLine($"  {"free",-12} {discretionary,5:F1}%   social + leisure + idle — the room leisure would have to compete for");
+
+    var shares = leisurePerColonist.Values
+        .Where(v => v.Total >= Colony.TicksPerDay)
+        .Select(v => v.Free * 100.0 / v.Total)
+        .OrderBy(x => x)
+        .ToList();
+
+    if (shares.Count > 0)
+    {
+        Console.WriteLine(
+            $"  {"per person",-12} min {shares[0],4:F1}  median {shares[shares.Count / 2],4:F1}  max {shares[^1],4:F1}" +
+            $"   (over {shares.Count} who lived a day or more)");
+    }
+}
+
+if (driveSamples > 0)
+{
+    Console.WriteLine();
+    Console.WriteLine("Drive means over the whole run (not the last tick)");
+    Console.Write("  ");
+    foreach (var drive in DriveTable.All)
+    {
+        Console.Write($"{drive.ToString()[..4].ToLowerInvariant()} {driveTotals[drive] / driveSamples,5:F2}   ");
+    }
+
+    Console.WriteLine();
+}
+
+if (population.Count > 1)
+{
+    var firstPrint = colony.Colonists
+        .Where(c => c.Lineage == LineageKind.Printed && c.BornOnDay > 0)
+        .Select(c => (double?)c.BornOnDay)
+        .DefaultIfEmpty(null)
+        .Min();
+
+    var firstBirth = colony.Colonists
+        .Where(c => c.Lineage == LineageKind.Paired)
+        .Select(c => (double?)c.BornOnDay)
+        .DefaultIfEmpty(null)
+        .Min();
+
+    Console.WriteLine();
+    Console.WriteLine($"Population   began {population[0]}, peak {population.Max()}, ended {population[^1]}");
+    Console.WriteLine($"  first print {(firstPrint is null ? "never" : $"day {firstPrint:F0}"),-12} first birth {(firstBirth is null ? "never" : $"day {firstBirth:F0}")}");
+    Console.Write("  curve ");
+
+    // Ten samples across the run: enough to see a collapse or a plateau without a chart.
+    for (var i = 0; i < 10; i++)
+    {
+        Console.Write($"{population[i * (population.Count - 1) / 9],4}");
+    }
+
+    Console.WriteLine();
 }
 
 Console.WriteLine();
@@ -133,7 +259,7 @@ static void Sweep(int days, int colonists, int seed)
         ActionCatalog.ReliefScale = scale;
 
         var random = new Random(seed);
-        var colony = ColonyFactory.Create(colonists, random);
+        var colony = ColonyFactory.Create(colonists, random, seed);
         var body = new BodySimulation(colony, random);
         for (var tick = 0; tick < days * Colony.TicksPerDay; tick++)
         {
@@ -158,6 +284,25 @@ static void Sweep(int days, int colonists, int seed)
 
     ActionCatalog.ReliefScale = 3.0;
 }
+
+/// <summary>
+/// How a day's ticks are grouped for reading. Wander is the colony's only leisure today — it is
+/// explicitly the fallback when nothing else scores, and V2's whole social economy is an argument
+/// that this line should be something a colonist chooses rather than settles for.
+/// </summary>
+static IReadOnlyList<(string Label, IReadOnlyList<string> Kinds)> Classes() =>
+[
+    ("work", new[] { "Forage", "Salvage", "Clear", "Build", "Tend" }),
+    ("rest", new[] { "Rest" }),
+    ("social", new[] { "Talk", "Teach" }),
+    ("leisure", new[] { "Wander" }),
+    ("civic", new[] { "Deliberate" }),
+    ("travel", new[] { "travel" }),
+    ("idle", new[] { "idle" })
+];
+
+/// <summary>Time not already claimed by work, rest, travel or a sitting council.</summary>
+static bool IsFree(string bucket) => bucket is "Wander" or "Talk" or "Teach" or "idle";
 
 /// <summary>The deepest line of descent: printed minds are generation one, their children two.</summary>
 static int Generations(Colony colony)

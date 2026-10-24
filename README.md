@@ -1,4 +1,3 @@
-| **M1** — the body, with no mind at all | **Done.** Drives, utility scoring, city map, foraging/salvage/building/rest, relationship ledger, episodic capture, event feed, time controls, HTTP/WebSocket API and React client. Zero model calls. |
 # What They Left Running
 
 A city the forest took back, a machine still printing minds into it, and nobody left to say why.
@@ -19,6 +18,7 @@ See [DESIGN.md](DESIGN.md) for the full design. Build order and milestone status
 | **M5** — dialogue and deliberation | **Done.** Colonists speak when they meet, in bubbles over both views, and the words go into their memories. The colony faces two genuine forks — whether to let the Loom print, and whether to go up to a floor nobody has reached — and a council of five decides each one by argued majority vote. |
 | **M6** — player verbs | **Done.** All five verbs, none of them an order. Speak to a colonist and they remember it and answer; Print a mind from a seed you write; Provide light, warmth or a way in on the Loom's charge, and Withhold it — they notice; Reveal something of the makers', once. |
 | **M7** — generations | **Done.** Bodies age, slow and die; the dead leave cores the colony reads, keeps or destroys; bonded adults have children who carry their weights and dream their memories. Colonists earn names; the colony coins its own words and tells itself a story about its makers, retold as it learns more. The overnight run reached 648 colony days and about sixteen generations, and its myth was judged worth going on with. It also set the pace: at 1× a colony-day is now an hour and a life about three months. |
+| **M8 →** — version 2 | **In progress.** Version 1 grows a population; version 2 grows a civilisation. The scope is [DESIGN-V2.md](DESIGN-V2.md): the world is built rather than only cleared, people are named from birth, and they get a wellbeing, an economy they take part in, and leisure to spend it on. |
 
 ## Layout
 

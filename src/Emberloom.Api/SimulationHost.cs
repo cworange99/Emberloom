@@ -55,7 +55,11 @@ public sealed class SimulationHost : BackgroundService
         _logger = logger;
 
         var seed = configuration.GetValue("Simulation:Seed", 4);
-        var colonists = configuration.GetValue("Simulation:Colonists", 8);
+        // Four, not eight, since M8. Four gives six possible conversations rather than one, and it
+        // sits below CouncilSize, so every early fork seats the whole colony — a town meeting that
+        // quietly becomes a selected council as the colony grows past five. It also makes a vote
+        // carry on 3 of 4: measured over a full lifespan, the first print slips from day 87 to 948.
+        var colonists = configuration.GetValue("Simulation:Colonists", 4);
 
         if (configuration.GetValue("Mind:Enabled", true))
         {
@@ -132,7 +136,7 @@ public sealed class SimulationHost : BackgroundService
         _chronicleEnabled = configuration.GetValue("Chronicle:Enabled", true);
 
         _random = new Random(seed);
-        _colony = ColonyFactory.Create(colonists, _random);
+        _colony = ColonyFactory.Create(colonists, _random, seed);
         _body = new BodySimulation(_colony, _random);
         AttachBody();
 
@@ -189,7 +193,7 @@ public sealed class SimulationHost : BackgroundService
             _colony.Feed.Appended -= OnEvent;
 
             _random = new Random(seed);
-            _colony = ColonyFactory.Create(colonists, _random);
+            _colony = ColonyFactory.Create(colonists, _random, seed);
             _body = new BodySimulation(_colony, _random);
             AttachBody();
             _lastDialogue.Clear();

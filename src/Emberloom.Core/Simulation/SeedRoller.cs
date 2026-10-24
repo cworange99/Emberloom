@@ -5,8 +5,9 @@ namespace Emberloom.Core.Simulation;
 /// <para>
 /// Seeds are prose because that is the whole creative input to a new mind — the player can write
 /// one directly (the Print verb, M6), or the colony can argue its way to one (a Deliberation, M5).
-/// Until either exists, this stands in. It composes rather than picking from a list so that a long
-/// run does not produce the same eight people repeatedly.
+/// Both of those shipped — this is what stands in when neither wrote one: the founding cast, and
+/// every mind a Print fork carries. It composes rather than picking from a list so that a long run
+/// does not produce the same eight people repeatedly.
 /// </para>
 /// </summary>
 public static class SeedRoller

@@ -132,7 +132,7 @@ export default function App() {
           follow feed
         </label>
 
-        <button className="back" onClick={() => void restart(8)}>
+        <button className="back" onClick={() => void restart(4)}>
           new colony
         </button>
 

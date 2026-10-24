@@ -13,6 +13,12 @@ public sealed record KindlingSeed
 {
     public required string Designation { get; init; }
 
+    /// <summary>
+    /// What the colony already calls them. Since M9 a mind is named when it is made, so the call
+    /// is writing a named person rather than proposing what to call one.
+    /// </summary>
+    public required string Name { get; init; }
+
     /// <summary>The seed in prose. This is the whole creative input to a new mind.</summary>
     public required string Seed { get; init; }
 
@@ -90,10 +96,10 @@ public static class KindlingCall
 
             Write this mind into being.
 
-            Give two or three name candidates it might one day choose for itself — short, plain,
-            the kind of word someone would take from a thing they found rather than a name from a
-            book. It will not use one until it has done something it considers worth being named
-            for.
+            This mind already has a name, {seed.Name}, given when it was made. Give two or three
+            other names it might have been called instead — invented words, not words that mean
+            anything: two syllables, four to six letters, easy to say. Luma, Vael, Oryn, Asha are
+            the shape. Never an ordinary word like Rock or River, and never a name from a story.
 
             Write a short personality in the third person, two or three sentences. Say what this
             mind does, not what it feels.
