@@ -42,6 +42,13 @@ const BY_KIND: Record<string, PlaceArt> = {
   Loom: { form: 'building', models: ['city/building-e'] },
   Ruin: { form: 'building', models: ['city/building-h', 'city/building-k'] },
   Stairwell: { form: 'building', models: ['city/building-skyscraper-d'] },
+
+  // Raised by the colony rather than left by the makers (M10). Deliberately plainer models than
+  // the ruins around them: what these people can build is not what was here before.
+  Site: { form: 'building', models: ['city/building-b'] },
+  Hall: { form: 'building', models: ['city/building-f', 'city/building-g'] },
+  Granary: { form: 'building', models: ['city/building-d'] },
+  Dwelling: { form: 'building', models: ['city/building-a', 'city/building-c'] },
 }
 
 export function artFor(place: Place): PlaceArt {

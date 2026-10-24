@@ -137,7 +137,10 @@ public class ForkTests
         Assert.False(fork.Carried);
         Assert.Equal(8, colony.Colonists.Count);
         Assert.True(colony.AskAgainOn(ForkKind.Print) >= colony.Day + ForkRules.PrintAskAgainDays - 0.01);
-        Assert.Null(ForkRules.Detect(colony));
+
+        // The *print* is what was put off. Since M10 the colony always has ground it could raise,
+        // so there is nearly always some fork available — which is the point of that milestone.
+        Assert.NotEqual(ForkKind.Print, ForkRules.Detect(colony)?.Kind);
     }
 
     [Fact]

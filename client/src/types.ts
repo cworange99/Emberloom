@@ -11,6 +11,8 @@ export interface Place {
   isBlocked: boolean
   clearingProgress: number
   salvageRemaining: number
+  /** What a site will become once raised. Null for everywhere the makers left behind. */
+  becomes: string | null
   neighbours: string[]
 }
 
@@ -164,6 +166,12 @@ export interface PlaceState {
   isLit: boolean
   /** Warmth the player keeps running here — shelters only. */
   isWarmed: boolean
+  /** What this place is now: a site becomes the building it was raised as. */
+  kind: string
+  /** True for ground the colony has not agreed to build on yet. */
+  isSite: boolean
+  /** 0 until the colony approves the ground, then how far up the building is. */
+  buildProgress: number
 }
 
 /** One thing of the makers' the player could show. shownTo is set once it has been shown. */

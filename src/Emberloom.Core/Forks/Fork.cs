@@ -16,7 +16,20 @@ public enum ForkKind
     Ascend,
 
     /// <summary>Someone has died, and their mind is still in its core. Read it, keep it, or destroy it?</summary>
-    Core
+    Core,
+
+    /// <summary>
+    /// There is ground to build on. Raise this one next, or leave it and be asked about another?
+    /// <para>
+    /// Deliberately binary, like every other fork. "What do we build next?" is the question the
+    /// colony is really answering, but it answers it as a sequence of yes-or-no questions about one
+    /// site at a time: a no puts that site aside and the body proposes the next-best one. A genuine
+    /// multiple-choice fork would mean generalising Stance, the council's two-drive axis, the
+    /// fallback vote and a deliberation schema whose three options the model is used to — for the
+    /// same outcome. See DESIGN-V2.md, Deferred.
+    /// </para>
+    /// </summary>
+    Build
 }
 
 public enum Stance
@@ -193,6 +206,15 @@ public static class ForkRules
     public const double AscendAskAgainDays = 160;
 
     /// <summary>
+    /// A building is the question the colony comes back to most, so the wait after a no is the
+    /// shortest — and a no is about *that site*, which is put aside for good, not about building.
+    /// </summary>
+    public const double BuildAskAgainDays = 60;
+
+    /// <summary>How long a particular piece of ground stays set aside after a no. See Colony.Declined.</summary>
+    public const double GroundSetAsideDays = 400;
+
+    /// <summary>
     /// The fork the colony should face now, if any. Only one at a time; a way up, when there is one,
     /// comes before a print — it is the rarer question and the bigger one.
     /// </summary>
@@ -242,7 +264,83 @@ public static class ForkRules
                 subject: null);
         }
 
+        // Last, and most often: what to raise next. It comes after the others because it is the
+        // question the colony will face again and again, and a core or a way up should never queue
+        // behind it.
+        if (colony.Day >= colony.AskAgainOn(ForkKind.Build)
+            && !colony.Map.Places.Any(p => p.Kind == PlaceKind.Site && p.IsApproved)
+            && Propose(colony) is { } site)
+        {
+            return Open(colony, ForkKind.Build,
+                question: $"Do we raise {site.Name} next?",
+                proposal: $"The colony builds {site.Name}. Anyone may work on it until it stands.",
+                stakes: Stakes(colony, site),
+                subject: site.Id,
+                forMeans: "they want this one raised next",
+                againstMeans: "they would leave this ground as it is, for now",
+                abstainMeans: "they do not mind either way which is raised next");
+        }
+
         return null;
+    }
+
+    /// <summary>
+    /// Which site the colony is asked about. A deterministic body rule, not a vote: the colony
+    /// chooses *whether*, and the body chooses *which* by what is most obviously short. Beds first
+    /// while people are sleeping in what the makers left, then somewhere to sit together, then
+    /// somewhere to put what is grown.
+    /// <para>
+    /// A site the colony has already said no to is put aside by <c>AskAgainOn</c>, and the next
+    /// detection proposes the next one down this order — which is how a sequence of yes-or-no
+    /// questions comes to the same place as "what shall we build next".
+    /// </para>
+    /// </summary>
+    public static Place? Propose(Colony colony)
+    {
+        var sites = colony.Map.Places
+            .Where(p => p.Kind == PlaceKind.Site && !p.IsApproved && !colony.IsDeclined(p.Id))
+            .ToList();
+
+        if (sites.Count == 0)
+        {
+            return null;
+        }
+
+        var heads = colony.Living.Count();
+        var beds = colony.Map.Places.Count(p => p.Kind is PlaceKind.Shelter or PlaceKind.Dwelling);
+        var halls = colony.Map.Places.Count(p => p.Kind == PlaceKind.Hall);
+
+        var wanted = heads > beds * 3 ? PlaceKind.Dwelling
+            : halls == 0 ? PlaceKind.Hall
+            : heads > halls * 8 ? PlaceKind.Hall
+            : PlaceKind.Granary;
+
+        // Whatever is wanted, nearest the plaza first, so the city grows outward from where the
+        // colony already gathers rather than scattering.
+        return sites
+            .Where(p => p.Becomes == wanted)
+            .Concat(sites)
+            .OrderBy(p => colony.Map.Find("plaza") is { } plaza ? p.DistanceTo(plaza) : 0)
+            .First();
+    }
+
+    private static string Stakes(Colony colony, Place site)
+    {
+        var heads = colony.Living.Count();
+        var beds = colony.Map.Places.Count(p => p.Kind is PlaceKind.Shelter or PlaceKind.Dwelling);
+
+        var need = site.Becomes switch
+        {
+            PlaceKind.Dwelling => $"There are {heads} of us and {beds} places to sleep.",
+            PlaceKind.Hall => "There is nowhere any of us go that is not somewhere we work.",
+            PlaceKind.Granary => "Everything any of us gathers is carried and eaten the same day.",
+            _ => "The ground is there."
+        };
+
+        // Both sides as sides, in words — the M5 lesson. No figures the model can hand back as a
+        // belief, beyond the plain count of people and beds, which a colonist would know.
+        return $"{need} For: it would be the first thing here the colony made rather than found, and it would stand after "
+               + "whoever raised it. Against: it is a great deal of work that nobody has to do, and the ruins have held so far.";
     }
 
     /// <summary>
@@ -281,6 +379,16 @@ public static class ForkRules
     {
         ForkKind.Print => (Drive.Belonging, Drive.Safety),
         ForkKind.Ascend => (Drive.Wonder, Drive.Safety),
+
+        // Work that lasts, against the comfort of leaving things as they are — and Meaning is
+        // exactly what Build relieves, so the people who argue for it are the people who will do it.
+        //
+        // Standing was the first choice and it was wrong, measurably: of the five archetypes only
+        // three lean Standing over Rest, and the council seats whoever is furthest from ordinary on
+        // the axis, so a small colony could seat two of the two who lean against and refuse every
+        // building in the city for its whole life. On Meaning against Rest, four of five lean
+        // towards raising something, which is the right baseline for a colony that builds.
+        ForkKind.Build => (Drive.Meaning, Drive.Rest),
         _ => (Drive.Meaning, Drive.Safety)
     };
 
@@ -288,6 +396,22 @@ public static class ForkRules
     /// Whoever feels it most, either way: the colonists whose weights on the two drives sit furthest
     /// from ordinary. A council of the indifferent does not argue, and an argument is the point.
     /// </summary>
+    /// <summary>
+    /// How many seats this colony can fill — always an odd number, so a council can always decide.
+    /// <para>
+    /// Found the hard way at M10, when the starting population dropped to four. Four living
+    /// colonists seated a council of four, and because a stub vote is a function of personality
+    /// weights that never change, the same four people split 2–2 on every question for their entire
+    /// lives: seed 5 refused every building, every print and every stairwell for 600 days running.
+    /// An odd council cannot deadlock.
+    /// </para>
+    /// </summary>
+    public static int Seats(Colony colony)
+    {
+        var willing = Math.Min(CouncilSize, colony.Living.Count());
+        return willing % 2 == 0 ? willing - 1 : willing;
+    }
+
     public static IReadOnlyList<string> Council(Colony colony, ForkKind kind)
     {
         var (forDrive, againstDrive) = Pulls(kind);
@@ -295,7 +419,7 @@ public static class ForkRules
         return colony.Living
             .OrderByDescending(c => Math.Abs(c.Weights[forDrive] - 1.0) + Math.Abs(c.Weights[againstDrive] - 1.0))
             .ThenBy(c => c.Id, StringComparer.Ordinal)
-            .Take(CouncilSize)
+            .Take(Seats(colony))
             .Select(c => c.Id)
             .ToList();
     }
@@ -308,7 +432,15 @@ public static class ForkRules
     public static Vote FallbackVote(ForkKind kind, Colonist colonist)
     {
         var (forDrive, againstDrive) = Pulls(kind);
-        var lean = colonist.Weights[forDrive] - colonist.Weights[againstDrive];
+
+        // Weights are who they are; levels are how they are today. Without the second term a stub
+        // vote is a constant, and the same council answers the same question identically for ever —
+        // which is what made a deadlocked colony of four deadlocked for its whole life rather than
+        // just this once. Someone whose Standing is pressing wants the thing built this month even
+        // if they are not, in general, the sort who does.
+        var lean = colonist.Weights[forDrive] - colonist.Weights[againstDrive]
+                   + (colonist.Drives[forDrive] - colonist.Drives[againstDrive]) * 0.5
+                   + Leaning(kind);
 
         var stance = lean > 0.05 ? Stance.For : lean < -0.05 ? Stance.Against : Stance.Abstain;
         var conviction = Math.Clamp(0.4 + Math.Abs(lean), 0, 1);
@@ -318,6 +450,19 @@ public static class ForkRules
             WasFallback: true);
     }
 
+    /// <summary>
+    /// Which way a question leans before anybody's personality is consulted. Only building leans at
+    /// all, and it leans towards doing it: measured over a full lifespan in v1, when Build was
+    /// available everywhere and achieved nothing, the colony still chose it for a third of its
+    /// waking life. Wanting to raise something is not a personality trait here, it is the baseline.
+    /// <para>
+    /// This matters most where it is least visible. A colony with no mind votes by comparing weights
+    /// alone, and without a lean, four founders who happened to rest easy would refuse the whole
+    /// city once and never build anything.
+    /// </para>
+    /// </summary>
+    private static double Leaning(ForkKind kind) => kind == ForkKind.Build ? 0.12 : 0;
+
     private static string StockLine(ForkKind kind, Stance stance) => (kind, stance) switch
     {
         (ForkKind.Print, Stance.For) => "Another mind is another pair of hands. Print it.",
@@ -326,6 +471,8 @@ public static class ForkRules
         (ForkKind.Ascend, Stance.Against) => "We have lost enough to that stairwell already.",
         (ForkKind.Core, Stance.For) => "Read it. They would have wanted to be heard.",
         (ForkKind.Core, Stance.Against) => "Let it go. Some things should stay with the dead.",
+        (ForkKind.Build, Stance.For) => "We have lived in what they left us for long enough. Raise it.",
+        (ForkKind.Build, Stance.Against) => "There is work enough already. Not this, not yet.",
         _ => "I will go along with whatever the rest of you decide."
     };
 
@@ -353,7 +500,7 @@ public static class ForkRules
             Participants = colony.Living
                 .OrderByDescending(c => LifeRules.Closeness(colony, c.Id, dead.Id))
                 .ThenBy(c => c.Id, StringComparer.Ordinal)
-                .Take(CouncilSize)
+                .Take(Seats(colony))
                 .Select(c => c.Id)
                 .ToList()
         };
@@ -365,7 +512,10 @@ public static class ForkRules
         string question,
         string proposal,
         string stakes,
-        string? subject) => new()
+        string? subject,
+        string? forMeans = null,
+        string? againstMeans = null,
+        string? abstainMeans = null) => new()
     {
         Id = $"fork-{colony.ForkHistory.Count + 1}",
         Kind = kind,
@@ -373,6 +523,9 @@ public static class ForkRules
         Proposal = proposal,
         Stakes = stakes,
         SubjectPlaceId = subject,
+        ForMeans = forMeans ?? "they want it done",
+        AgainstMeans = againstMeans ?? "they do not want it done, even gently",
+        AbstainMeans = abstainMeans ?? "they truly have no preference",
         PlaceId = colony.Map.OfKind(PlaceKind.Plaza).FirstOrDefault()?.Id ?? "plaza",
         OpenedOnDay = colony.Day,
         Participants = Council(colony, kind)

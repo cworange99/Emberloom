@@ -36,6 +36,13 @@ public sealed class Colony
     /// </summary>
     public int Seed { get; set; }
 
+    /// <summary>
+    /// How far the player may reach into this colony. Set when it is created and never afterwards:
+    /// a run that was observed for half its life and steered for the other half is evidence of
+    /// nothing. Defaults to <see cref="ColonyMode.Hybrid"/>, which is what v1 shipped.
+    /// </summary>
+    public ColonyMode Mode { get; init; } = ColonyMode.Hybrid;
+
     public RelationshipLedger Relationships { get; } = new();
 
     public EventFeed Feed { get; } = new();
@@ -78,6 +85,22 @@ public sealed class Colony
     /// and stays until a fork says otherwise; nobody's utility score reaches past it.
     /// </summary>
     public HashSet<string> ForbiddenPlaces { get; } = [];
+
+    /// <summary>
+    /// Ground the colony has voted not to raise, and the day it is willing to hear about it again.
+    /// A no moves the next Build fork on to different ground — otherwise the colony would be asked
+    /// the same question every sixty days until it said yes, which is not deciding anything.
+    /// <para>
+    /// It expires rather than standing for ever. A colony running with no mind at all votes by
+    /// comparing personality weights, and four founders who all lean the same way could otherwise
+    /// refuse every site in the city once and be locked out of building forever.
+    /// </para>
+    /// </summary>
+    public Dictionary<string, double> Declined { get; } = [];
+
+    /// <summary>Whether this ground is currently set aside.</summary>
+    public bool IsDeclined(string placeId) =>
+        Declined.TryGetValue(placeId, out var until) && Day < until;
 
     private readonly Dictionary<ForkKind, double> _askAgainOn = [];
 

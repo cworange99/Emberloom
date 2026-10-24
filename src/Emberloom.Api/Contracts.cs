@@ -24,6 +24,10 @@ public sealed record PlaceDto(
     bool IsBlocked,
     double ClearingProgress,
     int SalvageRemaining,
+
+    /// What a buildable site will be once it is raised, so the view can have the finished building
+    /// ready to reveal rather than loading a model mid-run. Null for everywhere the makers left.
+    string? Becomes,
     IReadOnlyList<string> Neighbours)
 {
     public static PlaceDto From(Place place) => new(
@@ -39,6 +43,7 @@ public sealed record PlaceDto(
         place.IsBlocked,
         place.ClearingProgress,
         place.SalvageRemaining,
+        place.Becomes?.ToString(),
         place.Neighbours);
 }
 
@@ -273,7 +278,15 @@ public sealed record PlaceStateDto(
     double ClearingProgress,
     int SalvageRemaining,
     bool IsLit,
-    bool IsWarmed)
+    bool IsWarmed,
+
+    /// What this place is now. A site becomes the building it was raised as, so this changes during
+    /// a run — which is why it is streamed per tick rather than sent once with the world.
+    string Kind,
+
+    /// True for ground the colony has not agreed to build on. It shows as marked ground.
+    bool IsSite,
+    double BuildProgress)
 {
     public static PlaceStateDto From(Place place, Colony colony) => new(
         place.Id,
@@ -282,7 +295,10 @@ public sealed record PlaceStateDto(
         Math.Round(place.ClearingProgress, 3),
         place.SalvageRemaining,
         colony.IsLit(place.Id),
-        colony.IsWarmed(place.Id));
+        colony.IsWarmed(place.Id),
+        place.Kind.ToString(),
+        place.Kind == PlaceKind.Site,
+        Math.Round(place.IsApproved ? place.BuildProgress : 0, 3));
 }
 
 /// <summary>One thing of the makers' the player could show, and — once shown — who saw it.</summary>

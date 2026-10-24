@@ -3,6 +3,7 @@ using Emberloom.Core.Colonists;
 using Emberloom.Core.Drives;
 using Emberloom.Core.Events;
 using Emberloom.Core.Simulation;
+using Emberloom.Core.World;
 
 // M1 — the body, with no mind at all.
 //
@@ -233,8 +234,12 @@ Console.WriteLine();
 Console.WriteLine("Places");
 foreach (var place in colony.Map.Places.OrderBy(p => p.Level).ThenBy(p => p.Name))
 {
-    var state = place.IsBlocked ? $"blocked {place.ClearingProgress:P0}" : place.IsExplored ? "open" : "unvisited";
-    Console.WriteLine($"  {place.Name,-22} {state,-16} salvage {place.SalvageRemaining}");
+    var state = place.IsBlocked ? $"blocked {place.ClearingProgress:P0}"
+        : place.Kind != PlaceKind.Site ? place.IsExplored ? "open" : "unvisited"
+        : !place.IsApproved ? "unbuilt ground"
+        : $"building {place.BuildProgress:P0}";
+
+    Console.WriteLine($"  {place.Name,-22} {place.Kind,-10} {state,-16} salvage {place.SalvageRemaining}");
 }
 
 return 0;

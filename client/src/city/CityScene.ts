@@ -69,6 +69,10 @@ export class CityScene {
   private readonly centres = new Map<string, THREE.Vector3>()
   private readonly anchors = new Map<string, THREE.Vector3>()
   private readonly rubble = new Map<string, THREE.Object3D>()
+
+  /** Buildings that are still going up, and the marked ground they are going up on. */
+  private readonly rising = new Map<string, THREE.Object3D>()
+  private readonly sites = new Map<string, THREE.Object3D>()
   private readonly walkers = new Map<string, Walker>()
   private readonly labels = new Map<string, HTMLElement>()
   private readonly pickables: THREE.Object3D[] = []
@@ -239,6 +243,24 @@ export class CityScene {
     for (const [placeId, rocks] of this.rubble) rocks.visible = sealed.get(placeId) ?? rocks.visible
   }
 
+  /**
+   * How far up each building is. A site shows marked ground until the colony approves it, then the
+   * building grows out of the ground as the work goes in, and the ground patch goes when it stands.
+   */
+  setBuilt(progress: ReadonlyMap<string, number>) {
+    for (const [placeId, building] of this.rising) {
+      const done = progress.get(placeId) ?? 0
+      building.visible = done > 0
+
+      // Scaled from a fifth so the first day's work is visible rather than invisible, and never
+      // past 1 so a finished building is exactly the size it was modelled at.
+      building.scale.setScalar(done <= 0 ? 0.0001 : Math.min(1, 0.2 + done * 0.8))
+
+      const ground = this.sites.get(placeId)
+      if (ground) ground.visible = done < 1
+    }
+  }
+
   /** Registers an overlay element to be kept over a place (by id) or a colonist ('colonist:' + id). */
   setLabel(key: string, element: HTMLElement | null) {
     if (element) this.labels.set(key, element)
@@ -335,9 +357,27 @@ export class CityScene {
   private async buildPlaces(places: Place[]) {
     for (const place of places) {
       const centre = this.centres.get(place.id)!
-      const art = artFor(place)
+
+      // A buildable site is drawn as the building it will become, hidden, standing on marked
+      // ground. Nothing is loaded or added once the scene is built: raising it is a visibility
+      // change and a scale, which is why growth costs this view nothing.
+      const art = place.kind === 'Site' && place.becomes
+        ? artFor({ ...place, kind: place.becomes })
+        : artFor(place)
+
       const group = new THREE.Group()
       group.position.copy(centre)
+
+      if (place.kind === 'Site') {
+        const ground = new THREE.Mesh(
+          new THREE.BoxGeometry(3.0, 0.04, 3.0),
+          new THREE.MeshLambertMaterial({ color: 0x5a5347 }),
+        )
+        ground.position.y = 0.02
+        ground.receiveShadow = true
+        group.add(ground)
+        this.sites.set(place.id, ground)
+      }
 
       if (art.form === 'building') {
         const model = art.models[hash(place.id) % art.models.length]
@@ -346,6 +386,11 @@ export class CityScene {
         )
         building.rotation.y = (hash(`${place.id}:turn`) % 4) * (Math.PI / 2)
         group.add(building)
+
+        if (place.kind === 'Site') {
+          building.visible = false
+          this.rising.set(place.id, building)
+        }
       } else if (art.form === 'grove') {
         // A grove is trees rather than a building.
         for (let i = 0; i < 6; i++) {

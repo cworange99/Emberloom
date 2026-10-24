@@ -127,12 +127,18 @@ public static class ActionCatalog
         ExposesToDanger = true
     };
 
+    /// <summary>
+    /// Raising a building on ground the colony voted to raise it on. Until M10 this was offered at
+    /// every shelter and plaza and did nothing whatsoever when it finished — a third of the
+    /// colony's waking life, measured, spent on work that left no mark. It now happens only at an
+    /// approved site, and when it is finished the site becomes a building.
+    /// </summary>
     public static readonly ActionDefinition Build = new()
     {
         Kind = ActionKind.Build,
         Verb = "built at",
         Relief = Relief((Drive.Meaning, 2.20), (Drive.Safety, 0.70), (Drive.Standing, 0.40)),
-        Places = [PlaceKind.Shelter, PlaceKind.Plaza],
+        Places = [PlaceKind.Site],
         DurationTicks = 32
     };
 

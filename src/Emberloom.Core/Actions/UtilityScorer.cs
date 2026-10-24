@@ -116,8 +116,16 @@ public sealed class UtilityScorer
         ActionKind.Forage => place.ForageYield > 0,
         ActionKind.Salvage => place.SalvageRemaining > 0 && !place.IsBlocked,
         ActionKind.Clear => place.IsBlocked,
-        ActionKind.Build => !place.IsBlocked,
-        _ => !place.IsBlocked
+
+        // Only where the colony agreed to raise something, and only until it stands. Before M10
+        // Build was available at every shelter and plaza and had no world effect at all, which
+        // measured out at 34% of every colonist's entire life spent on nothing. All of that effort
+        // now has exactly one place to land, and when there is no approved site it has none — which
+        // is where the room for leisure in V2 comes from.
+        ActionKind.Build => place.IsApproved && place.IsUnderConstruction,
+
+        // A site is marked ground until it is raised: nobody rests, forages or gathers on it.
+        _ => !place.IsBlocked && place.Kind != PlaceKind.Site
     };
 
     private ScoredAction Evaluate(

@@ -87,6 +87,15 @@ export function CityView({
     if (ready) sceneRef.current?.setSealed(new Map([...live].map(([id, s]) => [id, s.isBlocked])))
   }, [ready, live])
 
+  useEffect(() => {
+    // A site that has been raised reads as built, whatever its progress said on the way.
+    if (ready) {
+      sceneRef.current?.setBuilt(
+        new Map([...live].map(([id, s]) => [id, s.isSite ? s.buildProgress : 1])),
+      )
+    }
+  }, [ready, live])
+
   const describe = (x: number, y: number) => {
     const hit = sceneRef.current?.pick(x, y)
     if (!hit) return null

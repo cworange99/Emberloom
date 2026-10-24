@@ -197,6 +197,44 @@ public sealed class CityMap
             SalvageRemaining = 5, ClearingRequired = 120, IsExplored = false
         });
 
+        // ---- ground the colony can build on (M10) ------------------------------------------
+        //
+        // Every site exists from the first tick, as marked ground nobody has agreed to yet. That is
+        // deliberate and it is what makes growth cheap: the per-tick snapshot already streams every
+        // place, the city scene already toggles per-place visuals without rebuilding, and a site has
+        // a room spec authored up front like anywhere else. Adding places at runtime would need a
+        // push path and an incremental scene that do not exist, to show something less legible than
+        // scaffolding that fills in.
+        //
+        // EVERY SITE MUST BE A GRAPH LEAF. Reachable() walks neighbours, so a site standing between
+        // two built places would put itself on the only route between them. They are leaves, and
+        // they are never blocked, so neither can happen — keep it that way.
+        foreach (var (id, name, becomes, x, y, work, attachedTo) in new[]
+        {
+            ("site-row-north", "The North Row", PlaceKind.Dwelling, 10.0, 18.0, 12000.0, "plaza"),
+            ("site-hall-plaza", "The Plaza Hall", PlaceKind.Hall, -14.0, 14.0, 18000.0, "plaza"),
+            ("site-row-market", "The Market Row", PlaceKind.Dwelling, 28.0, -44.0, 12000.0, "market-hall"),
+            ("site-hall-east", "The East Hall", PlaceKind.Hall, 50.0, -18.0, 18000.0, "shelter-east"),
+            ("site-row-river", "The River Row", PlaceKind.Dwelling, -60.0, 52.0, 12000.0, "river-edge"),
+            ("site-granary-river", "The River Store", PlaceKind.Granary, -56.0, 28.0, 15000.0, "river-edge"),
+            ("site-row-orchard", "The Orchard Row", PlaceKind.Dwelling, 62.0, 36.0, 12000.0, "orchard"),
+            ("site-granary-orchard", "The Orchard Store", PlaceKind.Granary, 58.0, 14.0, 15000.0, "orchard"),
+            ("site-hall-under", "The Deep Hall", PlaceKind.Hall, -24.0, -46.0, 18000.0, "shelter-under"),
+            ("site-granary-under", "The Underhouse Store", PlaceKind.Granary, -2.0, -48.0, 15000.0, "shelter-under"),
+            ("site-row-tower", "The Tower Row", PlaceKind.Dwelling, 14.0, 44.0, 12000.0, "tower-lobby"),
+            ("site-hall-loom", "The Loomside Hall", PlaceKind.Hall, -44.0, 4.0, 18000.0, "loom")
+        })
+        {
+            map.Add(new Place
+            {
+                Id = id, Name = name, Kind = PlaceKind.Site, Becomes = becomes,
+                X = x, Y = y, Light = 1.0, Danger = 0.0,
+                BuildRequired = work, IsExplored = true
+            });
+
+            map.Connect(attachedTo, id);
+        }
+
         map.Connect("plaza", "loom");
         map.Connect("plaza", "shelter-east");
         map.Connect("plaza", "shelter-under");

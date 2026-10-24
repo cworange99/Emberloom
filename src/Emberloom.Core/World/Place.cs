@@ -18,7 +18,22 @@ public enum PlaceKind
     Loom,
 
     /// <summary>Open ground the colony gathers on. Where arguments happen.</summary>
-    Plaza
+    Plaza,
+
+    /// <summary>
+    /// Somewhere the colony can put a building. Until it votes to raise one, a site is marked
+    /// ground and nothing else — see <see cref="Place.BuildRequired"/>.
+    /// </summary>
+    Site,
+
+    /// <summary>A roof over tables. Where a colony stops working and sits with each other.</summary>
+    Hall,
+
+    /// <summary>Where what the colony grows is kept, against the days it does not grow anything.</summary>
+    Granary,
+
+    /// <summary>Beds, under a roof the colony built rather than found.</summary>
+    Dwelling
 }
 
 /// <summary>
@@ -31,7 +46,18 @@ public sealed class Place
 
     public required string Name { get; init; }
 
-    public required PlaceKind Kind { get; init; }
+    /// <summary>
+    /// What this place is. Settable since M10 only because a site becomes the thing it was raised
+    /// as: the ground where the colony voted for a hall is a Site until the work is done and a Hall
+    /// afterwards, and that is one place changing rather than two places sharing a spot.
+    /// </summary>
+    public required PlaceKind Kind { get; set; }
+
+    /// <summary>
+    /// What this place will be once it is built, for a <see cref="PlaceKind.Site"/>. Null for
+    /// anything the makers left behind — those were never raised by anybody here.
+    /// </summary>
+    public PlaceKind? Becomes { get; init; }
 
     public required double X { get; init; }
 
@@ -63,9 +89,34 @@ public sealed class Place
 
     public double ClearingDone { get; set; }
 
+    /// <summary>
+    /// Work ticks needed to raise a building here. Zero for everywhere the makers left — those are
+    /// cleared, not built. Mirrors <see cref="ClearingRequired"/> deliberately: clearing is how the
+    /// colony gets into what was already there, building is how it adds something that was not.
+    /// </summary>
+    public double BuildRequired { get; set; }
+
+    public double BuildDone { get; set; }
+
+    /// <summary>
+    /// True once the colony has voted to raise this site, which is what takes it out of
+    /// <see cref="Colonists.Colony.ForbiddenPlaces"/> and lets anyone work on it. A site nobody has
+    /// agreed to is marked ground that everyone walks past.
+    /// </summary>
+    public bool IsApproved { get; set; }
+
     public List<string> Neighbours { get; } = [];
 
     public bool IsBlocked => ClearingRequired > ClearingDone;
+
+    /// <summary>
+    /// Still going up. A site under construction is not yet the thing it will be: it holds nobody,
+    /// feeds nobody, and relieves nothing.
+    /// </summary>
+    public bool IsUnderConstruction => BuildRequired > BuildDone;
+
+    public double BuildProgress =>
+        BuildRequired <= 0 ? 1 : Math.Clamp(BuildDone / BuildRequired, 0, 1);
 
     public double ClearingProgress =>
         ClearingRequired <= 0 ? 1 : Math.Clamp(ClearingDone / ClearingRequired, 0, 1);

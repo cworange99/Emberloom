@@ -99,6 +99,30 @@ const BY_KIND: Record<string, RoomSpec> = {
   Stairwell: BY_ID['east-stair'],
   Clearing: BY_ID.orchard,
   Plaza: BY_ID.plaza,
+
+  // What the colony built for itself (M10). A hall is tables and benches and nothing to work at;
+  // a granary is what is kept; a dwelling is beds the colony made rather than found.
+  Hall: {
+    width: 9, depth: 7,
+    wall: furniture('kitchenBar', 'kitchenBarEnd', 'bookcaseOpenLow'),
+    open: furniture('tableCloth', 'bench', 'bench', 'stoolBar', 'tableRound', 'chairCushion'),
+  },
+  Granary: {
+    width: 7, depth: 6,
+    wall: furniture('kitchenCabinet', 'kitchenCabinetDrawer', 'bookcaseClosedWide'),
+    open: furniture('cardboardBoxClosed', 'cardboardBoxClosed', 'cardboardBoxOpen', 'table'),
+  },
+  Dwelling: {
+    width: 7, depth: 6,
+    wall: furniture('bedSingle', 'bedSingle', 'bedBunk', 'cabinetBedDrawer'),
+    open: furniture('rugRectangle', 'lampSquareFloor', 'chairRounded'),
+  },
+  // Marked ground, before anything stands on it. Outdoors, and wall must be present even when it
+  // is empty — buildRoom walks it unconditionally.
+  Site: {
+    width: 7, depth: 7, outdoor: true, wall: [],
+    open: forest('stones', 'rocks-low', 'plant'),
+  },
 }
 
 export function roomFor(place: Place): RoomSpec {

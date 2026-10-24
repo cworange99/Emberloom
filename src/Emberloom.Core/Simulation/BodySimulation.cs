@@ -428,6 +428,15 @@ public sealed class BodySimulation
 
                 break;
 
+            case ActionKind.Build:
+                place.BuildDone += 1;
+                if (!place.IsUnderConstruction && place.Kind == PlaceKind.Site)
+                {
+                    Raise(colonist, place);
+                }
+
+                break;
+
             case ActionKind.Talk or ActionKind.Teach when current.PartnerId is not null:
                 if (current.Definition.Kind == ActionKind.Talk
                     && current.TicksElapsed == 1
@@ -450,6 +459,44 @@ public sealed class BodySimulation
             Injure(colonist, place);
         }
     }
+
+    /// <summary>
+    /// A site becomes the building it was raised as. The first thing in this world the colony made
+    /// rather than found — so everyone hears about it, wherever they were, and whoever laid the last
+    /// course is known for it.
+    /// </summary>
+    private void Raise(Colonist colonist, Place place)
+    {
+        place.Kind = place.Becomes ?? PlaceKind.Shelter;
+
+        // A building is somewhere new even though its ground was always there.
+        place.IsExplored = true;
+
+        _colony.Log(EventLayer.Body,
+            $"{place.Name} stands. {colonist.DisplayName} laid the last of it.",
+            colonist, place.Id, notable: true);
+
+        Record(colonist, "finished building", place.Name, place.Id, valence: 0.9, intensity: 0.95);
+        EarnAName(colonist, $"finishing {place.Name}");
+
+        foreach (var other in _colony.Living.Where(c => c.Id != colonist.Id))
+        {
+            // A share of what everyone was carrying, lifted: a colony that has raised something is
+            // a different proposition from one squatting in what it found. Relief is proportional,
+            // so this takes a third off whoever most needed it and little off anyone who did not.
+            other.Drives.Relieve(new DriveVector(new Dictionary<Drive, double>
+            {
+                [Drive.Meaning] = 0.35,
+                [Drive.Belonging] = 0.25
+            }));
+            Record(other, "saw the colony finish", place.Name, other.PlaceId, valence: 0.6, intensity: 0.6);
+        }
+
+        PlaceRaised?.Invoke(place);
+    }
+
+    /// <summary>Raised at the tick a site becomes a building, so the host can tell anyone watching.</summary>
+    public event Action<Place>? PlaceRaised;
 
     private void Converse(Colonist colonist, CurrentAction current)
     {
@@ -671,6 +718,27 @@ public sealed class BodySimulation
 
             case ForkKind.Core when fork.SubjectColonistId is { } deadId:
                 SettleCore(fork, deadId, prevailed);
+                break;
+
+            case ForkKind.Build when carried && fork.SubjectPlaceId is { } ground
+                                     && _colony.Map.Find(ground) is { } site:
+                // Approval is the whole consequence: from here the scorer offers Build there, and
+                // the colony's own labour decides how long it takes to stand.
+                site.IsApproved = true;
+                _colony.Log(EventLayer.World,
+                    $"The colony agreed to raise {site.Name}. Anyone may work on it.",
+                    placeId: site.Id, notable: true);
+                break;
+
+            case ForkKind.Build:
+                // That ground, specifically, is set aside — so the next asking is about a different
+                // site rather than the same one again.
+                if (fork.SubjectPlaceId is { } refused)
+                {
+                    _colony.Declined[refused] = _colony.Day + ForkRules.GroundSetAsideDays;
+                }
+
+                _colony.PutOff(ForkKind.Build, _colony.Day + ForkRules.BuildAskAgainDays);
                 break;
         }
 
