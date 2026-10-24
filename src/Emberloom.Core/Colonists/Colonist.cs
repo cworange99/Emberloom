@@ -75,6 +75,12 @@ public sealed class Colonist
     /// <summary>In the last stretch of their life, and slowing. Set once, so it is noticed once.</summary>
     public bool IsElder { get; set; }
 
+    /// <summary>
+    /// How this life is going, in [0,1] — M12. Read-only at this milestone: see
+    /// <see cref="WellbeingRules"/> for what moves it and why nothing yet depends on it.
+    /// </summary>
+    public double Wellbeing { get; set; } = WellbeingRules.Start;
+
     /// <summary>When they last had a successor. Pairing has a cooldown.</summary>
     public double LastPairedOnDay { get; set; } = double.NegativeInfinity;
 
@@ -172,7 +178,14 @@ public sealed class Colonist
 
     /// <summary>
     /// Mood is derived, never generated. A whole model call for one adjective is the wrong trade
-    /// at any budget, so it comes off drive levels and the valence of what just happened.
+    /// at any budget, so it comes off what just happened and how the life is going.
+    /// <para>
+    /// M12 re-expressed the second half of that: the pressure term used to be the urgency of
+    /// whichever drive happened to be loudest this instant, which made the word flicker between
+    /// ticks for no reason a watcher could see. <see cref="Wellbeing"/> is the same pressure
+    /// integrated over days, so the word now changes when the life does. The word set is unchanged
+    /// — "restless" is still what a hard-pressed day looks like from outside.
+    /// </para>
     /// </summary>
     public string Mood(double currentDay)
     {
@@ -182,17 +195,16 @@ public sealed class Colonist
             .DefaultIfEmpty(0)
             .Average();
 
-        var dominant = Drives.Dominant(Weights);
-        var pressure = Drives.Urgency(dominant, Weights[dominant]);
-
-        return (recentValence, pressure) switch
+        return (recentValence, Wellbeing) switch
         {
-            ( > 0.25, < 0.4) => "settled",
+            // Banded on M12's measured range, not on the middle of [0,1] — see
+            // WellbeingRules.Describe for why, and for the warning about re-reading them.
+            ( > 0.25, > 0.48) => "settled",
             ( > 0.25, _) => "driven",
-            ( < -0.25, > 0.5) => "raw",
+            ( < -0.25, < 0.36) => "raw",
             ( < -0.25, _) => "sullen",
-            (_, > 0.6) => "restless",
-            (_, < 0.2) => "easy",
+            (_, < 0.38) => "restless",
+            (_, > 0.48) => "easy",
             _ => "guarded"
         };
     }

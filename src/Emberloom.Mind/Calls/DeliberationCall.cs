@@ -152,7 +152,7 @@ public static class DeliberationCall
     /// <summary>Where the colonist stands by their weights, with a stock line — and marked as a fallback.</summary>
     public static DeliberationResult Fallback(Colonist colonist, Fork fork, CompletionResult? call = null) => new()
     {
-        Vote = ForkRules.FallbackVote(fork.Kind, colonist),
+        Vote = ForkRules.FallbackVote(fork.Kind, colonist, fork.Pressure),
         FromModel = false,
         Call = call
     };

@@ -2,6 +2,7 @@ using Emberloom.Core.Actions;
 using Emberloom.Core.Colonists;
 using Emberloom.Core.Drives;
 using Emberloom.Core.Events;
+using Emberloom.Core.Life;
 using Emberloom.Core.Simulation;
 using Emberloom.Core.World;
 
@@ -75,6 +76,10 @@ public sealed record ColonistDto(
     bool IsAlive,
     double LifespanDays,
     bool IsElder,
+
+    /// <summary>M12: how the life is going, in [0,1], and the same thing as a word.</summary>
+    double Wellbeing,
+    string WellbeingWord,
     IReadOnlyList<PersonRefDto> Parents)
 {
     public static ColonistDto From(Colonist colonist, Colony colony) => new(
@@ -104,6 +109,8 @@ public sealed record ColonistDto(
         colonist.IsAlive,
         Math.Round(colonist.LifespanDays, 1),
         colonist.IsElder,
+        Math.Round(colonist.Wellbeing, 3),
+        WellbeingRules.Describe(colonist.Wellbeing),
         colonist.ParentIds.Select(id => new PersonRefDto(id, colony.Find(id)?.DisplayName ?? id)).ToList());
 }
 

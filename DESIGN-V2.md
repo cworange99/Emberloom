@@ -77,50 +77,115 @@ the economy work before a line of it is written.
 damper is `1/(1 + SharedMemories/30)` and Talk is the *only* real supplier of Belonging; if it trends
 toward pinning at 1.0, widen the denominator (one constant) before starting any economy work.
 
-### M8's measured baseline — 23 October 2026
+### The measured baseline — re-measured 24 October 2026, at M12
 
 Over a full lifespan, `--days 2160 --colonists 4 --quiet`, seed 4. **This is the baseline every later
 milestone compares against.** The 8-founder column is the same run at the old starting population.
 
+**Why this table was re-measured.** The figures first recorded here were taken at M8, before M10 gated
+`Build` and before M11 replaced `System.Random` with a saveable stream. The RNG change shifted every
+seed's draws, so the old decimals described runs that can no longer be reproduced. Re-measuring was
+listed as the first task of M12, and it immediately found a defect — see *What re-measuring found*.
+
 | | 4 founders | 8 founders |
 |---|---|---|
-| work | **67.4%** — build 34.4, tend 22.7, forage 10.3, salvage 0.0, clear 0.0 | 68.2% |
-| rest | 16.0% | 15.0% |
-| social | 8.6% — talk 6.2, teach 2.3 | 9.1% |
+| work | **47.8%** — tend 33.5, forage 12.8, build 1.5, salvage 0.0, clear 0.0 | 46.1% |
+| rest | **32.0%** | 30.8% |
+| social | 9.0% — teach 5.0, talk 3.9 | 13.0% |
 | leisure (Wander) | **0.0%** | 0.0% |
-| civic | 0.7% | 0.3% |
-| travel | 4.5% | 4.5% |
-| idle | 2.9% | 2.9% |
-| **free** (social + leisure + idle) | **11.4%** — per person 9.1 / 12.1 / 16.8 | 12.0% |
-| drive means | sus .21 rest .19 safe .16 **belo .55** stan .42 mean .09 wond .28 | belo .52 |
-| first print · first birth | **day 948** · day 673 | day 87 · day 655 |
-| population curve | 4 4 4 5 9 9 10 14 15 16 | 8 9 9 14 14 14 20 20 20 20 |
+| civic | 3.5% | 2.0% |
+| travel | 4.8% | 5.0% |
+| idle | 3.0% | 3.0% |
+| **free** (social + leisure + idle) | **11.9%** — per person 10.2 / 13.6 / 24.9 | 16.1% |
+| drive means | sus .17 rest .10 safe .24 **belo .58 stan .61** mean .18 wond .19 | — |
+| wellbeing over each life | **mean 0.412, spread 0.232** (0.336 / 0.389 / 0.569) | mean 0.477, spread 0.108 |
+| first print · first birth | **never** · day 661 | — |
+| population curve | 4 4 4 6 6 6 8 8 8 10 | — |
 
-**Four findings that change later milestones.**
+**What changed from the M8 figures, and what it means.**
 
-1. **A third of the colony's entire existence goes into `Build` — which does nothing.** 34.4% of all
-   colonist-ticks, 44,856 completed builds, zero world effect. The colony is *already* trying to build a
-   city. M10 does not have to persuade the scorer to allocate labour to construction; it has to give the
-   labour already being spent somewhere to land. This retires M10's riskiest assumption before it was run.
-2. **Leisure is literally never chosen.** Wander is 0.0% at both populations — it exists only as the
-   fallback when nothing scores, and something always scores. A leisure *action* alone will be ignored;
-   M13's venue has to relieve a drive nothing else reaches, which is why Belonging matters next.
-3. **Belonging is the colony's dominant pressure** at 0.55, nearly three times Sustenance, and Talk is its
-   only real supplier. The 4-founder fear was unfounded — 0.55 against 0.52 at eight, so the novelty
-   damper is *not* biting at this scale and needs no change. But it confirms where M13's social venue
-   should point.
-4. **Do not raise `ReliefScale` to buy leisure.** The sweep at 2160 days:
-   `0.55 → spread 0.56 · 1.0 → 0.70 · 2.0 → 0.59 · 3.0 → 0.49 · 5.0 → 0.12 · 8.0 → 0.08 · 12.0 → 0.13`.
-   At 5.0 every drive is met and the spread collapses — the colony has no priorities and action selection
-   becomes noise. 3.0 is the right knob setting and should stay. **Leisure has to come from reallocating
-   the 34% that Build is currently wasting, not from more relief.**
+1. **The thirty percent of the day that M10 took back from `Build` went to sleep, not to leisure.**
+   Build fell from 34.4% to 1.5% — M10 did what it was meant to — but rest rose 16.0% → 32.0% and free
+   time did not move at all (11.4% → 11.9%). The scope assumed reclaiming Build's wasted labour would
+   create room for leisure to compete for. It created room for Rest to expand into, because Rest is
+   always available, always scores something, and never runs out. **M13's venue is not competing for
+   slack; it is competing with sleep.** That is a different and harder problem than the one the scope
+   described, and it is the most important line in this table.
+2. **Standing has overtaken Belonging as the colony's dominant pressure** — .61 against .58, where at M8
+   it was .42 against .55, and Meaning doubled (.09 → .18). Gating Build did this: Build was the main
+   supplier of Meaning and a route to Standing, and with it rationed those two drives now go unmet. M13
+   should point at Belonging *and* Standing; a venue that only supplies company leaves half of it.
+3. **Leisure is still literally never chosen.** Wander is 0.0% at both populations, unchanged. It exists
+   only as the fallback when nothing scores, and something always scores.
+4. **The Loom never prints on seed 4 in 2160 days.** First print was day 948 at M8 and is now *never*;
+   the colony grows by birth alone. The charge accrues at ~0.059/day against a cost of 25, and nothing
+   about that is a decision anybody makes. This is the argument for M14 stated as a measurement.
+5. **`ReliefScale` must stay at 3.0, for a different reason than before.** The sweep now reads
+   `0.55 → spread 0.38 · 1.0 → 0.23 · 2.0 → 0.74 · 3.0 → 0.40 · 5.0 → 0.53 · 8.0 → 0.26 · 12.0 → 0.20`,
+   so the old finding — that the drive spread collapses at 5.0 — no longer holds numerically. The
+   conclusion does, on better evidence: **completed actions fall from 93,431 at 3.0 to 68,572 at 5.0 and
+   20,118 at 12.0.** A colony whose needs are all met stops doing anything, which is the same failure
+   seen from the other side. At 3.0 the physical drives sit low (.18/.10/.24) and the social drives carry
+   the pressure, which is the bar the sweep's own doc comment sets.
 
-Also measured: **Rest spends 16% of the day but completes only 165 times in 2160 days.** A Rest is 48
-ticks and the colony reconsiders every 6, so rest is being abandoned mid-sleep almost every time.
-Unexplained, probably harmless, worth a look when M12 starts reading rest as wellbeing input.
+Still true from M8, unchanged: `salvage 0.0% / clear 0.0%` — both run dry early, so two of nine actions
+are dead for most of a run. And **Rest spends a third of the day but completes rarely**: a Rest is 48
+ticks and the colony reconsiders every 6, so sleep is abandoned mid-sleep almost every time. At 32% of
+the day that is no longer a curiosity, and it is the first thing to look at if M13's venue cannot get a
+look in.
 
-And `salvage 0.0% / clear 0.0%`: both run dry early — every place reads `salvage 0` by the end. Two of
-nine actions are dead for most of a run, which is the "world doesn't grow" problem stated as a number.
+### What re-measuring found: the shipped seed never built anything
+
+Seed 4 is the seed in `appsettings.json` — the colony the game actually starts. Over 2160 days it raised
+**nothing**, refusing all twelve sites across twenty votes, and would have gone on refusing them for
+ever. Seeds 1, 2, 3, 5, 6 and 7 all raised every site by day 1200, which is why M10's own measurement
+missed it.
+
+The cause was structural rather than a seed quirk. A colony with no mind votes through
+`ForkRules.FallbackVote`, which read nothing but personality weights and drive levels — and the council
+is *itself* selected by those same fixed weights. So the answer to "shall we build?" was a fixed function
+of who was alive, decided at colony creation and never revisited. A council of three who all rest easy
+refuses the city permanently, and the 400-day `Declined` expiry only re-asks the same people the same
+question.
+
+The fix is `Fork.Pressure`: the same facts `Stakes` states in words, as a number in [0,1], so the voter
+who cannot read prose gets the same information the model does. Beds are not negotiable (crowding past
+three to a room presses up to 1.0), a hall is agreed to (0.5 for the first), a store is argued over (0.1
+— deliberately too small to carry anyone who would rather rest). Seed 4 now raises a hall and a dwelling
+and declines the rest, which is the intended behaviour: a colony that builds what it is short of.
+
+**The general lesson, worth keeping:** any mindless fallback that is a pure function of unchanging state
+is a decision made once and then frozen. This is the second time it has bitten — the first was seed 5's
+2–2 deadlock at M10, fixed with odd councils. Every fallback added from here should be checked against
+"what world fact would change this vote?"
+
+### M12's measured outcome — 24 October 2026
+
+`Colonist.Wellbeing`, a leaky integrator toward how the current tick is to live, half-life 5 colony days.
+Read-only: nothing scores it, gates on it or dies of it.
+
+**The riskiest assumption is retired: it does vary.** Over a lifespan at four founders the colony lives
+between **0.336 and 0.569**, mean 0.412 — a 70% relative spread, not the convergence on 0.5 that was
+feared. And it varies *for the right reasons*: at eight founders, where social time measures 13.0%
+against 9.0% and free time 16.1% against 11.9%, mean wellbeing is **0.477 against 0.412**. The number
+tracks a quantity measured independently of it, which is the strongest evidence available at this
+milestone that the inputs are right.
+
+**Two findings for the milestones that depend on it.**
+
+1. **Everybody is coping and nobody is flourishing.** The whole distribution sits in 0.3–0.6. That is an
+   honest description of a colony that works half its waking life, sleeps a third of it, gets 9% company
+   and has chronic unmet Standing and Belonging — and it is the number M13, M14 and M15 exist to move. If
+   wellbeing already read "well" here, those milestones would have nothing to show.
+2. **A bigger colony is a happier and a more *uniform* one** — spread 0.108 at eight founders against
+   0.232 at four. Scale supplies company to everyone equally. Differences between people will have to
+   come from things that are not shared out evenly, which is exactly what M15's residential capacity and
+   M13's priced venue are.
+
+Also noted: using mean urgency across all seven drives instead of the dominant one was measured and
+rejected — spread 0.246 against 0.232, no better, and harder to explain. And because the measured range
+is 0.34–0.57 rather than the middle of [0,1], the `Describe` and `Mood` bands are calibrated to it
+explicitly. **They want re-reading after each of M13, M14 and M15**, and the comment on them says so.
 
 ## M9 — Names at birth
 

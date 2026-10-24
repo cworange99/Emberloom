@@ -1,6 +1,7 @@
 using Emberloom.Core.Actions;
 using Emberloom.Core.Colonists;
 using Emberloom.Core.Drives;
+using Emberloom.Core.Life;
 using Emberloom.Core.Memory;
 
 namespace Emberloom.Core.Persistence;
@@ -28,6 +29,8 @@ public sealed record ColonistSnapshot
     public required bool IsAlive { get; init; }
     public required double LifespanDays { get; init; }
     public required bool IsElder { get; init; }
+
+    public double Wellbeing { get; init; } = WellbeingRules.Start;
     public required double LastPairedOnDay { get; init; }
     public required string Personality { get; init; }
     public required string Seed { get; init; }
@@ -58,6 +61,7 @@ public sealed record ColonistSnapshot
         IsAlive = colonist.IsAlive,
         LifespanDays = colonist.LifespanDays,
         IsElder = colonist.IsElder,
+        Wellbeing = colonist.Wellbeing,
         LastPairedOnDay = colonist.LastPairedOnDay,
         Personality = colonist.Personality,
         Seed = colonist.Seed,
@@ -94,6 +98,7 @@ public sealed record ColonistSnapshot
             IsAlive = IsAlive,
             LifespanDays = LifespanDays,
             IsElder = IsElder,
+            Wellbeing = Wellbeing,
             LastPairedOnDay = LastPairedOnDay,
             Personality = Personality,
             Seed = Seed,

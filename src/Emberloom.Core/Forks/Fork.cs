@@ -72,6 +72,21 @@ public sealed class Fork
     /// </summary>
     public required string Stakes { get; init; }
 
+    /// <summary>
+    /// The same thing <see cref="Stakes"/> says, as a number in [0,1]: how badly the colony needs
+    /// what is proposed, measured when the question was asked.
+    /// <para>
+    /// There are two readers of a fork and only one of them can read prose. A mind is given the
+    /// stakes in words, because figures in a prompt come back as beliefs; a colony with no mind
+    /// votes in <see cref="ForkRules.FallbackVote"/>, which until now read nothing but personality
+    /// and so answered every question the same way for ever. Measured at M12: on seed 4 — the seed
+    /// the game ships with — a council of three who all rest easy refused all twelve sites twenty
+    /// times over 600 days, and would have refused them for ever, because nothing in the vote could
+    /// tell them that eleven people were sharing two beds. This is how that fact reaches them.
+    /// </para>
+    /// </summary>
+    public double Pressure { get; init; }
+
     /// <summary>For an Ascend fork, the place the colony is deciding whether to go up to.</summary>
     public string? SubjectPlaceId { get; init; }
 
@@ -276,6 +291,7 @@ public static class ForkRules
                 proposal: $"The colony builds {site.Name}. Anyone may work on it until it stands.",
                 stakes: Stakes(colony, site),
                 subject: site.Id,
+                pressure: Pressure(colony, site),
                 forMeans: "they want this one raised next",
                 againstMeans: "they would leave this ground as it is, for now",
                 abstainMeans: "they do not mind either way which is raised next");
@@ -341,6 +357,38 @@ public static class ForkRules
         // belief, beyond the plain count of people and beds, which a colonist would know.
         return $"{need} For: it would be the first thing here the colony made rather than found, and it would stand after "
                + "whoever raised it. Against: it is a great deal of work that nobody has to do, and the ruins have held so far.";
+    }
+
+    /// <summary>
+    /// How short the colony actually is of what this site would become, in [0,1] — the same facts
+    /// <see cref="Stakes"/> states in words, for the voter who cannot read them. Deliberately the
+    /// same thresholds <see cref="Propose"/> uses to pick the site, so the thing the body says is
+    /// most needed is also the thing a mindless council feels most strongly about.
+    /// </summary>
+    public static double Pressure(Colony colony, Place site)
+    {
+        var heads = colony.Living.Count();
+        var beds = colony.Map.Places.Count(p => p.Kind is PlaceKind.Shelter or PlaceKind.Dwelling);
+        var halls = colony.Map.Places.Count(p => p.Kind == PlaceKind.Hall);
+        var stores = colony.Map.Places.Count(p => p.Kind == PlaceKind.Granary);
+
+        return site.Becomes switch
+        {
+            // Three to a room is crowded but liveable; past that it presses, and at six to a room
+            // it is the only thing anyone would vote for.
+            PlaceKind.Dwelling => Math.Clamp(heads / (beds * 3.0) - 1, 0, 1),
+
+            // Having nowhere to be together that is not somewhere you work is a standing complaint
+            // rather than an emergency, so the first hall presses moderately and never more.
+            PlaceKind.Hall => halls == 0 ? 0.5 : Math.Clamp(heads / (halls * 8.0) - 1, 0, 0.5),
+
+            // Somewhere to put what is grown is pure foresight, and deliberately too small to
+            // carry anyone who does not already want to build: 0.1 leaves a colonist who would
+            // rather rest at a shrug, so a store is raised by the restless and the proud or not at
+            // all. Beds are not negotiable, a hall is agreed to, a store is argued over.
+            PlaceKind.Granary => stores == 0 ? 0.1 : 0,
+            _ => 0
+        };
     }
 
     /// <summary>
@@ -429,7 +477,7 @@ public static class ForkRules
     /// with them. Thin on purpose, and marked as a fallback, so a colony running on stubs still
     /// decides but never looks like it argued.
     /// </summary>
-    public static Vote FallbackVote(ForkKind kind, Colonist colonist)
+    public static Vote FallbackVote(ForkKind kind, Colonist colonist, double pressure = 0)
     {
         var (forDrive, againstDrive) = Pulls(kind);
 
@@ -438,8 +486,14 @@ public static class ForkRules
         // which is what made a deadlocked colony of four deadlocked for its whole life rather than
         // just this once. Someone whose Standing is pressing wants the thing built this month even
         // if they are not, in general, the sort who does.
+        // The third term is the world. Personality and mood alone are a function of who is alive,
+        // and the council is itself chosen by those same fixed weights, so without it the answer to
+        // "shall we build?" is decided once at colony creation and never revisited. PressureWeight
+        // is sized so that a plainly needed building carries someone who would rather rest, while
+        // one the colony merely could have still has to be argued for.
         var lean = colonist.Weights[forDrive] - colonist.Weights[againstDrive]
                    + (colonist.Drives[forDrive] - colonist.Drives[againstDrive]) * 0.5
+                   + pressure * PressureWeight
                    + Leaning(kind);
 
         var stance = lean > 0.05 ? Stance.For : lean < -0.05 ? Stance.Against : Stance.Abstain;
@@ -462,6 +516,14 @@ public static class ForkRules
     /// </para>
     /// </summary>
     private static double Leaning(ForkKind kind) => kind == ForkKind.Build ? 0.12 : 0;
+
+    /// <summary>
+    /// What a colony's own shortages are worth against personality in a mindless vote. The widest
+    /// weight gap on the Build axis is 0.9 (restless) to -0.2 (cautious); 0.6 is enough to turn the
+    /// reluctant end of that range when the need is undeniable and not enough when it is a
+    /// preference. See <see cref="Fork.Pressure"/>.
+    /// </summary>
+    public const double PressureWeight = 0.6;
 
     private static string StockLine(ForkKind kind, Stance stance) => (kind, stance) switch
     {
@@ -513,6 +575,7 @@ public static class ForkRules
         string proposal,
         string stakes,
         string? subject,
+        double pressure = 0,
         string? forMeans = null,
         string? againstMeans = null,
         string? abstainMeans = null) => new()
@@ -522,6 +585,7 @@ public static class ForkRules
         Question = question,
         Proposal = proposal,
         Stakes = stakes,
+        Pressure = pressure,
         SubjectPlaceId = subject,
         ForMeans = forMeans ?? "they want it done",
         AgainstMeans = againstMeans ?? "they do not want it done, even gently",

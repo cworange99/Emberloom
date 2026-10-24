@@ -33,6 +33,9 @@ export interface Colonist {
   parents: PersonRef[]
   ageDays: number
   mood: string
+  /** M12: how the life is going, in [0,1], and the same thing as a word. */
+  wellbeing: number
+  wellbeingWord: string
   placeId: string
   doing: string | null
   doingTarget: string | null

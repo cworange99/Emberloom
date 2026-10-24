@@ -162,6 +162,17 @@ public sealed class SessionChronicle
         text.AppendLine($"- The Loom holds {colony.LoomCharge:F0} charge{(colony.UpkeepPerDay > 0 ? $", spending {colony.UpkeepPerDay:F2} a day on what you provide" : string.Empty)} · {colony.ArtifactsRecovered} pieces of the makers' recovered");
         text.AppendLine($"- {colony.Lexicon.Count} words of their own · the story {(colony.Myth is null ? "still untold" : $"told {Times(colony.Myth.Version)}")} · {colony.ForkHistory.Count} forks decided{(colony.OpenFork is not null ? ", one open now" : string.Empty)}");
 
+        // How the colony is, as the colony would say it — M12. Reading a long run back, "nine
+        // living" says whether they survived and nothing at all about whether it was worth it.
+        if (living.Count > 0)
+        {
+            var well = living.Average(c => c.Wellbeing);
+            var worst = living.OrderBy(c => c.Wellbeing).First();
+
+            text.AppendLine($"- Taken together they are **{WellbeingRules.Describe(well)}**"
+                            + $" · the hardest life here is {worst.DisplayName}'s, and they are {WellbeingRules.Describe(worst.Wellbeing)}");
+        }
+
         // Three states, not two: a colony with no mind configured is a supported way to play, and
         // must not read the same as one whose first call has simply not come back yet.
         text.AppendLine(stamp switch

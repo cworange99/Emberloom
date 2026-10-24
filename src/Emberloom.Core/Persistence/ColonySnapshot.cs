@@ -279,7 +279,8 @@ public sealed record ForkSnapshot(
     bool? Carried,
     Stance? Prevailed,
     string? Outcome,
-    double? ResolvedOnDay)
+    double? ResolvedOnDay,
+    double Pressure = 0)
 {
     public static ForkSnapshot Of(Fork fork) => new(
         fork.Id, fork.Kind, fork.Question, fork.Proposal, fork.Stakes,
@@ -287,7 +288,7 @@ public sealed record ForkSnapshot(
         fork.ForMeans, fork.AgainstMeans, fork.AbstainMeans,
         fork.PlaceId, fork.OpenedOnDay, fork.Participants.ToList(),
         fork.Votes.Select(v => new VoteSnapshot(v.Key, v.Value.Stance, v.Value.Conviction, v.Value.Line, v.Value.Reasoning, v.Value.WasFallback)).ToList(),
-        fork.Carried, fork.Prevailed, fork.Outcome, fork.ResolvedOnDay);
+        fork.Carried, fork.Prevailed, fork.Outcome, fork.ResolvedOnDay, fork.Pressure);
 
     public Fork Rebuild()
     {
@@ -298,6 +299,7 @@ public sealed record ForkSnapshot(
             Question = Question,
             Proposal = Proposal,
             Stakes = Stakes,
+            Pressure = Pressure,
             SubjectPlaceId = SubjectPlaceId,
             SubjectColonistId = SubjectColonistId,
             ForMeans = ForMeans,

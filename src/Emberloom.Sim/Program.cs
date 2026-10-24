@@ -2,6 +2,7 @@ using Emberloom.Core.Actions;
 using Emberloom.Core.Colonists;
 using Emberloom.Core.Drives;
 using Emberloom.Core.Events;
+using Emberloom.Core.Life;
 using Emberloom.Core.Simulation;
 using Emberloom.Core.World;
 
@@ -55,6 +56,12 @@ var population = new List<int>();
 var driveTotals = DriveTable.All.ToDictionary(d => d, _ => 0.0);
 var driveSamples = 0;
 
+// M12's whole question, as a number. Wellbeing is read-only at this milestone and the only thing
+// worth knowing about it is whether it separates people: a figure everyone shares describes a
+// colony with no priorities in it. Sampled per colonist per colony-day over their own life, so
+// someone who died young is not averaged against a full lifespan.
+var wellbeing = new Dictionary<string, (double Sum, int Days)>();
+
 colony.Feed.Appended += e =>
 {
     if (!diagnose)
@@ -98,6 +105,12 @@ for (var tick = 0; tick < days * Colony.TicksPerDay; tick++)
             }
 
             driveSamples++;
+        }
+
+        foreach (var colonist in colony.Living)
+        {
+            var (sum, seen) = wellbeing.GetValueOrDefault(colonist.Id);
+            wellbeing[colonist.Id] = (sum + colonist.Wellbeing, seen + 1);
         }
     }
 
@@ -190,6 +203,26 @@ if (driveSamples > 0)
     Console.WriteLine();
 }
 
+var lives = wellbeing.Values.Where(w => w.Days >= 1).Select(w => w.Sum / w.Days).OrderBy(w => w).ToList();
+if (lives.Count > 0)
+{
+    var mean = lives.Average();
+    var spread = lives[^1] - lives[0];
+
+    Console.WriteLine();
+    Console.WriteLine($"Wellbeing over each life ({lives.Count} who lived a day or more)");
+    Console.WriteLine($"  mean {mean:F3}   spread {spread:F3}   min {lives[0]:F3}   median {lives[lives.Count / 2]:F3}   max {lives[^1]:F3}");
+
+    // A histogram rather than only the moments, because the thing that would kill the milestone is
+    // a single spike, and a mean with a spread either side of it cannot show one.
+    for (var band = 0; band < 10; band++)
+    {
+        var low = band / 10.0;
+        var count = lives.Count(w => w >= low && (band == 9 ? w <= 1.0 : w < low + 0.1));
+        Console.WriteLine($"  {low:F1}-{low + 0.1:F1}  {new string('#', count),-20} {count}");
+    }
+}
+
 if (population.Count > 1)
 {
     var firstPrint = colony.Colonists
@@ -219,13 +252,13 @@ if (population.Count > 1)
 }
 
 Console.WriteLine();
-Console.WriteLine($"{"Colonist",-10} {"Mood",-9} {"Where",-20} {"Doing",-14} {"Mem",5} {"Refl?",6}  drives");
+Console.WriteLine($"{"Colonist",-10} {"Mood",-9} {"Well",-12} {"Where",-20} {"Doing",-14} {"Mem",5} {"Refl?",6}  drives");
 foreach (var colonist in colony.Living)
 {
     var where = colony.Map[colonist.PlaceId].Name;
     var doing = colonist.Current?.Definition.Kind.ToString() ?? "-";
     Console.WriteLine(
-        $"{colonist.DisplayName,-10} {colonist.Mood(colony.Day),-9} {where,-20} {doing,-14} " +
+        $"{colonist.DisplayName,-10} {colonist.Mood(colony.Day),-9} {$"{colonist.Wellbeing:F2} " + WellbeingRules.Describe(colonist.Wellbeing),-12} {where,-20} {doing,-14} " +
         $"{colonist.Memory.Episodic.Count,5} {(colonist.Memory.WantsReflection(colony.Day) ? "yes" : "no"),6}  " +
         $"{colonist.Drives.Levels}");
 }

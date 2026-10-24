@@ -219,7 +219,7 @@ export function ColonistDetailView({
               {colonist.isAlive && (
                 <>
                   {' · '}
-                  {colonist.mood} · at{' '}
+                  {colonist.mood} · {colonist.wellbeingWord} · at{' '}
                   <PlaceLink
                     id={colonist.placeId}
                     name={placeNames.get(colonist.placeId) ?? colonist.placeId}

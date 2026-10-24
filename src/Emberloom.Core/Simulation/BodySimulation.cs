@@ -304,6 +304,10 @@ public sealed class BodySimulation
     {
         colonist.Drives.Advance(DayPerTick);
 
+        // Before anything is decided, because this reads the tick just lived rather than the one
+        // about to be: what they were doing, and what was pressing on them while they did it.
+        WellbeingRules.Advance(colonist, colonist.Current is { } doing && colonist.PlaceId != doing.Target.Id, DayPerTick);
+
         var here = _colony.Map[colonist.PlaceId];
 
         // Standing somewhere dark and unstable is its own pressure on Safety.
@@ -693,7 +697,7 @@ public sealed class BodySimulation
         {
             if (_colony.Find(id) is { } missing)
             {
-                fork.Cast(id, ForkRules.FallbackVote(fork.Kind, missing));
+                fork.Cast(id, ForkRules.FallbackVote(fork.Kind, missing, fork.Pressure));
             }
         }
 
