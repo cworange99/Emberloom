@@ -304,4 +304,53 @@ public class ChronicleTests
 
         Assert.Contains("nothing served yet", waiting);
     }
+    /// <summary>
+    /// Two writers at once, which is not hypothetical: the host amends the record from its tick
+    /// loop, and starting a new colony closes the outgoing one's record from the request thread.
+    /// Found live by clicking "new colony" during an Overnight run — both writers shared one
+    /// "<name>.writing" scratch file, one opened it while the other was moving it, and Windows
+    /// reported that as access denied. The exception escaped a catch written for IOException
+    /// (UnauthorizedAccessException does not derive from it), and a BackgroundService that throws
+    /// stops the host, so the colony died of being unable to write its own obituary.
+    /// </summary>
+    [Fact]
+    public async Task TwoWritersAtOnceDoNotFightOverTheSameFile()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "emberloom-record-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            var faults = new System.Collections.Concurrent.ConcurrentBag<Exception>();
+
+            await Task.WhenAll(Enumerable.Range(0, 8).Select(writer => Task.Run(() =>
+            {
+                for (var i = 0; i < 40; i++)
+                {
+                    try
+                    {
+                        ChronicleFile.Save(folder, "colony.md", $"writer {writer}, pass {i}");
+                    }
+                    catch (Exception ex)
+                    {
+                        faults.Add(ex);
+                    }
+                }
+            })));
+
+            Assert.Empty(faults);
+
+            // And the record is one whole file rather than a drift of half-written scratch.
+            Assert.True(File.Exists(Path.Combine(folder, "colony.md")));
+            Assert.Empty(Directory.GetFiles(folder, "*.writing"));
+            Assert.Single(Directory.GetFiles(folder));
+        }
+        finally
+        {
+            if (Directory.Exists(folder))
+            {
+                Directory.Delete(folder, recursive: true);
+            }
+        }
+    }
+
 }

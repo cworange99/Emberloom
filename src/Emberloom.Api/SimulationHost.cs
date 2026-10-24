@@ -571,6 +571,7 @@ public sealed class SimulationHost : BackgroundService
             return;
         }
 
+        // Composed outside the lock, under the colony's own, so a slow disk never holds the ticks.
         var (chronicle, text) = Compose(ended);
 
         try
@@ -579,8 +580,13 @@ public sealed class SimulationHost : BackgroundService
             chronicle.MarkWritten();
             _chronicleWrittenAt = DateTimeOffset.Now;
         }
-        catch (IOException ex)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
+            // **UnauthorizedAccessException does not derive from IOException.** This catch was
+            // written for "the disk is busy" and missed "the file is locked", which on Windows is
+            // the one that actually happens — an editor, a sync client or a scanner holding the
+            // file for a moment is enough. Live: it escaped, and because a BackgroundService that
+            // throws stops the host, the colony died of being unable to write its own obituary.
             _logger.LogWarning(ex, "Could not write the colony's record to {Path}.", _chronicleFolder);
         }
     }
@@ -639,7 +645,7 @@ public sealed class SimulationHost : BackgroundService
             _storyOnDisk = text;
             _storyWrittenAt = File.GetLastWriteTimeUtc(_storyPath);
         }
-        catch (IOException ex)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             _logger.LogWarning(ex, "Could not write the colony's story to {Path}.", _storyPath);
         }
@@ -691,9 +697,11 @@ public sealed class SimulationHost : BackgroundService
                 WriteStory();
             }
         }
-        catch (IOException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            // Half-written, most likely: an editor saving. The next pass will read it.
+            // Half-written, most likely: an editor saving, which is also why it may be locked
+            // rather than merely busy. The next pass will read it.
+            _ = ex;
         }
     }
 
@@ -1186,9 +1194,20 @@ public sealed class SimulationHost : BackgroundService
                 _logger.LogError(ex, "Simulation tick failed.");
             }
 
-            KeepTheRecord();
-            AutosaveIfDue();
-            Broadcast(Snapshot());
+            // Everything past here is bookkeeping — the record, the save, the socket — and
+            // bookkeeping must never be what stops the colony. A BackgroundService that throws
+            // takes the whole host down with it, so a locked file at three in the morning would
+            // otherwise end an overnight run, which is precisely the run these files exist for.
+            try
+            {
+                KeepTheRecord();
+                AutosaveIfDue();
+                Broadcast(Snapshot());
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Could not keep the colony's books this tick.");
+            }
         }
     }
 

@@ -453,15 +453,59 @@ public sealed record ChronicleStamp(
 /// </summary>
 public static class ChronicleFile
 {
+    /// <summary>
+    /// One writer at a time, for every caller rather than only the careful ones.
+    /// <para>
+    /// The host amends the record from its tick loop, and starting a new colony closes the
+    /// outgoing one's record from the request thread — so two writers at once is ordinary, not
+    /// exotic. Giving each write its own scratch file is not enough on its own: two moves onto the
+    /// same destination race as well, and Windows reports the loser as access denied. Writes are
+    /// rare — a colony day, or two real minutes — so a lock costs nothing and makes the helper
+    /// safe to call from anywhere, which is the property a file writer should have.
+    /// </para>
+    /// </summary>
+    private static readonly object Writing = new();
+
     public static string Save(string folder, string fileName, string text)
+    {
+        lock (Writing)
+        {
+            return Replace(folder, fileName, text);
+        }
+    }
+
+    private static string Replace(string folder, string fileName, string text)
     {
         Directory.CreateDirectory(folder);
 
         var path = Path.Combine(folder, fileName);
-        var pending = path + ".writing";
 
-        File.WriteAllText(pending, text);
-        File.Move(pending, path, overwrite: true);
+        // A scratch file of this write's own. The lock above is what makes concurrent writers
+        // safe; this is for the case the lock cannot see — another process sharing the folder —
+        // where it turns a corrupted record into a failed move.
+        var pending = $"{path}.{Environment.CurrentManagedThreadId}-{DateTime.UtcNow.Ticks}.writing";
+
+        try
+        {
+            File.WriteAllText(pending, text);
+            File.Move(pending, path, overwrite: true);
+        }
+        finally
+        {
+            // A move that failed leaves the scratch file behind, and a folder of those would be
+            // the record getting in its own way.
+            if (File.Exists(pending))
+            {
+                try
+                {
+                    File.Delete(pending);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    // Nothing to be done about it, and it must not mask the real failure.
+                }
+            }
+        }
 
         return path;
     }
