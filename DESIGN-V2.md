@@ -781,9 +781,8 @@ in reserve if the economy milestones drag.
 
 ## M19 — The title
 
-Rename last — but **run the trademark and storefront search now**, in parallel with M8. DESIGN §13 has
-flagged it since September as "worth checking early… before it hardens into filenames", and it has never
-been done. It is a non-code task whose outcome determines filenames, the chronicle header and possibly the
+Rename last. The trademark and storefront search that DESIGN §13 flagged in September — "worth checking
+early… before it hardens into filenames" — **has now been done; see below.** It is a non-code task whose outcome determines filenames, the chronicle header and possibly the
 repo name; deferring the *search* to the end risks a forced rename after eleven milestones.
 
 **Recommendation: *Emberloom: What They Left Running*.** "Running" is doing real work — it is literally
@@ -794,6 +793,28 @@ storefront name — keep it for the repository, where it is doing its job. The s
 *Emberloom*, since that is the word becoming the brand.
 
 ---
+
+### The trademark and storefront search — done, 24 October 2026
+
+Flagged in DESIGN §13 since September as "worth checking early… before it hardens into filenames",
+and carried into this scope as an open item. It is now done. **Jeremy should confirm it before
+anything is filed** — this is a search, not advice.
+
+- **USPTO:** no trademark filing for *Emberloom* — nothing registered, nothing pending that a
+  search surfaces. The nearest marks are unrelated (*EMBER GAMES*, held by Ember Games Inc.).
+- **Steam:** no store page for *Emberloom*. The near names that exist are *Emberville*, *Ember*,
+  *Embr* and *Lost Ember* — all distinct enough to a reader and none of them a loom.
+- **In use, one hit:** `emberloom.xyz`, a Norse-themed social-casino site ("EmberLoom"), no real-money
+  play, not on Steam, no apparent mark. It is the one thing to weigh: the word is not unused, and a
+  games storefront listing would sit near a gambling site of the same name in search results. It is
+  not a conflict — different class, different thing — but it is a reason to prefer the full title on
+  the storefront rather than the bare word.
+
+**Conclusion: the recommendation stands, and the full form matters more than it did.**
+*Emberloom: What They Left Running* is clear; **Emberloom** alone is not quite uncontested. Keeping
+"Project" for the repository and the full title for the storefront, as recommended above, also
+happens to be what separates it from the one existing use.
+
 
 ## Deferred, with reasons
 
@@ -825,7 +846,7 @@ storefront name — keep it for the repository, where it is doing its job. The s
 | No persistence of any kind | M11 |
 | Trace text retention capped at 40 calls, early calls unrecoverable | M11 |
 | Art kits need a fetch script or installer | M17 |
-| Trademark/storefront search never done | Now, in parallel with M8 |
+| Trademark/storefront search never done | **Done 24 Oct 2026 — see M19** |
 | Kindling fallback leaves a colonist permanently unnameable | M9 |
 | No name-earning deed survives the mid-game | M9 |
 | `Build` has no world effect | M10 |
