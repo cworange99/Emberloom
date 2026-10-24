@@ -31,6 +31,10 @@ public sealed record ColonistSnapshot
     public required bool IsElder { get; init; }
 
     public double Wellbeing { get; init; } = WellbeingRules.Start;
+
+    public double Tokens { get; init; }
+
+    public int EveningsBought { get; init; }
     public required double LastPairedOnDay { get; init; }
     public required string Personality { get; init; }
     public required string Seed { get; init; }
@@ -62,6 +66,8 @@ public sealed record ColonistSnapshot
         LifespanDays = colonist.LifespanDays,
         IsElder = colonist.IsElder,
         Wellbeing = colonist.Wellbeing,
+        Tokens = colonist.Tokens,
+        EveningsBought = colonist.EveningsBought,
         LastPairedOnDay = colonist.LastPairedOnDay,
         Personality = colonist.Personality,
         Seed = colonist.Seed,
@@ -99,6 +105,8 @@ public sealed record ColonistSnapshot
             LifespanDays = LifespanDays,
             IsElder = IsElder,
             Wellbeing = Wellbeing,
+            Tokens = Tokens,
+            EveningsBought = EveningsBought,
             LastPairedOnDay = LastPairedOnDay,
             Personality = Personality,
             Seed = Seed,

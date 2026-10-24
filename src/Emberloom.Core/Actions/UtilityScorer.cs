@@ -80,7 +80,7 @@ public sealed class UtilityScorer
         {
             foreach (var definition in ActionCatalog.All)
             {
-                if (!definition.CanHappenAt(place) || !IsAvailable(definition, place))
+                if (!definition.CanHappenAt(place) || !IsAvailable(definition, place, colonist))
                 {
                     continue;
                 }
@@ -111,7 +111,29 @@ public sealed class UtilityScorer
         return results;
     }
 
-    private static bool IsAvailable(ActionDefinition definition, Place place) => definition.Kind switch
+    /// <summary>
+    /// Whether this is even on the list. M13 added the colonist, for one reason: an evening at the
+    /// hall has a price, and somebody who cannot pay it should not be weighing it up.
+    /// <para>
+    /// A hard gate rather than a score penalty, on purpose and provisionally. The two are not the
+    /// same thing — a gate makes the price a wall a colonist saves up against, a penalty makes it a
+    /// reason they go a little less often — and which one the game wants is a question about
+    /// measurement, not taste. The gate is the simpler claim, so it is the one to test: if the
+    /// leisure fraction turns out to be a step in the price rather than a slope, the gate is wrong
+    /// and the penalty is right. See DESIGN-V2.md for what the sweep said.
+    /// </para>
+    /// </summary>
+    private static bool IsAvailable(ActionDefinition definition, Place place, Colonist colonist)
+    {
+        if (definition.Price > colonist.Tokens)
+        {
+            return false;
+        }
+
+        return Offered(definition, place);
+    }
+
+    private static bool Offered(ActionDefinition definition, Place place) => definition.Kind switch
     {
         ActionKind.Forage => place.ForageYield > 0,
         ActionKind.Salvage => place.SalvageRemaining > 0 && !place.IsBlocked,

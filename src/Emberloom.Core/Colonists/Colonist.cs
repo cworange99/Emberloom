@@ -81,6 +81,15 @@ public sealed class Colonist
     /// </summary>
     public double Wellbeing { get; set; } = WellbeingRules.Start;
 
+    /// <summary>
+    /// What this colonist has earned and not yet spent — M13. Theirs, unlike the Loom's charge,
+    /// which is the colony's. See <see cref="EconomyRules"/>.
+    /// </summary>
+    public double Tokens { get; set; }
+
+    /// <summary>How many evenings they have paid for. Kept so a run can be read back.</summary>
+    public int EveningsBought { get; set; }
+
     /// <summary>When they last had a successor. Pairing has a cooldown.</summary>
     public double LastPairedOnDay { get; set; } = double.NegativeInfinity;
 

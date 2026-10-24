@@ -50,6 +50,11 @@ public static class WellbeingRules
     /// </summary>
     public static double Ease(ActionKind? kind) => kind switch
     {
+        // The best hour of the day, and the colony had to build the room and earn the token to
+        // have it. If an evening at the hall were not the high point there would be no reason to
+        // pay for one.
+        ActionKind.Gather => 1.00,
+
         ActionKind.Talk or ActionKind.Teach => 0.95,
         ActionKind.Wander => 0.85,
         ActionKind.Rest => 0.80,

@@ -219,7 +219,11 @@ export function ColonistDetailView({
               {colonist.isAlive && (
                 <>
                   {' · '}
-                  {colonist.mood} · {colonist.wellbeingWord} · at{' '}
+                  {colonist.mood} · {colonist.wellbeingWord} ·{' '}
+                  {colonist.tokens.toFixed(2)} saved
+                  {colonist.eveningsBought > 0 &&
+                    ` · ${colonist.eveningsBought} evening${colonist.eveningsBought === 1 ? '' : 's'} bought`}
+                  {' · at '}
                   <PlaceLink
                     id={colonist.placeId}
                     name={placeNames.get(colonist.placeId) ?? colonist.placeId}

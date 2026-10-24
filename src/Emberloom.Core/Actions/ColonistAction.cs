@@ -1,4 +1,5 @@
 using Emberloom.Core.Drives;
+using Emberloom.Core.Life;
 using Emberloom.Core.World;
 
 namespace Emberloom.Core.Actions;
@@ -14,6 +15,9 @@ public enum ActionKind
     Teach,
     Tend,
     Wander,
+
+    /// <summary>An evening at a hall the colony built, paid for out of what the work earned.</summary>
+    Gather,
 
     /// <summary>Sitting on a council at a fork. Offered only to the council, and only while it sits.</summary>
     Deliberate
@@ -42,6 +46,19 @@ public sealed record ActionDefinition
 
     /// <summary>Actions in dark or dangerous places aggravate Safety while they run.</summary>
     public bool ExposesToDanger { get; init; }
+
+    /// <summary>
+    /// What doing this costs the colonist in tokens, per time it is done — M13. Zero for everything
+    /// the colony has always been able to do for nothing, which is everything else. A colonist who
+    /// cannot pay is not offered it rather than being offered it and refused: see
+    /// UtilityScorer.IsAvailable for why that is the version worth measuring first.
+    /// </summary>
+    /// <para>
+    /// Settable rather than init-only for the same reason <see cref="ActionCatalog.ReliefScale"/>
+    /// is: it is a balance knob whose right value is measured, and the measuring instrument has to
+    /// be able to turn it. The game never writes it; only the price sweep does.
+    /// </para>
+    public double Price { get; set; }
 
     public bool CanHappenAt(Place place) =>
         Places.Count == 0 || Places.Contains(place.Kind);
@@ -208,6 +225,31 @@ public static class ActionCatalog
         DurationTicks = 30
     };
 
+    /// <summary>
+    /// An evening at a hall. The first thing in the colony that costs money, the first thing that
+    /// needs a building the colony voted to raise, and the first real supplier of Standing.
+    /// <para>
+    /// Standing is the point. Talk already buys company and measures out at 4% of the day; what
+    /// nothing supplies is being *seen* — Standing sat at 0.61 at M12, the highest of the seven,
+    /// with only Teach reaching it and only in pairs. A hall is where a colonist is among everyone
+    /// rather than beside one person, so the relief is weighted the other way round from Talk's.
+    /// </para>
+    /// <para>
+    /// It does not require company, deliberately. Pairing an action off needs somebody already
+    /// standing there, and nobody would ever be first. A hall pulls on everyone's score at once
+    /// instead, and they arrive together because they all want the same thing at the same time.
+    /// </para>
+    /// </summary>
+    public static readonly ActionDefinition Gather = new()
+    {
+        Kind = ActionKind.Gather,
+        Verb = "spent the evening at",
+        Relief = Relief((Drive.Standing, 2.40), (Drive.Belonging, 1.60), (Drive.Rest, 0.30), (Drive.Wonder, 0.20)),
+        Places = [PlaceKind.Hall],
+        DurationTicks = 20,
+        Price = EconomyRules.GatheringPrice
+    };
+
     public static readonly IReadOnlyList<ActionDefinition> All =
-        [Forage, Salvage, Clear, Build, Rest, Talk, Teach, Tend, Wander];
+        [Forage, Salvage, Clear, Build, Rest, Talk, Teach, Tend, Wander, Gather];
 }

@@ -36,6 +36,9 @@ export interface Colonist {
   /** M12: how the life is going, in [0,1], and the same thing as a word. */
   wellbeing: number
   wellbeingWord: string
+  /** M13: what they have earned and not spent, and how many evenings it bought. */
+  tokens: number
+  eveningsBought: number
   placeId: string
   doing: string | null
   doingTarget: string | null

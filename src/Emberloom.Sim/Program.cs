@@ -33,6 +33,9 @@ for (var i = 0; i < args.Length; i++)
         case "--sweep":
             Sweep(days, colonists, seed);
             return 0;
+        case "--prices":
+            Prices(days, colonists, seed);
+            return 0;
         default:
             Console.Error.WriteLine($"Unrecognised argument: {args[i]}");
             return 1;
@@ -223,6 +226,18 @@ if (lives.Count > 0)
     }
 }
 
+var earners = colony.Colonists.Where(c => c.AgeInDays(colony.Day) >= 1).ToList();
+if (earners.Count > 0)
+{
+    var evenings = earners.Sum(c => c.EveningsBought);
+    var paid = earners.Count(c => c.EveningsBought > 0);
+
+    Console.WriteLine();
+    Console.WriteLine($"Tokens (price {EconomyRules.GatheringPrice:F2} of a {EconomyRules.WagePerWorkDay:F2}-token working day)");
+    Console.WriteLine($"  {evenings} evenings bought by {paid} of {earners.Count} who lived · purses now"
+        + $" min {earners.Min(c => c.Tokens):F1} median {earners.OrderBy(c => c.Tokens).ElementAt(earners.Count / 2).Tokens:F1} max {earners.Max(c => c.Tokens):F1}");
+}
+
 if (population.Count > 1)
 {
     var firstPrint = colony.Colonists
@@ -286,6 +301,66 @@ return 0;
 /// drives low and the top of the stack — Standing, Meaning, Wonder — carrying the pressure.
 /// </para>
 /// </summary>
+/// <summary>
+/// What an evening at the hall should cost — M13's one open question, answered by measurement.
+/// <para>
+/// The failure the scope warned about is a corner solution: a price that never binds is
+/// decoration, and one that always binds is dead code that looks implemented. Worse, the gate is
+/// hard — a colonist who cannot pay is not offered the evening at all — so the honest shape to
+/// look for is a *slope*. A step means the gate is the wrong mechanism and a score penalty
+/// proportional to the shortfall is right.
+/// </para>
+/// </summary>
+static void Prices(int days, int colonists, int seed)
+{
+    Console.WriteLine($"Gathering price sweep — {days} colony-days, {colonists} colonists, seed {seed}");
+    Console.WriteLine($"A full working day earns {EconomyRules.WagePerWorkDay:F2}; the colony works about half of one.");
+    Console.WriteLine();
+    Console.WriteLine($"{"price",6} {"leisure",8} {"social",7} {"rest",6} {"work",6} {"evenings",9} {"bought",7} {"stand",6} {"belg",6} {"well",6} {"purse",6}");
+
+    foreach (var price in new[] { 0.05, 0.1, 0.25, 0.5, 0.9, 1.5, 2.5, 5.0 })
+    {
+        ActionCatalog.Gather.Price = price;
+
+        var random = new ColonyRandom(seed);
+        var colony = ColonyFactory.Create(colonists, random, seed);
+        var body = new BodySimulation(colony, random);
+
+        var buckets = new Dictionary<string, long>();
+
+        for (var tick = 0; tick < days * Colony.TicksPerDay; tick++)
+        {
+            body.Tick();
+
+            foreach (var colonist in colony.Living)
+            {
+                var bucket = colonist.Current is not { } action ? "idle"
+                    : colonist.PlaceId != action.Target.Id ? "travel"
+                    : action.Definition.Kind.ToString();
+
+                buckets[bucket] = buckets.GetValueOrDefault(bucket) + 1;
+            }
+        }
+
+        var total = (double)buckets.Values.Sum();
+        double Share(params string[] kinds) => total == 0 ? 0 : kinds.Sum(k => buckets.GetValueOrDefault(k)) / total;
+
+        var lived = colony.Colonists.Where(c => c.AgeInDays(colony.Day) >= 1).ToList();
+        var bought = lived.Count == 0 ? 0 : (double)lived.Count(c => c.EveningsBought > 0) / lived.Count;
+
+        Console.WriteLine(
+            $"{price,6:F2} {Share("Gather"),8:P1} {Share("Talk", "Teach"),7:P1} {Share("Rest"),6:P1} "
+            + $"{Share("Forage", "Salvage", "Clear", "Build", "Tend"),6:P1} "
+            + $"{lived.Sum(c => c.EveningsBought),9} {bought,7:P0} "
+            + $"{colony.Living.DefaultIfEmpty().Average(c => c?.Drives[Drive.Standing] ?? 0),6:F2} "
+            + $"{colony.Living.DefaultIfEmpty().Average(c => c?.Drives[Drive.Belonging] ?? 0),6:F2} "
+            + $"{colony.Living.DefaultIfEmpty().Average(c => c?.Wellbeing ?? 0),6:F3} "
+            + $"{lived.DefaultIfEmpty().Average(c => c?.Tokens ?? 0),6:F1}");
+    }
+
+    ActionCatalog.Gather.Price = EconomyRules.GatheringPrice;
+}
+
 static void Sweep(int days, int colonists, int seed)
 {
     Console.WriteLine($"Relief scale sweep — {days} colony-days, {colonists} colonists, seed {seed}");
@@ -324,23 +399,24 @@ static void Sweep(int days, int colonists, int seed)
 }
 
 /// <summary>
-/// How a day's ticks are grouped for reading. Wander is the colony's only leisure today — it is
-/// explicitly the fallback when nothing else scores, and V2's whole social economy is an argument
-/// that this line should be something a colonist chooses rather than settles for.
+/// How a day's ticks are grouped for reading. Wander was the colony's only leisure through M12 and
+/// measured 0.0% at every population — it is explicitly the fallback when nothing else scores, and
+/// something always scores. Gather, from M13, is the line to read instead: a hall the colony voted
+/// to raise and an evening a colonist pays for out of what the work earned.
 /// </summary>
 static IReadOnlyList<(string Label, IReadOnlyList<string> Kinds)> Classes() =>
 [
     ("work", new[] { "Forage", "Salvage", "Clear", "Build", "Tend" }),
     ("rest", new[] { "Rest" }),
     ("social", new[] { "Talk", "Teach" }),
-    ("leisure", new[] { "Wander" }),
+    ("leisure", new[] { "Gather", "Wander" }),
     ("civic", new[] { "Deliberate" }),
     ("travel", new[] { "travel" }),
     ("idle", new[] { "idle" })
 ];
 
 /// <summary>Time not already claimed by work, rest, travel or a sitting council.</summary>
-static bool IsFree(string bucket) => bucket is "Wander" or "Talk" or "Teach" or "idle";
+static bool IsFree(string bucket) => bucket is "Gather" or "Wander" or "Talk" or "Teach" or "idle";
 
 /// <summary>The deepest line of descent: printed minds are generation one, their children two.</summary>
 static int Generations(Colony colony)

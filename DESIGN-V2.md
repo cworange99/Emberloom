@@ -315,6 +315,80 @@ future action fails loudly instead of quietly.
 
 **Re-run `--sweep`.** This milestone changes relief supply against the fixed 1.60/day demand.
 
+### M13's measured outcome — 24 October 2026
+
+`Colonist.Tokens`, earned by the hour for work and nothing else, and `Gather` — an evening at a hall
+the colony voted to raise, priced at **0.25**, a little over half what the colony actually earns in a
+day. Affordability is a hard gate: a colonist who cannot pay is not offered it.
+
+**The price was measured, not chosen.** `--prices` sweeps it over two decades against a fixed
+1.00-per-working-day wage, seed 4, 2160 days:
+
+| price | leisure | social | rest | work | evenings | purse left |
+|---|---|---|---|---|---|---|
+| 0.05 | 20.3% | **0.9%** | 24.1% | 42.9% | 33,932 | **445.1** |
+| 0.10 | 20.1% | **0.8%** | 25.1% | 42.2% | 33,345 | **247.2** |
+| **0.25** | **4.3%** | 7.5% | 29.3% | 46.4% | 25,932 | **0.2** |
+| 0.50 | 2.0% | 8.9% | 31.0% | 46.8% | 13,569 | 0.3 |
+| 0.90 | 1.0% | 7.9% | 31.5% | 48.0% | 6,650 | 0.5 |
+| 1.50 | 0.5% | 9.2% | 32.3% | 46.6% | 4,314 | 0.8 |
+| 2.50 | 0.3% | 8.7% | 31.7% | 47.8% | 2,465 | 1.3 |
+| 5.00 | 0.2% | 8.8% | 31.7% | 48.2% | 1,322 | 2.7 |
+
+**It is a slope, not a step** — leisure falls smoothly from 20.3% to 0.2% across the whole range. That
+is the answer to the question the scope raised: **the hard affordability gate is the right mechanism,
+and the soft score penalty it listed as the fallback is not needed.** Keep the gate.
+
+The corner the scope warned about is real and visible at the cheap end. Below 0.25 the price does not
+bind at all: purses accumulate to 247 and 445 tokens, which is money that means nothing, and the hall
+out-competes Talk so completely that **conversation almost stops** — social falls to 0.8%, which would
+have quietly broken the colony's only supplier of relationships. The knee is between 0.10 and 0.25,
+where the purse goes to zero. 0.25 is the first price at which the colony spends everything it earns.
+
+**What it did to the colony, against the M12 baseline.**
+
+| | M12 | M13 | |
+|---|---|---|---|
+| leisure | 0.0% | **4.3%** | chosen, for the first time in the project |
+| rest | 32.0% | **29.3%** | the scope was wrong and the baseline was right: leisure came out of sleep |
+| social | 9.0% | 7.5% | and a little out of conversation |
+| work | 47.8% | 46.4% | |
+| travel | 4.8% | 6.7% | there is one hall, and people walk to it |
+| free | 11.9% | **14.4%** | |
+| Belonging | .58 | **.47** | |
+| Standing | **.61** | **.47** | the first real relief Standing has ever had |
+| wellbeing | 0.412 | **0.454** | |
+| wellbeing spread | 0.232 | 0.151 | |
+| survived 2160 days | 10 | 12 | |
+
+Three things worth carrying forward:
+
+1. **The venue took its time out of sleep, exactly as M12's baseline predicted.** Rest fell 2.7 points,
+   social 1.5, work 1.4, and travel rose 1.9. Nothing else in the project has moved Rest off its
+   plateau.
+2. **Standing fell 0.61 → 0.47 and Belonging 0.58 → 0.47.** Gather was weighted toward Standing on
+   purpose — Talk already buys company, and what nothing supplied was being *seen* — and the two
+   dominant pressures of the M12 colony are now level with each other and with nothing in particular.
+3. **Wellbeing rose but its spread narrowed again**, 0.232 → 0.151, which is the same effect eight
+   founders had. One hall open to everybody is shared out evenly. **Differences between people will
+   have to come from something that is not** — which is precisely M15's residential capacity, and is now
+   the second measurement pointing at it.
+
+Also landed here, as the scope asked: `ApplyWorkEffects` and `CompleteAction` no longer have switches
+without a default arm. Every action must now name its world effect or be listed explicitly among those
+whose only effect is relief, and `EveryActionDeclaresWhatItDoes` walks the whole catalog so a tenth
+action cannot be added without that decision being made. This is the defect that let `Build` spend the
+whole of version 1 doing nothing while looking implemented.
+
+**`--sweep` re-run after the catalog change**, as the verification section requires:
+`0.55 → spread 0.35 (every drive pinned at ~1.0) · 1.0 → 0.38 · 2.0 → 0.29 · 3.0 → 0.24 · 5.0 → 0.34 ·
+8.0 → 0.24 · 12.0 → 0.13`, with completions `82,880 → 56,739 → 34,775 → 16,076` across 3.0/5.0/8.0/12.0.
+**3.0 stays.** At it the physical drives sit at .20/.13/.27 and Belonging and Standing carry what
+pressure is left, which is the bar the sweep's own doc comment sets. The *spread* figure has become
+less informative now that Gather supplies the two drives that used to stand out — the throughput
+column is the one to read.
+
+
 ## M14 — The Loom, fed by work
 
 **Delivers.** The charge stops being a trickle nobody earns. Colony labour produces it; prints and

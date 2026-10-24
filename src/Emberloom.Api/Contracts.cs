@@ -80,6 +80,10 @@ public sealed record ColonistDto(
     /// <summary>M12: how the life is going, in [0,1], and the same thing as a word.</summary>
     double Wellbeing,
     string WellbeingWord,
+
+    /// <summary>M13: what they have earned and not spent, and how many evenings it bought.</summary>
+    double Tokens,
+    int EveningsBought,
     IReadOnlyList<PersonRefDto> Parents)
 {
     public static ColonistDto From(Colonist colonist, Colony colony) => new(
@@ -111,6 +115,8 @@ public sealed record ColonistDto(
         colonist.IsElder,
         Math.Round(colonist.Wellbeing, 3),
         WellbeingRules.Describe(colonist.Wellbeing),
+        Math.Round(colonist.Tokens, 2),
+        colonist.EveningsBought,
         colonist.ParentIds.Select(id => new PersonRefDto(id, colony.Find(id)?.DisplayName ?? id)).ToList());
 }
 

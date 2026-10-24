@@ -421,6 +421,15 @@ public sealed class BodySimulation
 
         colonist.Drives.Relieve(current.Definition.Relief, reliefScale);
 
+        // Paid by the hour, like the relief above and for the same reason: a wage per completed
+        // action would pay a 12-tick Talk the same as a 48-tick shift. Travel is unpaid because
+        // walking to the orchard is not working the orchard — the colonist is not here yet, and
+        // Work is only reached once they are.
+        if (EconomyRules.IsPaid(current.Definition.Kind))
+        {
+            colonist.Tokens += EconomyRules.WagePerWorkDay * DayPerTick;
+        }
+
         ApplyWorkEffects(colonist, current, place, DayPerTick);
 
         if (!current.IsComplete)
@@ -459,6 +468,14 @@ public sealed class BodySimulation
 
                 break;
 
+            // Paid for on the way in, not on the way out. A colonist who abandons the evening
+            // halfway through has still spent the token, which is what makes the choice cost
+            // something rather than being a thing they try and get refunded for.
+            case ActionKind.Gather when current.TicksElapsed == 1:
+                colonist.Tokens = Math.Max(0, colonist.Tokens - current.Definition.Price);
+                colonist.EveningsBought++;
+                break;
+
             case ActionKind.Talk or ActionKind.Teach when current.PartnerId is not null:
                 if (current.Definition.Kind == ActionKind.Talk
                     && current.TicksElapsed == 1
@@ -474,6 +491,20 @@ public sealed class BodySimulation
                 }
 
                 break;
+
+            // Everything whose only effect is the relief already applied above. Listed rather than
+            // defaulted: a switch with no default arm is how Build spent all of version 1 doing
+            // nothing at all while looking implemented, and the next action added should have to
+            // say which of these two it is instead of quietly becoming the second.
+            case ActionKind.Forage or ActionKind.Salvage or ActionKind.Rest or ActionKind.Tend
+                or ActionKind.Wander or ActionKind.Deliberate or ActionKind.Talk or ActionKind.Teach
+                or ActionKind.Gather:
+                break;
+
+            default:
+                throw new NotImplementedException(
+                    $"{current.Definition.Kind} has no world effect declared. Give it one, or list it "
+                    + "with the actions whose only effect is relief.");
         }
 
         if (current.Definition.ExposesToDanger && _random.NextDouble() < place.Danger * share * 0.10)
@@ -582,6 +613,21 @@ public sealed class BodySimulation
             case ActionKind.Clear:
                 Record(colonist, "worked at clearing", place.Name, place.Id, 0.15, 0.35);
                 break;
+
+            case ActionKind.Gather:
+                Record(colonist, "spent the evening at", place.Name, place.Id, 0.6, 0.5);
+                break;
+
+            // The guarded cases above fall through to here when their guard does not hold — a
+            // salvage run that found the place already stripped, a conversation whose partner
+            // walked off — along with the actions that finish without leaving a memory.
+            case ActionKind.Salvage or ActionKind.Talk or ActionKind.Teach
+                or ActionKind.Wander or ActionKind.Deliberate:
+                break;
+
+            default:
+                throw new NotImplementedException(
+                    $"{current.Definition.Kind} does nothing when it completes. Say so explicitly.");
         }
 
         colonist.Current = null;
