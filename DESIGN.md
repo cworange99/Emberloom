@@ -1,4 +1,4 @@
-# What They Left Running
+# Emberloom: What They Left Running
 
 *Design plan, draft 2 — 7 September 2026. Ported into the repo from the plan artifact.*
 
@@ -566,8 +566,12 @@ three play modes. Where that document and this one disagree about something ship
   for word; the colony's beliefs converged on the myth's own words ("masonry", "the drift", "the
   gray"). Marketability is left for later. The game was begun as an experiment in an AI
   civilisation and how it evolves, which is why simulation mode needs no interference at all.
-- **Worth checking early — the name.** *What They Left Running* is worth a trademark and storefront
-  search before it hardens into filenames.
+- **The name — checked, 24 October 2026.** Nothing is filed at the USPTO for *Emberloom* and there
+  is no Steam page; the near names there are *Emberville*, *Ember*, *Embr* and *Lost Ember*, all
+  distinct. One thing is in use: `emberloom.xyz`, a Norse-themed social-casino site. Not a conflict
+  — different class, different thing — but it is why the full title carries the storefront and the
+  bare word does not. The game is **Emberloom: What They Left Running**; *Project Emberloom* stays
+  as the repository, where a codename is doing its job. A search, not advice.
 
 ---
 

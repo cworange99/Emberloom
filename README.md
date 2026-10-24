@@ -1,9 +1,11 @@
-# What They Left Running
+# Emberloom: What They Left Running
 
 A city the forest took back, a machine still printing minds into it, and nobody left to say why.
 Every character thinks, remembers and inherits — on your own hardware, offline.
 
-See [DESIGN.md](DESIGN.md) for the full design. Build order and milestone status below.
+See [DESIGN.md](DESIGN.md) for the design and [DESIGN-V2.md](DESIGN-V2.md) for version 2's scope,
+which is where every measurement behind the balance is recorded. Build order and milestone status
+below.
 
 ## Status
 
@@ -18,7 +20,18 @@ See [DESIGN.md](DESIGN.md) for the full design. Build order and milestone status
 | **M5** — dialogue and deliberation | **Done.** Colonists speak when they meet, in bubbles over both views, and the words go into their memories. The colony faces two genuine forks — whether to let the Loom print, and whether to go up to a floor nobody has reached — and a council of five decides each one by argued majority vote. |
 | **M6** — player verbs | **Done.** All five verbs, none of them an order. Speak to a colonist and they remember it and answer; Print a mind from a seed you write; Provide light, warmth or a way in on the Loom's charge, and Withhold it — they notice; Reveal something of the makers', once. |
 | **M7** — generations | **Done.** Bodies age, slow and die; the dead leave cores the colony reads, keeps or destroys; bonded adults have children who carry their weights and dream their memories. Colonists earn names; the colony coins its own words and tells itself a story about its makers, retold as it learns more. The overnight run reached 648 colony days and about sixteen generations, and its myth was judged worth going on with. It also set the pace: at 1× a colony-day is now an hour and a life about three months. |
-| **M8 →** — version 2 | **In progress.** Version 1 grows a population; version 2 grows a civilisation. The scope is [DESIGN-V2.md](DESIGN-V2.md): the world is built rather than only cleared, people are named from birth, and they get a wellbeing, an economy they take part in, and leisure to spend it on. |
+| **M8** — four founders, and a harness that can see | **Done.** Colonies start at four, and `Emberloom.Sim` became the instrument every balance claim in version 2 is settled with: how a colonist's day actually divides, in colonist-ticks. |
+| **M9** — names at birth | **Done.** Everyone is named when they are printed or born, invented in `Emberloom.Core` so a colony with no model still has people rather than designations. The three deeds survive as epithets. |
+| **M10** — the world grows | **Done.** Twelve buildable sites, a Build fork that asks about one at a time, and `Build` that finally changes the world — a third of every colonist's life had been going into work that left no mark. |
+| **M11** — persistence | **Done.** A colony outlives the process: SQLite, a versioned document, beliefs and their vectors as their own rows. The random stream is saved with it, so a loaded colony lives the same life the saved one would have. |
+| **M12** — wellbeing | **Done, read-only.** One number per colonist, integrated from how their days divide. It varies — 0.34 to 0.57 over a lifespan — and it tracks what it claims to: a colony with more company reads higher. |
+| **M13** — tokens and the first paid venue | **Done.** Work pays the worker and an evening at a hall costs 0.25 of a day's wage, a price arrived at by sweeping it. Leisure had been chosen 0.0% of the time since the project began; it is 4.3% of the day now. |
+| **M14** — the Loom, fed by work | **Done.** The charge stops being a trickle nobody earns. Labour makes it, every mouth draws on it, granaries set what can be kept, and "can we feed another?" is a question with an answer that depends on the colony. |
+| **M15** — the couplings | **Done.** An empty store is felt as hunger, a life going badly is a shorter life, and a bed somebody else is in is not a bed. Every life in a struggling colony now runs shorter than it was born to. |
+| **M16** — modes and intents | **Done.** Simulation, Hybrid and Directed, chosen at creation and fixed for life — one code path at three strengths, so a research run is provably this same binary. What you ask for weighs; somebody in real need cannot hear you at all. |
+| **M17** — rooms that look like the building | **Done.** Furniture that belongs together is placed together: a rug under its table, chairs facing it, nothing standing inside anything else. And `assets/fetch-kits.ps1`, so a fresh clone is not an empty scene. |
+| **M18** — the chronicle and the story | **Done.** The record is budgeted in lines rather than colony-days, and what it gives up it summarises. The myth is told what is new since it was last told — retellings keep 76% of their wording now, where 158 of them once came back near word for word. |
+| **M19** — the title | **Done.** *Emberloom: What They Left Running*, after a trademark and storefront search. *Project Emberloom* stays as the repository. |
 
 ## Layout
 

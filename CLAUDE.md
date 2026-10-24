@@ -1,6 +1,6 @@
 # Project Emberloom — working rules
 
-*What They Left Running.* A colony sim where every character thinks, remembers and inherits.
+*Emberloom: What They Left Running.* A colony sim where every character thinks, remembers and inherits.
 See [DESIGN.md](DESIGN.md) for the design and [README.md](README.md) for status and how to run it.
 
 ---

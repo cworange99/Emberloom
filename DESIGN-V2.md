@@ -989,6 +989,87 @@ anything is filed** — this is a search, not advice.
 happens to be what separates it from the one existing use.
 
 
+### M19's outcome — 24 October 2026
+
+**The game is _Emberloom: What They Left Running_.** Chosen by Jeremy on the strength of the search
+recorded above; *Project Emberloom* stays as the repository name, where a codename is doing its job.
+
+Eight touch points, all shallow, because the namespaces and assemblies have said `Emberloom` since
+M0 — the rename was a change of what the game calls itself, not of what it is built from:
+
+- `README.md` and `DESIGN.md` headings, and the line in `CLAUDE.md`.
+- The browser tab (`client/index.html`).
+- The client's brand block, where **the milestone counter was retired**. It had read "M18 · the
+  record and the story"; it now reads *Emberloom / what they left running*, which is what the
+  counter had been sitting under all along. Version 2 is finished, so the scaffolding comes down.
+- The chronicle's own heading: `# Emberloom — a colony begun 24 October 2026 at 11:49, from seed 4`.
+  A folder of these is a shelf, and a shelf wants its books titled.
+- DESIGN §13's standing note, which had said the name was *worth checking early*, now records what
+  the check found.
+
+### The end-to-end test, at the close of the sequence
+
+The verification section reserved one run for the end: *start a colony at 4 founders in Hybrid mode,
+run it to the first raised building, save it, restart the process, load it, confirm the colony
+continues with its people named and its buildings standing, then run it overnight and read the
+chronicle.* Done, in that order, against the built binaries:
+
+| | |
+|---|---|
+| ran to | day 156.3, four founders, Hybrid, **The Plaza Hall raised** |
+| saved as | `v2-end-to-end` |
+| then | killed the process, **rebuilt the binary**, started a fresh one — which began its own day-zero colony |
+| loaded | day 156.3, Hybrid, The Plaza Hall still standing, 6 beds, stores 60 of 60 |
+| people | Tuven, Aratha, Marauth, Diven — named, with 273–339 memories each |
+| and | purses of 0.03 to 42.12, between 186 and 270 evenings bought apiece, wellbeing from *coping* to *well* |
+
+Every system version 2 added came back: M9's names, M10's building, M11's persistence, M12's
+wellbeing, M13's tokens and the evenings they bought, M14's stores, M15's beds, M16's mode. Tuven
+came back with three hundredths of a token and the most evenings bought of anyone, and is the only
+one of the four who is merely coping — which is a detail nobody wrote.
+
+Run on at Overnight, the chronicle reads:
+
+> - The stores hold 60 of 60 · work puts in 1.10 a day, the living take 0.64 · **spoiling for want of a granary** · 9 pieces of the makers' recovered
+> - 10 words of their own · the story told 2 times · 3 forks decided
+> - Taken together they are **well** · the hardest life here is Tuven's, and they are coping · 6 beds for 4 of them
+> - **2 of them have lost time to it** — 6 days each on average, 10 at the worst, off lives of about 2160
+
+Which is the whole of version 2 in four lines: an economy with a shortage in it, a culture, a
+measure of how the lives are going, and a cost for living them badly.
+
+---
+
+## Version 2 is finished
+
+Twelve milestones, M8 to M19, 265 tests, and the body still runs with no model at all.
+
+**What version 2 was for.** Version 1 grew a population, not a civilisation: the colonists worked,
+aged, argued and died in a city that never changed, and `Build` relieved a drive while having no
+effect on the world whatsoever. They had no leisure, no economy they took part in, no wellbeing that
+could be hurt, and most of them lived and died as "C-14".
+
+**What it measured, and what that cost.** Every milestone from M8 had a named run in
+`Emberloom.Sim` or `Emberloom.Bench` with a number to read, and four of those measurements changed
+what got built rather than what got tuned:
+
+1. **The 30% of the day M10 freed from `Build` went to sleep, not to leisure** — the scope had
+   assumed otherwise, so M13's venue was competing with Rest rather than for slack.
+2. **A 3B model will not vote against a print because the stores are thin.** Thin stakes produced
+   *more* for-votes than adequate ones. The resource constraint went into the body, which the scope
+   had named as the fallback.
+3. **An intent strong enough to be heard was strong enough to be obeyed by someone starving.** No
+   constant fixes that, so the promise became structural: an intent fades as need rises.
+4. **The despair coupling went extinct**, and the cause was somewhere else entirely — an unclamped
+   urgency term that made the last two people in a dying colony evaluate to exactly zero.
+
+**And one class of bug, three times.** `Fork.Pressure` at M12, council selection at M14, and
+`Propose`'s preference ordering at M15 were all the same shape: *a decision that was a pure function
+of unchanging state, made once and then frozen.* Seed 4 — the seed the game ships — had never built
+anything and never printed anything, in either case for the colony's entire existence, and both
+looked like balance until they were measured.
+
+
 ## Deferred, with reasons
 
 - **Multiple-choice forks.** Generalising `Stance` touches six places including a hard-coded three-literal
@@ -1026,11 +1107,11 @@ happens to be what separates it from the one existing use.
 | A fork-printed mind's Kindling never hears the colony argued for it (`Provenance` unused for that path) | M10 |
 | `PopulationCap = 20` is a thinking budget masquerading as a constant | Decided at M14 |
 | Core forks have no ask-again cooldown while Print and Ascend do | Name it at M10; probably intentional |
-| Marketability still deferred | After M17, when it can be seen |
+| Marketability still deferred | Still deferred — but it can be seen now |
 | DESIGN §7 says retellings come 3 days apart; code says 30 | **Fixed at M18** |
 | DESIGN §7 tier table misdescribes Myth as written "at coinage" | **Fixed at M18** |
-| `README.md:1` has a stray duplicated M1 table row above the title | Fix in M8 |
-| `SeedRoller`'s doc comment is stale (M5 and M6 shipped) | Fix in M8 |
+| `README.md:1` has a stray duplicated M1 table row above the title | **Fixed** |
+| `SeedRoller`'s doc comment is stale (M5 and M6 shipped) | **Fixed** |
 
 ## Verification
 

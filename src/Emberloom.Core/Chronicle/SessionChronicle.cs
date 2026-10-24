@@ -226,7 +226,7 @@ public sealed class SessionChronicle
         var text = new StringBuilder();
         var living = colony.Living.ToList();
 
-        text.AppendLine($"# A colony begun {StartedAt.LocalDateTime:d MMMM yyyy 'at' HH:mm}, from seed {Seed}");
+        text.AppendLine($"# Emberloom — a colony begun {StartedAt.LocalDateTime:d MMMM yyyy 'at' HH:mm}, from seed {Seed}");
         text.AppendLine();
         text.AppendLine(stamp.Ended
             ? $"_Ended {stamp.At.LocalDateTime:d MMM HH:mm} on colony day {colony.Day:F1}, after {Spell(stamp.Elapsed)} — {Spell(colony.Day)} of colony time._"
