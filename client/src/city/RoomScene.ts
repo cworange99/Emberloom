@@ -4,7 +4,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import type { Colonist, Place } from '../types'
 import { FOLK, animationFor } from './art'
 import { KitLoader, hash, makeFigure, playClip, rand, withShadows, type Figure } from './kit'
-import { STRUCTURE, roomFor, type RoomSpec } from './rooms'
+import { STRUCTURE, roomFor, type Cluster, type RoomSpec } from './rooms'
 
 /**
  * Floor tiles are 0.05 thick. Everything stands on top of them — a rug is 0.01, and one placed at
@@ -58,6 +58,12 @@ export class RoomScene {
   private placeId: string | null = null
   private spec: RoomSpec | null = null
   private floor = FLOOR_TOP
+
+  /** Seeded from the place, so every room is its own and none of them move. See luck(). */
+  private seed = 0
+
+  /** How wide each model is on the floor, measured once. Clusters ask this a lot. */
+  private readonly sizes = new Map<string, number>()
   private readonly door = new THREE.Vector3()
   private frustum = 4.6
   private pending: Colonist[] = []
@@ -115,8 +121,18 @@ export class RoomScene {
     const build = ++this.builds
     const spec = roomFor(place)
 
+    // Every model the room could want, including everything inside a cluster — a chair that
+    // arrives after its table has been placed would be measured as missing and sized at zero.
+    const wanted = spec.open.flatMap((piece) =>
+      typeof piece === 'string'
+        ? [piece]
+        : [piece.centre, piece.under, ...(piece.around ?? []), ...(piece.beside ?? [])].filter(
+            (m): m is string => Boolean(m),
+          ),
+    )
+
     await Promise.all(
-      [...Object.values(STRUCTURE), ...spec.wall, ...spec.open, ...FOLK].map((m) => this.kit.load(m)),
+      [...Object.values(STRUCTURE), ...spec.wall, ...wanted, ...FOLK].map((m) => this.kit.load(m)),
     )
     // A later call won the race: someone clicked through to another room while this one loaded.
     if (this.disposed || build !== this.builds) return { missingKit: this.kit.missing }
@@ -135,6 +151,7 @@ export class RoomScene {
 
     this.placeId = place.id
     this.spec = spec
+    this.seed = hash(place.id)
     this.floor = spec.outdoor ? 0 : FLOOR_TOP
     this.buildRoom(spec, walls)
     if (!samePlace) this.fit(spec)
@@ -296,15 +313,6 @@ export class RoomScene {
       if (post) post.scale.x = 0.05
     }
 
-    // Against the back wall, one per tile, skipping the doorway so nothing blocks it.
-    const slots = [...Array(w).keys()].filter((i) => i !== door)
-    spec.wall.forEach((model, k) => {
-      const slot = slots[Math.min(slots.length - 1, Math.round(((k + 0.5) * slots.length) / spec.wall.length - 0.5))]
-      const prop = this.place(model, x0 + slot + 0.5, 0, { floor })
-      // Back against the wall: its centre sits half its own depth out from the face.
-      if (prop) prop.position.z = z0 + prop.userData.size.z / 2 + 0.03
-    })
-
     // Keep a prop's whole footprint on the floor, whichever way round it ended up.
     const keepOnFloor = (prop: THREE.Object3D | null, margin = 0.1) => {
       if (!prop) return
@@ -313,41 +321,181 @@ export class RoomScene {
       prop.position.z = Math.min(z0 + d - half, Math.max(z0 + half, prop.position.z))
     }
 
+    // What is already standing, as circles, so nothing is put down inside anything else. A room
+    // with four things in it got away without this; a hall with two laid tables does not.
+    const standing: Array<{ x: number; z: number; r: number }> = []
+    const footprint = (prop: THREE.Object3D) =>
+      Math.max(prop.userData.size.x, prop.userData.size.z) / 2
+    const occupy = (prop: THREE.Object3D | null) => {
+      if (prop) standing.push({ x: prop.position.x, z: prop.position.z, r: footprint(prop) })
+    }
+    const free = (x: number, z: number, r: number) =>
+      !standing.some((s) => Math.hypot(s.x - x, s.z - z) < s.r + r - 0.08)
+
+    // Against the back wall, one per tile, skipping the doorway so nothing blocks it.
+    const slots = [...Array(w).keys()].filter((i) => i !== door)
+    spec.wall.forEach((model, k) => {
+      const slot = slots[Math.min(slots.length - 1, Math.round(((k + 0.5) * slots.length) / spec.wall.length - 0.5))]
+      const prop = this.place(model, x0 + slot + 0.5, 0, { floor })
+      // Back against the wall: its centre sits half its own depth out from the face.
+      if (prop) prop.position.z = z0 + prop.userData.size.z / 2 + 0.03
+      occupy(prop)
+    })
+
     if (spec.outdoor) {
       // Outdoors there is no wall to line things up against, so scenery is scattered and repeated.
       // Four props on a lawn read as a diagram; twenty read as a place.
+      const scenery = spec.open.map((piece) => (typeof piece === 'string' ? piece : piece.centre))
       for (let i = 0; i < 22; i++) {
-        const angle = rand(i * 5 + 1) * Math.PI * 2
-        const radius = 1.3 + rand(i * 9 + 2) * (Math.min(w, d) / 2 - 0.6)
-        this.place(spec.open[i % spec.open.length], Math.cos(angle) * radius, Math.sin(angle) * radius, {
-          ry: rand(i * 11) * Math.PI * 2,
-          scale: 0.7 + rand(i * 3) * 0.5,
+        const angle = this.luck(i * 5 + 1) * Math.PI * 2
+        const radius = 1.3 + this.luck(i * 9 + 2) * (Math.min(w, d) / 2 - 0.6)
+
+        this.place(scenery[i % scenery.length], Math.cos(angle) * radius, Math.sin(angle) * radius, {
+          ry: this.luck(i * 11) * Math.PI * 2,
+          scale: 0.7 + this.luck(i * 3) * 0.5,
           floor,
         })
       }
     } else {
-      spec.open.forEach((model, i) => {
-        const angle = (i / Math.max(spec.open.length, 1)) * Math.PI * 2
-        const prop = this.place(model, Math.cos(angle) * (w / 2.9), Math.sin(angle) * (d / 2.9) + 0.4, {
-          ry: Math.floor(rand(i * 11) * 4) * (Math.PI / 2),
-          floor,
-        })
-        keepOnFloor(prop)
+      // Indoors, each cluster gets a bearing of its own and is walked outward from the middle
+      // until it fits. The middle is left open on purpose: people stand there, and a room whose
+      // floor you cannot see is a furniture catalogue rather than somewhere anybody lives.
+      spec.open.forEach((piece, i) => {
+        const cluster = typeof piece === 'string' ? { centre: piece } : piece
+        const bearing = ((i + 0.5) / spec.open.length) * Math.PI * 2 + this.luck(i * 17) * 0.6
+
+        this.placeCluster(cluster, bearing, { w, d, x0, z0, floor }, free, occupy, keepOnFloor)
       })
     }
 
     if (spec.ruined && !spec.outdoor) {
       for (let i = 0; i < 4; i++) {
-        const plant = this.place(STRUCTURE.plant, x0 + 0.5 + rand(i) * (w - 1), z0 + 1 + rand(i * 3) * (d - 2), {
-          ry: rand(i * 7) * 6,
+        const plant = this.place(STRUCTURE.plant, x0 + 0.5 + this.luck(i) * (w - 1), z0 + 1 + this.luck(i * 3) * (d - 2), {
+          ry: this.luck(i * 7) * 6,
           floor,
         })
         keepOnFloor(plant)
+        occupy(plant)
       }
     }
 
     // People come and go through the doorway — or, outdoors, from the far edge.
     this.door.set(spec.outdoor ? 0 : x0 + door + 0.5, floor, z0 + (spec.outdoor ? 0.2 : 0.35))
+  }
+
+  /**
+   * One arrangement, put down as a unit: the rug first so it is underneath, then the thing itself,
+   * then whatever is ringed around it turned to face it, then whatever stands against its side.
+   *
+   * The cluster is walked outward along its bearing until its whole footprint clears everything
+   * already standing, which is why the collision test is a circle rather than a box — a chair that
+   * is a hand's breadth inside a table reads worse than one a hand's breadth too far out, and at
+   * this scale nobody can tell the difference between a circle and a rectangle anyway.
+   */
+  private placeCluster(
+    cluster: Cluster,
+    bearing: number,
+    room: { w: number; d: number; x0: number; z0: number; floor: number },
+    free: (x: number, z: number, r: number) => boolean,
+    occupy: (prop: THREE.Object3D | null) => void,
+    keepOnFloor: (prop: THREE.Object3D | null, margin?: number) => void,
+  ) {
+    const { w, d, floor } = room
+    const reach = Math.min(w, d) / 2 - 0.5
+
+    // How much room the whole arrangement wants, measured rather than guessed: the centre plus
+    // twice the widest thing going around it.
+    const centreSize = this.sizeOf(cluster.centre)
+    const widest = Math.max(0, ...(cluster.around ?? []).map((m) => this.sizeOf(m)))
+    const span = centreSize / 2 + widest
+
+    // Start out where the furniture of a real room sits — between the middle and the walls — and
+    // walk outward from there. Starting at the middle and stopping at the first clear spot put
+    // everything in a huddle around the doorway with the rest of the floor bare.
+    let x = 0
+    let z = 0
+    for (let radius = Math.max(0.9, reach * 0.55); radius <= reach + 1.2; radius += 0.25) {
+      x = Math.cos(bearing) * radius
+      z = Math.sin(bearing) * radius + 0.3
+      if (free(x, z, span)) break
+    }
+
+    // The rug first, flat and square to the room: a rug at a jaunty angle looks dropped.
+    if (cluster.under) {
+      const rug = this.place(cluster.under, x, z, { floor })
+      keepOnFloor(rug)
+      // Deliberately not occupied — everything in this cluster is meant to stand on it.
+    }
+
+    // Square to the room, not to the bearing it arrived on. People push furniture against the
+    // grain of a building; a table at seventeen degrees reads as an earthquake rather than a room.
+    const quarter = Math.PI / 2
+    const facing = Math.round((bearing + quarter) / quarter) * quarter
+
+    const middle = this.place(cluster.centre, x, z, { floor, ry: facing })
+    keepOnFloor(middle)
+    occupy(middle)
+    if (!middle) return
+
+    const half = Math.max(middle.userData.size.x, middle.userData.size.z) / 2
+
+    ;(cluster.around ?? []).forEach((model, k, all) => {
+      const angle = bearing + Math.PI + ((k + 0.5) / all.length) * Math.PI * 2
+      const out = half + this.sizeOf(model) / 2 + 0.04
+      const seat = this.place(model, middle.position.x + Math.cos(angle) * out, middle.position.z + Math.sin(angle) * out, {
+        // Turned to face what it is sitting at. A model's front is its +z, so pointing at the
+        // centre means looking back down the ray it was placed along.
+        ry: Math.atan2(-Math.cos(angle), -Math.sin(angle)),
+        floor,
+      })
+      keepOnFloor(seat)
+      occupy(seat)
+    })
+
+    ;(cluster.beside ?? []).forEach((model, k) => {
+      // Alternating sides, touching, and square to the centre rather than to the room.
+      const side = k % 2 === 0 ? 1 : -1
+      const step = Math.floor(k / 2) + 1
+      const out = half + this.sizeOf(model) * (step - 0.5) + 0.04
+
+      // Along the centre's own axis, so a lamp stands beside a sofa rather than off a corner of it.
+      const angle = facing + (side > 0 ? 0 : Math.PI)
+
+      const mate = this.place(model, middle.position.x + Math.cos(angle) * out, middle.position.z + Math.sin(angle) * out, {
+        ry: facing,
+        floor,
+      })
+      keepOnFloor(mate)
+      occupy(mate)
+    })
+  }
+
+  /** How wide a model is on the floor, without placing it. Zero when the kit is missing. */
+  private sizeOf(model: string): number {
+    const cached = this.sizes.get(model)
+    if (cached !== undefined) return cached
+
+    const gltf = this.kit.peek(model)
+    if (!gltf) return 0
+
+    // The kit's scene is never added to anything, so its matrices are whatever the loader left:
+    // measuring it without this reads a model's size through a stale transform.
+    gltf.scene.updateMatrixWorld(true)
+    const box = new THREE.Box3().setFromObject(gltf.scene)
+    const size = box.getSize(new THREE.Vector3())
+    const widest = Math.max(size.x, size.z)
+    this.sizes.set(model, widest)
+    return widest
+  }
+
+  /**
+   * The room's own luck. Seeded from the place, so the two halls the colony raises are laid out
+   * differently from each other and the same way every time you look at either of them — which is
+   * the one thing a procedural room has to get right, because a room that rearranges itself when
+   * you look away is not a room.
+   */
+  private luck(n: number): number {
+    return rand(this.seed + n * 31)
   }
 
   /** A structural tile at its corner-origin position. */

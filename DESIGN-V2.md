@@ -762,6 +762,82 @@ is finalised. If there are no tavern props, the site list changes, not the art.
 **Why it's late.** Pure client, zero risk to the simulation, maximum visual payoff — and good work to hold
 in reserve if the economy milestones drag.
 
+### M17's outcome — 24 October 2026
+
+#### The riskiest assumption, retired first
+
+*That the 141 room GLBs cover the new building types.* They do, comfortably. The furniture kit has
+140 models here, and the three built kinds are all served: a **hall** has `kitchenBar`,
+`kitchenBarEnd`, `stoolBar`, `bench`, `benchCushion`, `tableCloth`, `tableRound` and `tableCross`; a
+**granary** has `cardboardBoxClosed`/`Open`, the kitchen cabinets and `trashcan`; a **dwelling** has
+`bedSingle`, `bedDouble`, `bedBunk`, the bedside cabinets and `sideTableDrawers`. The site list in
+`CityMap` stands unchanged.
+
+#### What was actually wrong, and the fix
+
+The prop choice was never the problem — someone had already put kitchen furniture in the market
+hall. **The layout rule was.** Floor props were placed one at a time on a ring around the room's
+centre, each given a random quarter turn, with no grouping and no collision test. So a table and its
+chairs landed on opposite sides of the room facing nothing, and a rug lay beside the table it was
+meant to be under. There was no way to *say* that a chair is tucked at a table, because the schema
+had no word for it.
+
+`RoomSpec.open` is now `(string | Cluster)[]`, where a `Cluster` is
+`{ centre, under?, around?, beside? }` — a bare name is still a thing standing on its own. Four
+words were enough to describe every arrangement in the game:
+
+- **`under`** — a rug, laid first and never turned, deliberately *not* added to the collision set so
+  everything in the cluster stands on it. A rug at a jaunty angle looks dropped.
+- **`around`** — seats ringed at `centre.width/2 + mine.width/2`, each turned to face the centre by
+  `atan2(-cos θ, -sin θ)`. Measured from the models rather than guessed, so a bench at a long table
+  sits where a bench sits.
+- **`beside`** — alternating left and right along the centre's own axis, touching. A lamp by a sofa.
+- The **centre** snaps to the nearest quarter turn. People push furniture against the grain of a
+  building; a table at seventeen degrees reads as an earthquake rather than a room.
+
+Clusters are then placed as units: each gets a bearing of its own, starts at **55% of the way to the
+wall** — where the furniture of a real room sits — and walks outward until its whole footprint
+clears everything already standing, wall props included. Starting at the middle and stopping at the
+first clear spot, which is what it did at first, put everything in a huddle by the doorway with the
+rest of the floor bare.
+
+**Every room is seeded from its place id.** The two halls the colony raises are laid out differently
+from each other and the same way every time you look at either of them — which is the one thing a
+procedural room has to get right, because a room that rearranges itself when you look away is not a
+room. (The scope said `roomFor` should read `place.name`; the id is the better key, since it is what
+identifies the place and cannot be renamed out from under a save.)
+
+Looked at in the browser rather than reasoned about: the market hall is a cloth-laid table with two
+chairs flanking it and a stool at the end; the plaza hall has two laid tables spaced apart; the
+granary has boxes stacked beside the table they are stacked on; the dwelling has beds along the wall
+and a coffee table **on its rug** with a chair at it.
+
+#### The fetch script
+
+`assets/fetch-kits.ps1`. `assets/kit/` has been out of the repository since 11 September 2026, and
+until now a fresh clone drew placeholders until somebody placed four kits by hand.
+
+It reads each asset's page on kenney.nl and takes the `.zip` link from it rather than holding a URL
+of its own — Kenney's download URLs carry a cache-busting hash that changes whenever an asset is
+updated, so a hardcoded link works until the day it quietly doesn't. Verified against all four live
+pages. `-Force` replaces kits already present; `-From <folder>` unpacks zips you already have, which
+is both the offline path and how the unpacking was tested without going to the network. One kit
+failing warns and continues: three kits and a warning is a working game missing some scenery, where
+none is placeholders everywhere.
+
+**The script fell into the exact trap the README documents.** PowerShell's
+`Get-ChildItem -Path <folder> -Include *.png` matches `-Include` against the folder's own name and
+copies nothing, silently — so the first version reported `textures: yes` on the strength of the
+directory existing and shipped a kit that would have rendered pure white. It now copies with the
+trailing `\*` form, **counts what landed**, and reports the count per kit. Tested by building a
+Kenney-shaped zip out of the city kit already on disk and round-tripping it: *41 models, 1 texture*.
+
+Also worth recording: **the furniture kit's `Textures/` is empty here and should be** — it embeds
+its textures in the GLBs, unlike city, forest and folk, which reference `colormap.png` externally.
+Checking that a `Textures/` directory exists tells you nothing; checking that something is in it
+tells you what you wanted to know.
+
+
 ## M18 — The chronicle and the myth
 
 **Delivers.** Four carried-over items, all small and all in the same neighbourhood.
@@ -845,7 +921,7 @@ happens to be what separates it from the one existing use.
 | `Revelations.cs` holds five placeholders | M18 |
 | No persistence of any kind | M11 |
 | Trace text retention capped at 40 calls, early calls unrecoverable | M11 |
-| Art kits need a fetch script or installer | M17 |
+| Art kits need a fetch script or installer | **Done at M17 — assets/fetch-kits.ps1** |
 | Trademark/storefront search never done | **Done 24 Oct 2026 — see M19** |
 | Kindling fallback leaves a colonist permanently unnameable | M9 |
 | No name-earning deed survives the mid-game | M9 |
