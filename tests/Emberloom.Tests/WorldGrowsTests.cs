@@ -240,25 +240,35 @@ public class WorldGrowsTests
     /// <summary>
     /// The other half of the same fix: a building the colony merely could have still has to win an
     /// argument. Pressure that carried every question would be a rubber stamp with extra steps.
+    /// <para>
+    /// M14 gave a granary something to do — it is what lets the colony keep what its work earns —
+    /// so a store presses in proportion to how full the bins already are rather than by a flat
+    /// token amount. Which means the thing to assert is that an empty store presses on nobody and
+    /// a spoiling one presses on everybody.
+    /// </para>
     /// </summary>
     [Fact]
-    public void AStoreNobodyNeedsIsStillSomethingToArgueAbout()
+    public void AStoreOnlyPressesOnceThereIsSomethingToKeep()
     {
         var (colony, _) = Start();
         var cautious = ColonyFactory.Print(colony, new Random(1), chargeIsFree: true)!;
         cautious.Weights.Vector[Drive.Rest] = 1.2;
         cautious.Weights.Vector[Drive.Meaning] = 1.0;
 
-        var stores = colony.Map.Places.Where(p => p.Becomes == PlaceKind.Granary).ToList();
+        var store = colony.Map.Places.First(p => p.Becomes == PlaceKind.Granary);
 
-        // Nowhere to put what is grown presses a little: enough that somebody who cares about the
-        // colony's standing argues for it, not enough to carry someone who would rather rest.
-        var firstStore = ForkRules.Pressure(colony, stores[0]);
-        Assert.InRange(firstStore, 0.01, 0.2);
-        Assert.NotEqual(Stance.For, ForkRules.FallbackVote(ForkKind.Build, cautious, firstStore).Stance);
+        // Nothing in the stores: a granary is a shed for air, and nobody who would rather rest
+        // votes to raise one.
+        colony.LoomCharge = 0;
+        Assert.Equal(0, ForkRules.Pressure(colony, store));
+        Assert.NotEqual(Stance.For, ForkRules.FallbackVote(ForkKind.Build, cautious, 0).Stance);
 
-        // And once one stands, the next is pure foresight and presses not at all.
-        stores[0].Kind = PlaceKind.Granary;
-        Assert.Equal(0, ForkRules.Pressure(colony, stores[1]));
+        // Full to the brim, and the colony's own work going nowhere: now it presses on everyone.
+        colony.LoomCharge = colony.StoreCapacity;
+        colony.StoresOverflowing = true;
+
+        var pressure = ForkRules.Pressure(colony, store);
+        Assert.True(pressure > 0.5, $"spoiling work should press hard (was {pressure:F2})");
+        Assert.Equal(Stance.For, ForkRules.FallbackVote(ForkKind.Build, cautious, pressure).Stance);
     }
 }

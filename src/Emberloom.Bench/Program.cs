@@ -8,6 +8,20 @@ using Emberloom.Mind.Ollama;
 // resident and a long keep_alive, and records the schema-adherence failure rate per model.
 // Every throughput figure in the design is sized from what this produces.
 
+// A focused probe rather than a benchmark: see StakesProbe for what it answers and why it runs
+// before the milestone it belongs to is written.
+if (args.Length > 0 && args[0] == "--stakes")
+{
+    using var probeCts = new CancellationTokenSource();
+    Console.CancelKeyPress += (_, e) => { e.Cancel = true; probeCts.Cancel(); };
+
+    var model = args.Length > 1 ? args[1] : "llama3.2:3b";
+    var samples = args.Length > 2 ? int.Parse(args[2]) : 30;
+    var where = args.Length > 3 ? new Uri(args[3]) : new Uri("http://localhost:11434");
+
+    return await StakesProbe.RunAsync(where, model, samples, probeCts.Token);
+}
+
 var options = CliOptions.Parse(args);
 if (options is null)
 {

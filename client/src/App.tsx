@@ -156,10 +156,20 @@ export default function App() {
             <dd>{formatTimeOfDay(state.timeOfDay)}</dd>
           </div>
           <div className="readout">
-            <dt>Charge</dt>
-            <dd title="The Loom's charge, and what your light and warmth cost it each day">
+            <dt>Stores</dt>
+            <dd
+              title={`The colony's one stock. Work puts ${state.producedPerDay.toFixed(2)} a day in; the living take ${state.drawPerDay.toFixed(2)}; your light and warmth cost ${state.upkeepPerDay.toFixed(2)}. It holds ${state.storeCapacity.toFixed(0)} — raise a granary to hold more.`}
+            >
               {state.loomCharge.toFixed(0)}
-              {state.upkeepPerDay > 0 && <span className="of">−{state.upkeepPerDay.toFixed(2)}/d</span>}
+              <span className="of">of {state.storeCapacity.toFixed(0)}</span>
+              {state.storesOverflowing ? (
+                <span className="of">spoiling</span>
+              ) : (
+                <span className="of">
+                  {state.chargeFlowPerDay >= 0 ? '+' : '−'}
+                  {Math.abs(state.chargeFlowPerDay).toFixed(2)}/d
+                </span>
+              )}
             </dd>
           </div>
           <div className="readout">

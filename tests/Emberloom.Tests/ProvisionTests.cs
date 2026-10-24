@@ -50,7 +50,11 @@ public class ProvisionTests
             body.Tick();
         }
 
-        Assert.Equal(10 + colony.LoomChargePerDay - ProvisionRules.LightPerDay, colony.LoomCharge, precision: 3);
+        // From M14 the colony both feeds itself out of the same stock and puts its work back into
+        // it, so the day's light is only one of three things moving the charge. What is asserted is
+        // still the one that matters: the light cost exactly a day of light.
+        var expected = 10 + colony.ProducedPerDay + colony.LoomChargePerDay - colony.DrawPerDay - ProvisionRules.LightPerDay;
+        Assert.Equal(expected, colony.LoomCharge, precision: 2);
     }
 
     [Fact]

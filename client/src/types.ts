@@ -103,6 +103,12 @@ export interface ColonyState {
   loomCharge: number
   /** What the player's light and warmth cost, in charge per colony-day. */
   upkeepPerDay: number
+  /** M14: what the stores hold, what the work put in, what the living take, and the net. */
+  storeCapacity: number
+  producedPerDay: number
+  drawPerDay: number
+  chargeFlowPerDay: number
+  storesOverflowing: boolean
   artifactsRecovered: number
   population: number
   actionsCompleted: number

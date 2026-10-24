@@ -153,6 +153,8 @@ public sealed class BodySimulation
 
         if (_colony.Tick % Colony.TicksPerDay == 0)
         {
+            _colony.ProducedPerDay = _colony.ProducingToday;
+            _colony.ProducingToday = 0;
             EndOfDay();
         }
     }
@@ -287,7 +289,10 @@ public sealed class BodySimulation
 
     private void AdvanceWorld()
     {
-        _colony.LoomCharge += (_colony.LoomChargePerDay - _colony.UpkeepPerDay) * DayPerTick;
+        // What the living take, what the player keeps running, and whatever the Loom still makes on
+        // its own — which from M14 is nothing unless the colony found a way to change that. The
+        // charge going *in* is added by the hour in Work(), where it is earned.
+        _colony.LoomCharge -= (_colony.DrawPerDay + _colony.UpkeepPerDay - _colony.LoomChargePerDay) * DayPerTick;
 
         // What the player keeps running is paid for as it runs. When the Loom runs dry, the
         // newest provision goes out first, one a tick until the books balance — and each going
@@ -298,6 +303,27 @@ public sealed class BodySimulation
         }
 
         _colony.LoomCharge = Math.Max(0, _colony.LoomCharge);
+
+        // What there is nowhere to keep is not kept. Noticed once when it starts and once when it
+        // stops, because a colony watching its own work spoil is a reason to raise a granary, and
+        // a line a tick would be a flood rather than a reason.
+        if (_colony.LoomCharge > _colony.StoreCapacity)
+        {
+            _colony.LoomCharge = _colony.StoreCapacity;
+
+            if (!_colony.StoresOverflowing)
+            {
+                _colony.StoresOverflowing = true;
+                _colony.Log(EventLayer.World,
+                    "The stores are as full as they will go. What anyone gathers past this is going nowhere.",
+                    notable: true);
+            }
+        }
+        else if (_colony.StoresOverflowing && _colony.LoomCharge < _colony.StoreCapacity * 0.9)
+        {
+            _colony.StoresOverflowing = false;
+            _colony.Log(EventLayer.World, "There is room in the stores again.", notable: true);
+        }
     }
 
     private void AdvanceColonist(Colonist colonist)
@@ -428,6 +454,14 @@ public sealed class BodySimulation
         if (EconomyRules.IsPaid(current.Definition.Kind))
         {
             colonist.Tokens += EconomyRules.WagePerWorkDay * DayPerTick;
+
+            // The colony's share of the same hour, from whoever is grown enough to give it.
+            if (LifeRules.IsGrown(colonist, _colony.Day))
+            {
+                var made = _colony.ChargePerWorkDay * DayPerTick;
+                _colony.LoomCharge += made;
+                _colony.ProducingToday += made;
+            }
         }
 
         ApplyWorkEffects(colonist, current, place, DayPerTick);

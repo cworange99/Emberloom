@@ -184,7 +184,7 @@ public class LifeTests
         colony.Relationships.Mutual(closest.Id, dying.Id, affinity: 0.9, trust: 0.9);
 
         DieAtDayThree(colony, body, dying);
-        colony.LoomCharge = ForkRules.PrintThreshold + 10;
+        colony.LoomCharge = ForkRules.ChargeNeededToPrint(colony) + 10;
 
         var fork = ForkRules.Detect(colony);
 

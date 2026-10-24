@@ -140,7 +140,7 @@ public class PlayerVerbTests
     {
         var (colony, body, random) = Start();
         colony.Tick = (long)(ForkRules.EarliestDay * Colony.TicksPerDay);
-        colony.LoomCharge = ForkRules.PrintThreshold + 1;
+        colony.LoomCharge = ForkRules.ChargeNeededToPrint(colony) + 1;
         colony.OpenFork = ForkRules.Detect(colony);
 
         var result = PlayerVerbs.Print(colony, body, random, null);

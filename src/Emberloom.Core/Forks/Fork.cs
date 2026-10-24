@@ -198,10 +198,24 @@ public static class ForkRules
     public const int CouncilSize = 5;
 
     /// <summary>
-    /// A print is not worth arguing about until the Loom holds more than one costs: the colony wants
-    /// something left over for light and doors afterwards.
+    /// What the Loom must hold before a print is worth arguing about — **what a print costs, plus two
+    /// months of feeding one more mouth than there are now.**
+    /// <para>
+    /// It was a flat 45 until M14, which made sense in a world where the charge arrived on its own
+    /// and nobody ate: the colony just wanted something left over for light and doors. Now that the
+    /// living draw on the same stock, what is left over has to feed somebody, and how much that is
+    /// depends on how many of them there already are. At four founders a print needs about 73
+    /// charge; at twenty, about 250. That is the resource argument the Print fork never had, and
+    /// most of it is arithmetic rather than politics — see <see cref="CanFeedAnother"/> for the
+    /// measurement that made that the right division of labour.
+    /// </para>
     /// </summary>
-    public const double PrintThreshold = Colony.PrintCost + 20;
+    public static double ChargeNeededToPrint(Colony colony) =>
+        Colony.PrintCost + PrintReserveDays * DrawWithOneMore(colony);
+
+    /// <summary>What the colony would take from the stores a day with one more mouth in it.</summary>
+    private static double DrawWithOneMore(Colony colony) =>
+        (colony.Living.Count() + 1) * colony.DrawPerHeadPerDay + colony.UpkeepPerDay;
 
     /// <summary>No forks before the colony has had time to become anyone. Kindling finishes first.</summary>
     public const double EarliestDay = 2.0;
@@ -268,14 +282,21 @@ public static class ForkRules
                 subject: above.Id);
         }
 
-        if (colony.LoomCharge >= PrintThreshold && colony.Day >= colony.AskAgainOn(ForkKind.Print))
+        // The cap belongs here rather than at the print itself: a body that asks a question whose
+        // answer it would then refuse to honour is worse than one that does not ask. Births have
+        // always been capped in ConsiderPairings and prints were not, which went unnoticed while the
+        // Print fork almost never carried — with labour feeding the Loom it carries often, and three
+        // seeds measured at M14 ran to 29, 41 and 27 living before this line existed. See
+        // DESIGN-V2.md: the cap is really a thinking budget, and whether to raise it is open.
+        if (colony.Living.Count() < LifeRules.PopulationCap
+            && CanFeedAnother(colony)
+            && colony.Day >= colony.AskAgainOn(ForkKind.Print))
         {
             return Open(colony, ForkKind.Print,
                 question: "Do we let the Loom print another mind?",
                 proposal: "The Loom spends its charge on one more mind.",
-                // Both sides spelled out as sides. Live at M5, a looser version ("kept, it could light
-                // the dark places") was read by a 3B model as a reason to print.
-                stakes: "For: a print adds one more mind to the colony — more company, more hands. Against: the charge is spent and gone; kept, it could light the dark places or open a door that will not open.",
+                stakes: Stores(colony),
+                pressure: Plenty(colony),
                 subject: null);
         }
 
@@ -359,6 +380,89 @@ public static class ForkRules
                + "whoever raised it. Against: it is a great deal of work that nobody has to do, and the ruins have held so far.";
     }
 
+    /// <summary>How much must be left after a print, in colony-days of stores. Two months.</summary>
+    public const double PrintReserveDays = 60;
+
+    /// <summary>
+    /// Whether the colony can feed another mouth — **a body-side gate, and it is here because the
+    /// mind would not do it.**
+    /// <para>
+    /// M14's riskiest assumption was that a council told the stores were thin would vote against a
+    /// print. It was measured before the milestone was built, with three worded variants of the
+    /// Print stakes and thirty samples each against llama3.2:3b, and it is false. Thin stores
+    /// produced *more* for-votes than adequate ones (15, 10, 17 out of 30 for thin, adequate and
+    /// plentiful) and against was 2, 1 and 0 — the model essentially will not oppose a print at all.
+    /// It is the M5 lesson again: whatever is at stake, a 3B model reads it as a reason to act.
+    /// </para>
+    /// <para>
+    /// The one real signal was indirect: an adequate store produced nineteen abstentions against
+    /// thirteen, and conviction fell from 0.50 to 0.30, so the model does register that a middling
+    /// stock is a reason to be unsure. That is worth keeping the wording for, and it is nowhere near
+    /// enough to run an economy on. So the stores constrain the colony here, in arithmetic, and the
+    /// council argues about whether it *wants* another mind rather than whether it can afford one.
+    /// </para>
+    /// </summary>
+    public static bool CanFeedAnother(Colony colony) =>
+        colony.LoomCharge >= ChargeNeededToPrint(colony)
+
+        // And either the colony is still gaining, or it has enough behind it not to care that it
+        // isn't. One or the other: a colony living off its stores should not be adding to the
+        // number of people living off them.
+        && (colony.ChargeFlowPerDay >= 0 || colony.StoresFull > 0.5);
+
+    /// <summary>
+    /// What the stores look like, in words — M14, and the reason the Print fork now has an argument
+    /// in it. Through v1 the charge arrived on its own at a fixed rate, so the council was never
+    /// deciding whether the colony could afford another mouth; it was waiting for a number to cross
+    /// a line by itself.
+    /// <para>
+    /// No figures. CLAUDE.md is explicit that a model reads every number in a prompt as something
+    /// the colonist knows and hands it straight back as a conviction, and the M5 lesson here is
+    /// sharper still: a looser version of the Against clause below was read as a reason *to* print.
+    /// The clauses are therefore left exactly as they were measured working, and only the first
+    /// sentence moves.
+    /// </para>
+    /// </summary>
+    private static string Stores(Colony colony)
+    {
+        // Read off how full the bins are rather than off a count of days, because that is what a
+        // colonist standing in front of them would see, and because what the colony can keep at all
+        // depends on how many granaries it has raised.
+        var reserve = colony.StoresFull switch
+        {
+            < 0.25 => "The stores are nearly out — what is gathered is eaten, and there is little behind it.",
+            < 0.70 => "The stores hold. There is enough for everyone here, with something behind it.",
+            _ => "The stores are as full as they will go — more is gathered than anyone eats."
+        };
+
+        var trend = colony.ChargeFlowPerDay < -0.01
+            ? " And they are going down, not up."
+            : colony.ChargeFlowPerDay > 0.01 ? " And they are still rising." : string.Empty;
+
+        return $"{reserve}{trend} For: a print adds one more mind to the colony — more company, more hands. "
+               + "Against: the charge is spent and gone; kept, it could light the dark places or open a door that will not open.";
+    }
+
+    /// <summary>
+    /// The same thing as a number, for the council that cannot read — and the first pressure in the
+    /// game that can be **negative**, because a thin store is an argument against the question
+    /// rather than a weak argument for it. Everything else a colony votes on is a thing it either
+    /// needs or merely could have; a print it cannot feed is worse than no print.
+    /// </summary>
+    private static double Plenty(Colony colony)
+    {
+        // Half-full is the point of indifference: below it the colony is plainly against feeding
+        // another mouth, above it plainly for, and the ends of the range are reachable because the
+        // stores have a ceiling the colony can raise by building.
+        var reserve = Math.Clamp((colony.StoresFull - 0.5) * 2, -1, 1);
+
+        // And which way they are moving, which is what makes a council that said no last season
+        // able to say yes this one without anybody's personality having changed.
+        var trend = Math.Clamp(colony.ChargeFlowPerDay * 2, -0.5, 0.5);
+
+        return Math.Clamp(reserve + trend, -1, 1);
+    }
+
     /// <summary>
     /// How short the colony actually is of what this site would become, in [0,1] — the same facts
     /// <see cref="Stakes"/> states in words, for the voter who cannot read them. Deliberately the
@@ -370,7 +474,6 @@ public static class ForkRules
         var heads = colony.Living.Count();
         var beds = colony.Map.Places.Count(p => p.Kind is PlaceKind.Shelter or PlaceKind.Dwelling);
         var halls = colony.Map.Places.Count(p => p.Kind == PlaceKind.Hall);
-        var stores = colony.Map.Places.Count(p => p.Kind == PlaceKind.Granary);
 
         return site.Becomes switch
         {
@@ -382,11 +485,14 @@ public static class ForkRules
             // rather than an emergency, so the first hall presses moderately and never more.
             PlaceKind.Hall => halls == 0 ? 0.5 : Math.Clamp(heads / (halls * 8.0) - 1, 0, 0.5),
 
-            // Somewhere to put what is grown is pure foresight, and deliberately too small to
-            // carry anyone who does not already want to build: 0.1 leaves a colonist who would
-            // rather rest at a shrug, so a store is raised by the restless and the proud or not at
-            // all. Beds are not negotiable, a hall is agreed to, a store is argued over.
-            PlaceKind.Granary => stores == 0 ? 0.1 : 0,
+            // A store was pure foresight until M14 gave the colony something to keep. Watching
+            // your own work spoil for want of anywhere to put it presses hard; bins merely filling
+            // up presses the way foresight should, which is gently enough that the restless and the
+            // proud raise one and nobody else has to. Beds are not negotiable, a hall is agreed to,
+            // a store is argued over.
+            PlaceKind.Granary => colony.StoresOverflowing
+                ? 0.7
+                : Math.Clamp((colony.StoresFull - 0.6) / 0.4, 0, 0.5),
             _ => 0
         };
     }
@@ -460,16 +566,55 @@ public static class ForkRules
         return willing % 2 == 0 ? willing - 1 : willing;
     }
 
+    /// <summary>
+    /// Who sits: the person who feels it most strongly each way, and then whoever is most ordinary
+    /// about it to decide between them.
+    /// <para>
+    /// It used to be simply the furthest from ordinary on either of the fork's two drives, and that
+    /// turned out to be a quiet bias toward whichever side of the question has the more extreme
+    /// archetype in it. Measured twice, at M14: the Print fork sets Belonging against Safety, the
+    /// largest single weight in the table is the cautious archetype's 1.7 on Safety, so a cautious
+    /// colonist was seated *first* at every print — and with a stub vote being a function of weights
+    /// that never change, seed 4 refused every print for its entire existence while sitting on two
+    /// hundred charge. Build had the same shape and was patched by changing its axis, which fixed
+    /// that fork and not the rule underneath it.
+    /// </para>
+    /// <para>
+    /// Seating both champions and filling the rest with the uncommitted makes the council an
+    /// argument with someone in it who can be persuaded, which is what the two mechanisms that
+    /// *can* move — the world's pressure and a mind's reading of the stakes — need in order to
+    /// matter at all.
+    /// </para>
+    /// </summary>
     public static IReadOnlyList<string> Council(Colony colony, ForkKind kind)
     {
         var (forDrive, againstDrive) = Pulls(kind);
+        var seats = Seats(colony);
 
-        return colony.Living
-            .OrderByDescending(c => Math.Abs(c.Weights[forDrive] - 1.0) + Math.Abs(c.Weights[againstDrive] - 1.0))
+        double Lean(Colonist c) => c.Weights[forDrive] - c.Weights[againstDrive];
+
+        var seated = new List<Colonist>();
+
+        foreach (var champion in new[]
+                 {
+                     colony.Living.OrderByDescending(Lean).ThenBy(c => c.Id, StringComparer.Ordinal).FirstOrDefault(),
+                     colony.Living.OrderBy(Lean).ThenBy(c => c.Id, StringComparer.Ordinal).FirstOrDefault()
+                 })
+        {
+            if (champion is not null && seated.Count < seats && !seated.Contains(champion))
+            {
+                seated.Add(champion);
+            }
+        }
+
+        // Then the least committed, because a council of nothing but champions has already decided.
+        seated.AddRange(colony.Living
+            .Where(c => !seated.Contains(c))
+            .OrderBy(c => Math.Abs(Lean(c)))
             .ThenBy(c => c.Id, StringComparer.Ordinal)
-            .Take(Seats(colony))
-            .Select(c => c.Id)
-            .ToList();
+            .Take(seats - seated.Count));
+
+        return seated.Select(c => c.Id).ToList();
     }
 
     /// <summary>

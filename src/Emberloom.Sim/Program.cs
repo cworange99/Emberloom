@@ -65,6 +65,11 @@ var driveSamples = 0;
 // someone who died young is not averaged against a full lifespan.
 var wellbeing = new Dictionary<string, (double Sum, int Days)>();
 
+// The Loom, sampled daily. A single day is a bad sample of a stock: at M14 the last day of a run
+// read 0.66 produced against a 2160-day average of something quite different, because whether the
+// run ends at noon or at midnight decides how many people are asleep in it.
+var chargeSamples = new List<(double Charge, double Produced, double Flow)>();
+
 colony.Feed.Appended += e =>
 {
     if (!diagnose)
@@ -115,6 +120,8 @@ for (var tick = 0; tick < days * Colony.TicksPerDay; tick++)
             var (sum, seen) = wellbeing.GetValueOrDefault(colonist.Id);
             wellbeing[colonist.Id] = (sum + colonist.Wellbeing, seen + 1);
         }
+
+        chargeSamples.Add((colony.LoomCharge, colony.ProducedPerDay, colony.ChargeFlowPerDay));
     }
 
     foreach (var colonist in colony.Living)
@@ -138,7 +145,15 @@ for (var tick = 0; tick < days * Colony.TicksPerDay; tick++)
 
 Console.WriteLine();
 Console.WriteLine($"=== after {days} colony-days, {colonists} colonists ===");
-Console.WriteLine($"Loom charge      {colony.LoomCharge,8:F1}");
+Console.WriteLine($"Loom charge      {colony.LoomCharge,8:F1}   {Reserve(colony.DaysOfStores)} of stores, drawn {colony.DrawPerDay:F2}/day");
+if (chargeSamples.Count > 0)
+{
+    var dry = chargeSamples.Count(s => s.Charge <= 0.01);
+    Console.WriteLine(
+        $"                           over the run: produced {chargeSamples.Average(s => s.Produced):F2}/day, "
+        + $"net {chargeSamples.Average(s => s.Flow):+0.00;-0.00;0.00}, charge {chargeSamples.Min(s => s.Charge):F0}..{chargeSamples.Max(s => s.Charge):F0}, "
+        + $"empty on {(double)dry / chargeSamples.Count:P0} of days");
+}
 Console.WriteLine($"Artifacts        {colony.ArtifactsRecovered,8}");
 Console.WriteLine($"Living           {colony.Living.Count(),8}");
 Console.WriteLine($"Born             {colony.Colonists.Count(c => c.Lineage == LineageKind.Paired),8}");
@@ -416,6 +431,8 @@ static IReadOnlyList<(string Label, IReadOnlyList<string> Kinds)> Classes() =>
 ];
 
 /// <summary>Time not already claimed by work, rest, travel or a sitting council.</summary>
+static string Reserve(double days) => double.IsInfinity(days) ? "no end" : $"{days:F0} days";
+
 static bool IsFree(string bucket) => bucket is "Gather" or "Wander" or "Talk" or "Teach" or "idle";
 
 /// <summary>The deepest line of descent: printed minds are generation one, their children two.</summary>

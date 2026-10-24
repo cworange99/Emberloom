@@ -153,7 +153,7 @@ public class PersistenceTests
 
         // Thirty days in, a site is usually already going up — which stops another Build fork —
         // and the Loom is still short of a print. Give it something to argue about.
-        colony.LoomCharge = ForkRules.PrintThreshold + 1;
+        colony.LoomCharge = ForkRules.ChargeNeededToPrint(colony) + 1;
         var fork = colony.OpenFork ?? ForkRules.Detect(colony);
         Assert.NotNull(fork);
         colony.OpenFork = fork;

@@ -49,7 +49,7 @@ public class DeliberationTests
         var random = new Random(11);
         var colony = ColonyFactory.Create(8, random);
         colony.Tick = (long)(ForkRules.EarliestDay * Colony.TicksPerDay);
-        colony.LoomCharge = ForkRules.PrintThreshold + 1;
+        colony.LoomCharge = ForkRules.ChargeNeededToPrint(colony) + 1;
 
         var fork = ForkRules.Detect(colony)!;
         colony.OpenFork = fork;

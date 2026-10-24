@@ -52,6 +52,14 @@ public sealed record ColonySnapshot
     public required long Tick { get; init; }
     public required double LoomCharge { get; init; }
     public required double LoomChargePerDay { get; init; }
+
+    public double ChargePerWorkDay { get; init; } = 0.5;
+
+    public double DrawPerHeadPerDay { get; init; } = 0.15;
+
+    public double ProducedPerDay { get; init; }
+
+    public double ProducingToday { get; init; }
     public required int ArtifactsRecovered { get; init; }
     public required long NextMemoryId { get; init; }
 
@@ -87,6 +95,10 @@ public sealed record ColonySnapshot
         Tick = colony.Tick,
         LoomCharge = colony.LoomCharge,
         LoomChargePerDay = colony.LoomChargePerDay,
+        ChargePerWorkDay = colony.ChargePerWorkDay,
+        DrawPerHeadPerDay = colony.DrawPerHeadPerDay,
+        ProducedPerDay = colony.ProducedPerDay,
+        ProducingToday = colony.ProducingToday,
         ArtifactsRecovered = colony.ArtifactsRecovered,
         NextMemoryId = body.NextMemoryId,
         RandomState = body.RandomState,
@@ -130,6 +142,10 @@ public sealed record ColonySnapshot
             Tick = Tick,
             LoomCharge = LoomCharge,
             LoomChargePerDay = LoomChargePerDay,
+            ChargePerWorkDay = ChargePerWorkDay,
+            DrawPerHeadPerDay = DrawPerHeadPerDay,
+            ProducedPerDay = ProducedPerDay,
+            ProducingToday = ProducingToday,
             ArtifactsRecovered = ArtifactsRecovered
         };
 

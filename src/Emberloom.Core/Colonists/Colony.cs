@@ -63,11 +63,98 @@ public sealed class Colony
     public double LoomCharge { get; set; } = 40;
 
     /// <summary>
-    /// The Loom's trickle, per colony-day. About 128 charge in a life — five prints' worth, as it
-    /// was at 3.2 a day in a 40-day life. Scaled with the lifespan so that stretching lives did not
-    /// fill the city with prints: a print is still rare in a life, not rare in an afternoon.
+    /// What the Loom makes on its own, per colony-day — **nothing, from M14**.
+    /// <para>
+    /// Through v1 this was a flat trickle of about 0.06 a day whatever anybody did, which is why the
+    /// Print fork had no argument in it: the council was not deciding whether the colony could
+    /// afford another mouth, it was waiting for a threshold to cross on its own. Measured over 2160
+    /// days on the shipped seed, the colony reached 57.8 charge without a single person having
+    /// earned any of it. Labour feeds the Loom now — see <see cref="ChargePerWorkDay"/> — and this
+    /// is what is left over for anything that changes the machine itself, which is the
+    /// <c>charge-lines</c> revelation and nothing else.
+    /// </para>
     /// </summary>
-    public double LoomChargePerDay { get; set; } = 3.2 * 40 / LifeRules.BaseLifespanDays;
+    public double LoomChargePerDay { get; set; }
+
+    /// <summary>
+    /// What one colonist-day of paid work puts into the Loom. The colony's single stock: the scope's
+    /// separate food and grain store is this, because a colony with three resources to track is a
+    /// spreadsheet and a colony with one has an argument.
+    /// <para>
+    /// Only grown colonists feed it. Someone younger than <see cref="LifeRules.MaturityDays"/> is
+    /// fed by the colony and gives nothing back yet, which is what makes "can we feed another?" a
+    /// real question rather than an accounting one — a print or a birth costs for a third of a
+    /// lifetime before it starts paying.
+    /// </para>
+    /// </summary>
+    public double ChargePerWorkDay { get; set; } = 0.5;
+
+    /// <summary>
+    /// What each living colonist takes from the stores a day, grown or not. Measured against the
+    /// colony's real working day: see DESIGN-V2.md for the shape this produces, which is a small
+    /// colony that accumulates, a middling one that holds, and a large one that slowly cannot.
+    /// </summary>
+    public double DrawPerHeadPerDay { get; set; } = 0.16;
+
+    /// <summary>What the living take from the stores a day, before anything the player keeps running.</summary>
+    public double DrawPerDay => Living.Count() * DrawPerHeadPerDay;
+
+    /// <summary>What the Loom's own cells hold, with nowhere else to put anything.</summary>
+    public const double BaseStoreCapacity = 60;
+
+    /// <summary>What one raised granary adds to what the colony can keep.</summary>
+    public const double StorePerGranary = 120;
+
+    /// <summary>
+    /// How much the colony can actually keep — M14. Surplus past this is not kept, because there is
+    /// nowhere to put it.
+    /// <para>
+    /// This is what a granary is *for*, and the reason it needed one. Measured with labour feeding
+    /// the Loom and no ceiling at all, a settled colony of twenty adults reached 2,592 charge, eight
+    /// hundred days of stores, and the Print fork's resource argument became vacuous again from the
+    /// other direction. A ceiling that the colony can raise by building also turns the Granary vote
+    /// — the one <see cref="ForkRules"/> deliberately gives the least pressure, because nothing
+    /// obliges anyone to want one — into a question with a real answer behind it.
+    /// </para>
+    /// </summary>
+    public double StoreCapacity =>
+        BaseStoreCapacity + Map.Places.Count(p => p.Kind == PlaceKind.Granary) * StorePerGranary;
+
+    /// <summary>How full the stores are, 0 to 1. What a colonist would notice without counting.</summary>
+    public double StoresFull => StoreCapacity <= 0 ? 1 : Math.Clamp(LoomCharge / StoreCapacity, 0, 1);
+
+    /// <summary>True while surplus is being lost for want of anywhere to keep it.</summary>
+    public bool StoresOverflowing { get; set; }
+
+    /// <summary>
+    /// What the colony actually put into the Loom on the last full day. Measured rather than
+    /// derived, because it depends on what everybody chose to do.
+    /// </summary>
+    public double ProducedPerDay { get; set; }
+
+    /// <summary>Running total for the day in progress; rolled into <see cref="ProducedPerDay"/> at midnight.</summary>
+    public double ProducingToday { get; set; }
+
+    /// <summary>
+    /// Charge in, charge out. Negative means the colony is living off what it has.
+    /// <para>
+    /// Flat until a day's work has actually been measured. A colony reads nothing but its draw on
+    /// the morning it is printed, and without this every brand-new colony — and every test that
+    /// sets the clock forward rather than living through the days — looks like it is starving.
+    /// Unknown is not the same as falling.
+    /// </para>
+    /// </summary>
+    public double ChargeFlowPerDay =>
+        ProducedPerDay <= 0 ? 0 : ProducedPerDay + LoomChargePerDay - DrawPerDay - UpkeepPerDay;
+
+    /// <summary>
+    /// How many colony-days the stores would last if everybody stopped working — the figure the
+    /// Print fork is really about. Infinite when the colony takes nothing, which only happens when
+    /// everybody is dead.
+    /// </summary>
+    public double DaysOfStores => DrawPerDay + UpkeepPerDay <= 0
+        ? double.PositiveInfinity
+        : LoomCharge / (DrawPerDay + UpkeepPerDay);
 
     public const double PrintCost = 25;
 

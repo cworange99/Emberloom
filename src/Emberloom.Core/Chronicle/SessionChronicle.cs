@@ -159,7 +159,11 @@ public sealed class SessionChronicle
         var generations = LifeRules.Generations(colony);
 
         text.AppendLine($"- **{living.Count} living** · {Colonists} to begin with · {born} born or printed since · {died} died · {generations} generation{(generations == 1 ? string.Empty : "s")}");
-        text.AppendLine($"- The Loom holds {colony.LoomCharge:F0} charge{(colony.UpkeepPerDay > 0 ? $", spending {colony.UpkeepPerDay:F2} a day on what you provide" : string.Empty)} · {colony.ArtifactsRecovered} pieces of the makers' recovered");
+        text.AppendLine($"- The stores hold {colony.LoomCharge:F0} of {colony.StoreCapacity:F0}"
+                        + $" · work puts in {colony.ProducedPerDay:F2} a day, the living take {colony.DrawPerDay:F2}"
+                        + (colony.UpkeepPerDay > 0 ? $", what you provide costs {colony.UpkeepPerDay:F2}" : string.Empty)
+                        + $" · {(colony.StoresOverflowing ? "**spoiling for want of a granary**" : $"{colony.ChargeFlowPerDay:+0.00;-0.00;0.00} a day")}"
+                        + $" · {colony.ArtifactsRecovered} pieces of the makers' recovered");
         text.AppendLine($"- {colony.Lexicon.Count} words of their own · the story {(colony.Myth is null ? "still untold" : $"told {Times(colony.Myth.Version)}")} · {colony.ForkHistory.Count} forks decided{(colony.OpenFork is not null ? ", one open now" : string.Empty)}");
 
         // How the colony is, as the colony would say it — M12. Reading a long run back, "nine

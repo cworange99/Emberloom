@@ -3,6 +3,7 @@ using Emberloom.Core.Colonists;
 using Emberloom.Core.Drives;
 using Emberloom.Core.Forks;
 using Emberloom.Core.Simulation;
+using Emberloom.Core.World;
 using Xunit;
 
 namespace Emberloom.Tests;
@@ -21,13 +22,29 @@ public class ForkTests
         return (colony, new BodySimulation(colony, random));
     }
 
+    /// <summary>
+    /// From M14 a print needs both the charge and somewhere to have kept it: the Loom's own cells
+    /// hold sixty, and what a print plus two months of one more mouth costs is more than that at
+    /// any population. A colony that has not raised a granary cannot print, which is a real rule
+    /// rather than a test convenience — see Colony.StoreCapacity.
+    /// </summary>
     private static Fork OpenPrint(Colony colony)
     {
-        colony.LoomCharge = ForkRules.PrintThreshold + 1;
+        Store(colony);
+        colony.LoomCharge = ForkRules.ChargeNeededToPrint(colony) + 1;
         var fork = ForkRules.Detect(colony);
         Assert.NotNull(fork);
         colony.OpenFork = fork;
         return fork!;
+    }
+
+    private static void Store(Colony colony)
+    {
+        foreach (var site in colony.Map.Places.Where(p => p.Becomes == PlaceKind.Granary).Take(2))
+        {
+            site.Kind = PlaceKind.Granary;
+            site.BuildDone = site.BuildRequired;
+        }
     }
 
     private static void EveryoneVotes(Fork fork, Stance stance)
@@ -42,7 +59,8 @@ public class ForkTests
     public void APrintForkOpensWhenTheLoomHasChargeToSpare()
     {
         var (colony, body) = Start();
-        colony.LoomCharge = ForkRules.PrintThreshold + 1;
+        Store(colony);
+        colony.LoomCharge = ForkRules.ChargeNeededToPrint(colony) + 1;
 
         Fork? opened = null;
         body.ForkOpened += f => opened = f;
@@ -63,7 +81,7 @@ public class ForkTests
     public void NoForkOpensBeforeTheColonyHasHadTimeToBecomeAnyone()
     {
         var colony = ColonyFactory.Create(8, new Random(11));
-        colony.LoomCharge = ForkRules.PrintThreshold + 10;
+        colony.LoomCharge = ForkRules.ChargeNeededToPrint(colony) + 10;
 
         Assert.Null(ForkRules.Detect(colony));
     }
@@ -76,7 +94,7 @@ public class ForkTests
     public void NoForkOpensWhileAnyoneIsStillBeingKindled()
     {
         var (colony, _) = Start();
-        colony.LoomCharge = ForkRules.PrintThreshold + 10;
+        colony.LoomCharge = ForkRules.ChargeNeededToPrint(colony) + 10;
         colony.Colonists[3].AwaitingKindling = true;
 
         Assert.Null(ForkRules.Detect(colony));

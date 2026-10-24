@@ -419,6 +419,121 @@ really a *thinking budget*, since every living mind costs the governor. Raising 
 notable and bodies for the rest, which is an architecture decision rather than a constant change. This is
 the single most underestimated item in the v2 scope and it should be decided deliberately, here.
 
+### M14's measured outcome — 24 October 2026
+
+Labour feeds the Loom. `Colony.LoomChargePerDay` — the flat 0.059 a day that arrived whatever anybody
+did — is now **zero**, and the colony's one stock is produced by paid work from whoever is grown,
+drawn down by every living mouth, and bounded by how many granaries have been raised.
+
+#### The riskiest assumption was tested first, and it is false
+
+The scope's bet was that a council told the stores were thin would vote against a print, so the
+resource could enter the politics as words. `Emberloom.Bench --stakes` ran three worded variants of
+the Print stakes past llama3.2:3b, thirty samples each, before any of M14 was written:
+
+| stores | for | against | abstain | fell back | mean conviction |
+|---|---|---|---|---|---|
+| thin | **15** | 2 | 13 | 0 | 0.50 |
+| adequate | 10 | 1 | 19 | 0 | 0.30 |
+| plentiful | **17** | 0 | 13 | 0 | 0.50 |
+
+**Thin stores produced more for-votes than adequate ones, and against never rose above 2 of 30.** A
+3B model will not oppose a print on the strength of the stock, and if anything reads scarcity as
+urgency to act — the M5 lesson exactly, where a looser Against clause was read as a reason *to*
+print. Schema adherence was perfect (zero fallbacks), so this is not a parsing problem. The one real
+signal is indirect and worth keeping: an adequate store produced nineteen abstentions against
+thirteen and dropped conviction from 0.50 to 0.30, so the model does register that a middling stock
+is a reason to be unsure.
+
+**So the stores constrain the colony in the body, and the council argues about whether it *wants*
+another mind rather than whether it can afford one.** That is `ForkRules.CanFeedAnother`, and the
+scope named it as the fallback: "if stance doesn't move, the resource is invisible to the politics
+and needs a body-side gate in `Detect` instead". It doesn't move. The gate is in `Detect`.
+
+#### What the economy looks like
+
+- **`ChargePerWorkDay = 0.5`** — one colonist-day of paid work, from anyone grown.
+- **`DrawPerHeadPerDay = 0.16`** — every living colonist, grown or not.
+- **`LifeRules.IsGrown`** — the Loom prints adults, so a printed mind pays its way at once; a child
+  has `MaturityDays` (648, a third of a life) of being fed first. A birth therefore costs the colony
+  two years of food, and a print costs 25 charge up front. The two kinds of arrival cost differently,
+  which is new.
+- **`ChargeNeededToPrint(colony)`** replaces the flat 45: a print's cost plus **sixty days of feeding
+  one more mouth than there are now**. About 73 charge at four founders, about 250 at twenty.
+- **`Colony.StoreCapacity`** — 60 in the Loom's own cells, +120 for each raised granary. Surplus past
+  it is not kept, and the colony says so in the feed.
+
+Measured over 2160 days at four founders, `--quiet`, six seeds:
+
+| seed | produced | net | charge range | first print | population |
+|---|---|---|---|---|---|
+| **4** | 1.14/day | **+0.09** | 40..174 | **never** | 4 → 12, by birth alone |
+| 1 | 2.76 | +0.65 | 40..420 | day 353 | 4 → 20 |
+| 2 | 3.28 | +1.05 | 40..420 | day 425 | 4 → 20 |
+| 3 | 2.30 | +0.55 | 40..420 | day 518 | 4 → 20 |
+| 5 | 2.81 | +0.73 | 40..420 | day 500 | 4 → 20 |
+| 6 | 2.63 | +0.64 | 40..420 | day 418 | 4 → 20 |
+
+**This is the first time the Print fork has had an answer that depends on the colony.** Five seeds
+save up and print, somewhere between day 353 and 518 — rare in a life, which is what the original
+design asked for. Seed 4 never does, and not because anybody is frozen: its stores never get past
+41% of capacity and its net is +0.09 a day, so it genuinely cannot afford another mouth and grows by
+birth alone. Before M14 the same seed reached 57.8 charge over the same 2160 days with nobody having
+earned any of it, and never printed either — the difference is that now there is a reason.
+
+**A colony with nowhere to keep anything cannot print at all.** What a print plus two months of one
+more mouth costs is more than the Loom's 60 cells hold at any population, so a granary is a
+precondition. That is deliberate and it is the strongest thing M10's buildings have ever done: *you
+cannot feed another mouth until you have somewhere to keep food.* It also finally gives the Granary
+vote — the one deliberately given the least pressure, because nothing obliges anyone to want one — a
+real answer behind it, and build time rose from 1.4% to 2.7% of the day because of it.
+
+#### Two defects this milestone found
+
+1. **Prints were never capped and births always were.** `ConsiderPairings` has checked
+   `PopulationCap` since M7; the print path never did, which went unnoticed while the Print fork
+   almost never carried. With labour feeding the Loom it carries often, and three seeds ran to **29,
+   41 and 27 living** against a cap of 20 before the cap was moved into `Detect`. The body should not
+   ask a question whose answer it would then refuse to honour.
+2. **The council seated only champions, and that was a quiet bias.** `Council` took whoever was
+   furthest from ordinary on either of the fork's two drives — which systematically seats whichever
+   side of the question has the more extreme archetype in it. The Print fork sets Belonging against
+   Safety, and the largest single weight in the table is the cautious archetype's 1.7 on Safety, so a
+   cautious colonist sat at *every* print; with a stub vote being a function of weights that never
+   change, seed 4 refused every print for its whole existence while sitting on two hundred charge.
+   Build had the same shape at M10 and was patched by changing its axis, which fixed that fork and
+   not the rule underneath it. The council now seats **the champion each way and fills the rest with
+   the least committed**, so there is someone in the room who can be persuaded — which is what the
+   two things that *can* move, the world's pressure and a mind's reading of the stakes, need in
+   order to matter at all.
+
+   **This is the third time the same class of bug has appeared.** Seed 5's 2–2 deadlock at M10, seed
+   4's permanent refusal to build at M12, seed 4's permanent refusal to print here. Any mindless
+   fallback that is a pure function of unchanging state is a decision made once and then frozen, and
+   council *selection* is part of that state.
+
+#### The decision the scope reserved for here: `PopulationCap`
+
+**Not taken — it needs Jeremy.** The cap is now honoured by both arrivals, so the behaviour is
+coherent at 20, and every seed but one reaches it by about day 700 and then sits there for 1,400
+days. That is the hamlet the scope complained about, and it is reached early.
+
+What the measurements say about it:
+- A colony of 20 is **not** short of food. At the cap, with no children, production runs well ahead
+  of the draw, and the stores sit full and spoiling until a granary is raised. So the cap is not
+  doing economic work; the economy would support more.
+- It is doing *thinking* work: every living mind costs the governor, and the Contemplation readout
+  measures served calls against a fixed rate. Twenty minds is roughly what the laptop sustains.
+- So raising it means **minds for the notable and bodies for the rest**, which is an architecture
+  change — a second tier of colonist that acts but does not reflect, and a rule for promotion
+  between them. That is a milestone, not a constant.
+
+Recommendation: leave it at 20 for v2 and schedule the two-tier change as its own milestone after
+M19, where the tier rule can be designed against a colony that is otherwise finished. The alternative
+— raising the constant and letting the governor drop calls — degrades every mind in the colony
+rather than choosing which ones matter.
+
+
 ## M15 — The couplings
 
 **Delivers.** Shortfall aggravates Sustenance through the existing `Drives.Aggravate` channel; sustained

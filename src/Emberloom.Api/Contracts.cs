@@ -197,6 +197,13 @@ public sealed record ColonyStateDto(
     bool IsNight,
     double LoomCharge,
     double UpkeepPerDay,
+
+    /// <summary>M14: what the stores can hold, what went in, what the living take, and the net.</summary>
+    double StoreCapacity,
+    double ProducedPerDay,
+    double DrawPerDay,
+    double ChargeFlowPerDay,
+    bool StoresOverflowing,
     int ArtifactsRecovered,
     int Population,
     int ActionsCompleted,

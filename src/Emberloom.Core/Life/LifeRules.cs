@@ -41,6 +41,20 @@ public static class LifeRules
     public const double PairCooldownDays = BaseLifespanDays * 0.3;
 
     /// <summary>
+    /// Whether this colonist's work feeds the colony yet — M14. The Loom prints grown people, so a
+    /// printed mind pays its way from the hour it wakes; a child does not, and has
+    /// <see cref="MaturityDays"/> of being fed by everyone else first. That is what makes a birth
+    /// cost the colony something, and why a print's cost is the charge it was printed with instead.
+    /// <para>
+    /// Deliberately a lower bar than pairing, which keeps <see cref="MaturityDays"/> for everyone
+    /// including the founders: being able to carry a load and being ready to raise someone are not
+    /// the same threshold, and the second one is the slower of the two in every society.
+    /// </para>
+    /// </summary>
+    public static bool IsGrown(Colonist colonist, double day) =>
+        colonist.Lineage == LineageKind.Printed || colonist.AgeInDays(day) >= MaturityDays;
+
+    /// <summary>
     /// How long a core waits for the colony before it is kept, unread, by default. Deaths can come
     /// faster than councils decide, and cores outrank prints: in the sim a backlog of five waiting
     /// cores held every Print fork off for good.
