@@ -62,6 +62,38 @@ export function DriveBars({
   )
 }
 
+/**
+ * How the life is going, as a bar. Wellbeing has existed since M12 and has only ever been shown as
+ * a word in a line of other words, which is why Jeremy went looking for the work-life balance
+ * metric and could not find it: it was there, spelled "coping", between the mood and the purse.
+ *
+ * The bands are not thirds of [0,1]. Wellbeing is a leaky integrator of how a day was spent and a
+ * measured colony sits between about 0.35 and 0.55, so "well" starts at 0.48 and the whole scale
+ * is marked at the two band edges rather than left to look like a half-empty bar.
+ */
+export function WellbeingBar({ wellbeing, word }: { wellbeing: number; word: string }) {
+  const className =
+    wellbeing < 0.36 ? 'wellbeing-fill is-low' : wellbeing >= 0.6 ? 'wellbeing-fill is-high' : 'wellbeing-fill'
+
+  return (
+    <div
+      className="wellbeing"
+      title={`How this life is going, from how the days are spent: work presses it down, rest and company lift it, and a drive left pressing holds it there. Below ${DESPAIR_BELOW} it starts costing days off the end of the life.`}
+    >
+      <span className="drive-name">life</span>
+      <span className="drive-track">
+        <span className={className} style={{ width: `${Math.round(wellbeing * 100)}%` }} />
+      </span>
+      <span className="wellbeing-word">
+        {word} · {wellbeing.toFixed(2)}
+      </span>
+    </div>
+  )
+}
+
+/** Where WellbeingRules starts taking days off a life. Shown so the bar has a meaning, not a middle. */
+const DESPAIR_BELOW = 0.38
+
 export function Roster({
   colonists,
   selectedId,
@@ -100,6 +132,9 @@ export function Roster({
                 )}
               </span>
               <DriveBars drives={colonist.drives} dominant={colonist.dominantDrive} mini />
+              {colonist.isAlive && (
+                <WellbeingBar wellbeing={colonist.wellbeing} word={colonist.wellbeingWord} />
+              )}
             </button>
           </li>
         ))}
@@ -525,6 +560,17 @@ function NowTab({ detail, links }: { detail: ColonistDetail; links: Links }) {
             </div>
           ))}
         </div>
+      </section>
+
+      <section>
+        <h3>How the life is going</h3>
+        <WellbeingBar wellbeing={colonist.wellbeing} word={colonist.wellbeingWord} />
+        <p className="row-meta" style={{ marginTop: 8 }}>
+          Work presses it down and rest, company and an evening out lift it, each at the ease of the
+          thing being done; a drive left pressing holds it down whatever they are doing. Under{' '}
+          {DESPAIR_BELOW} it starts taking days off the end of the life — {colonist.displayName} has
+          lost {colonist.daysLostToDespair.toFixed(0)} so far.
+        </p>
       </section>
 
       <section>

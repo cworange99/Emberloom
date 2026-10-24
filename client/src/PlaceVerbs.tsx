@@ -84,7 +84,11 @@ export function PlaceVerbs({
 
   return (
     <div className="place-verbs" onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()}>
-      <span className="head">The Loom's charge · {Math.floor(charge)}</span>
+      {/* The same number the header shows, named the same way. These verbs spend it, and a
+          player who reads one figure here and another up there is reading two resources. */}
+      <span className="head" title="The colony's one stock, shown in the header too: what they eat, what lights the dark places, and what a new mind is made of.">
+        The Loom · {Math.floor(charge)}
+      </span>
 
       {blocked && (
         <button disabled={busy} onClick={() => void act('provide', 'Door')}>

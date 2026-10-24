@@ -793,7 +793,23 @@ public sealed class BodySimulation
     {
         if (_colony.OpenFork is { } open)
         {
-            var timedOut = open.AwaitingMinds == 0 && _colony.Day - open.OpenedOnDay >= ForkRules.TimeoutDays;
+            // The deadline applies whether or not minds are still working on it. It used to wait
+            // for them however long they took, which is the right instinct at a speed somebody is
+            // watching and quite wrong at one nobody is: a vote is bounded in real time by the
+            // governor and in colony time by nothing, so at Overnight a single fork stood the
+            // council in the plaza for a dozen colony-days. That is not merely slow — deliberating
+            // relieves the very drives a fork is weighed on, so a long vote is a vote that argues
+            // itself down. Anyone whose mind has not come back by the deadline is counted by where
+            // they stood, which is the same bargain the whole governor makes: go faster and the
+            // colony thinks less per day.
+            //
+            // And the deadline is only the backstop. A fork with every mind back — or with the
+            // seats the governor never found room for simply never coming — has nothing further to
+            // wait for and is counted at once. Standing there anyway is what made one vote take
+            // over an hour of real time: three colony-days at 1x, with the auto-slow holding the
+            // clock down, in front of a question nobody was still answering.
+            var timedOut = _colony.Day - open.OpenedOnDay >= ForkRules.TimeoutDays
+                           || open.NothingLeftToWaitFor;
             if (open.AllVoted || timedOut)
             {
                 ResolveFork(open);
@@ -826,7 +842,8 @@ public sealed class BodySimulation
         {
             if (_colony.Find(id) is { } missing)
             {
-                fork.Cast(id, ForkRules.FallbackVote(fork.Kind, missing, fork.Pressure));
+                fork.Cast(id, ForkRules.FallbackVote(fork.Kind, missing, fork.Pressure,
+                    fork.Standing.TryGetValue(id, out var stood) ? stood : null));
             }
         }
 

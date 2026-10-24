@@ -176,10 +176,14 @@ export default function App() {
             <dt>Hour</dt>
             <dd>{formatTimeOfDay(state.timeOfDay)}</dd>
           </div>
+          {/* One stock, one name. It was labelled "Stores" here and "The Loom's charge" on every
+              room bar and in the Print verb, which read as two resources and is one: since M14 the
+              colony's labour feeds the Loom, the living draw on it to eat, your light and warmth
+              cost it, and a print spends it. */}
           <div className="readout">
-            <dt>Stores</dt>
+            <dt>The Loom</dt>
             <dd
-              title={`The colony's one stock. Work puts ${state.producedPerDay.toFixed(2)} a day in; the living take ${state.drawPerDay.toFixed(2)}; your light and warmth cost ${state.upkeepPerDay.toFixed(2)}. It holds ${state.storeCapacity.toFixed(0)} — raise a granary to hold more.`}
+              title={`The colony's one stock — what they eat, what lights the dark places, and what a new mind is made of. Work puts ${state.producedPerDay.toFixed(2)} a day in; the living take ${state.drawPerDay.toFixed(2)}; your light and warmth cost ${state.upkeepPerDay.toFixed(2)}. It holds ${state.storeCapacity.toFixed(0)} — raise a granary to hold more.`}
             >
               {state.loomCharge.toFixed(0)}
               <span className="of">of {state.storeCapacity.toFixed(0)}</span>
@@ -191,6 +195,22 @@ export default function App() {
                   {Math.abs(state.chargeFlowPerDay).toFixed(2)}/d
                 </span>
               )}
+            </dd>
+          </div>
+          {/* What the charge is actually for, and the bar it has to clear before the colony is
+              even asked. A flat "a print costs 25" was true of the spend and not of the decision. */}
+          <div
+            className={state.canFeedAnother ? 'readout' : 'readout is-mind'}
+            title={
+              state.canFeedAnother
+                ? 'The Loom holds enough to print another mind and still feed everyone for two months. The colony can be asked.'
+                : 'A print costs 25, and the colony keeps two months of feeding one more mouth behind it. Until the Loom holds this much, the question is not put.'
+            }
+          >
+            <dt>A print needs</dt>
+            <dd>
+              {state.chargeToPrint.toFixed(0)}
+              <span className="of">{state.canFeedAnother ? 'affordable' : 'not yet'}</span>
             </dd>
           </div>
           <div className="readout">

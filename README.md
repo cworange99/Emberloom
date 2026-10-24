@@ -32,6 +32,7 @@ below.
 | **M17** — rooms that look like the building | **Done.** Furniture that belongs together is placed together: a rug under its table, chairs facing it, nothing standing inside anything else. And `assets/fetch-kits.ps1`, so a fresh clone is not an empty scene. |
 | **M18** — the chronicle and the story | **Done.** The record is budgeted in lines rather than colony-days, and what it gives up it summarises. The myth is told what is new since it was last told — retellings keep 76% of their wording now, where 158 of them once came back near word for word. |
 | **M19** — the title | **Done.** *Emberloom: What They Left Running*, after a trademark and storefront search. *Project Emberloom* stays as the repository. |
+| **After the first play** | **Done.** Playing it found the worst defect in the project: a council deliberates in the plaza, and deliberating relieves the very drive a fork is weighed on, so debating whether the colony wanted another person cured the loneliness and seed 4 refused sixteen prints in a row. A vote is now answered on where people stood when the question was put. Seed 4 went from seven living to the population cap. See [V2-REPORT.md](V2-REPORT.md). |
 
 ## Layout
 
@@ -39,7 +40,7 @@ below.
 src/Emberloom.Core    the body — drives, actions, world, memory, relationships (no model calls)
 src/Emberloom.Mind    the mind — Ollama transport, call schemas, token budgets
 src/Emberloom.Bench   M0 benchmark harness
-src/Emberloom.Sim     headless watcher for the body, and the balance sweep
+src/Emberloom.Sim     headless watcher for the body, the balance sweep, and the fork census
 src/Emberloom.Api     HTTP/WebSocket host; also mounts assets/kit/ at /kit
 client/               React + TypeScript client, built into the API's wwwroot
 assets/               the Kenney CC0 art kits, served at /kit (see assets/README.md)

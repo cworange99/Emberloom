@@ -114,6 +114,8 @@ export interface ColonyState {
   timeOfDay: number
   isNight: boolean
   loomCharge: number
+  chargeToPrint: number
+  canFeedAnother: boolean
   /** What the player's light and warmth cost, in charge per colony-day. */
   upkeepPerDay: number
   /** M14: what the stores hold, what the work put in, what the living take, and the net. */

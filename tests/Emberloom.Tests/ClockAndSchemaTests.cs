@@ -196,6 +196,11 @@ public class ClockTests
         Assert.Equal(GameSpeed.Normal, clock.Speed);
     }
 
+    /// <summary>
+    /// Both holds can be on at once, and the speed comes back only when both are off. Each used to
+    /// guard itself with "the clock is already at 1x, so there is nothing to do", which is true of
+    /// the speed and false of the hold.
+    /// </summary>
     [Fact]
     public void AThrottleDuringADecisionDoesNotLoseTheSpeedBehindBoth()
     {
@@ -205,8 +210,35 @@ public class ClockTests
         clock.SlowForEvent();
         clock.ThrottleForThought();
 
-        // The throttle sees 1x and declines to save it; the fork's own memory is what restores.
-        Assert.False(clock.ThrottledByGovernor);
+        Assert.True(clock.SlowedForEvent);
+        Assert.True(clock.ThrottledByGovernor);
+        Assert.Equal(GameSpeed.Normal, clock.Speed);
+
+        clock.ResumeAfterEvent();
+        Assert.Equal(GameSpeed.Normal, clock.Speed);
+
+        clock.ReleaseThrottle();
+        Assert.Equal(GameSpeed.Fastest, clock.Speed);
+    }
+
+    /// <summary>
+    /// The other order, which is the one that was actually broken: a throttle lands first, the
+    /// clock is already at 1x, and the fork that opens a moment later finds nothing to do. When the
+    /// budget freed up the colony went back to 60x with the vote still open — which is how a vote
+    /// Jeremy was watching ran for several colony-days with auto-slow switched on.
+    /// </summary>
+    [Fact]
+    public void ADecisionDuringAThrottleStillHoldsTheSpeedDown()
+    {
+        var clock = new SimulationClock { AutoSlowOnEvent = true };
+        clock.SetSpeed(GameSpeed.Fastest);
+
+        clock.ThrottleForThought();
+        clock.SlowForEvent();
+        clock.ReleaseThrottle();
+
+        Assert.True(clock.SlowedForEvent);
+        Assert.Equal(GameSpeed.Normal, clock.Speed);
 
         clock.ResumeAfterEvent();
         Assert.Equal(GameSpeed.Fastest, clock.Speed);

@@ -1138,3 +1138,204 @@ looked like balance until they were measured.
 **End-to-end, at the close of the sequence:** start a colony at 4 founders in Hybrid mode, run it to the
 first raised building, save it, restart the process, load it, confirm the colony continues with its
 people named and its buildings standing, then run it overnight and read the chronicle in the morning.
+
+---
+
+# After the first play — 24 October 2026
+
+Version 2 closed, Jeremy played it, and wrote down six things. Four were questions and two were
+faults, and between them they found **the worst defect in the project so far** — one that no test,
+no sim run and no overnight chronicle had caught, because every instrument that existed measured
+outcomes and the defect was in the mechanism.
+
+## The vote that argued itself out of existence
+
+A fork is decided in the plaza, and the council sits there deliberating while it is open.
+`ActionCatalog.Deliberate` relieves **Belonging at 1.20 a day** — the strongest supply of Belonging
+anywhere in the catalogue. `ForkRules.Pulls(Print)` weighs **Belonging against Safety**.
+
+So debating whether the colony is lonely enough to want another person **cured the loneliness**, and
+by the time the vote was counted the reason for it was gone.
+
+It is not only Print. `Deliberate` also relieves Meaning, which is Build's for-drive, and Standing.
+**Nothing it relieves is ever a fork's against-drive.** Holding a vote has therefore always biased it
+towards the status quo, on every question a colony can face, by an amount that grows with how long
+the vote takes — which is to say with how fast the game is running.
+
+**Measured with the new `Emberloom.Sim --forks`**, which prints each seated member's standing when
+the question is put and again when it is counted. Seed 4, the seed the game ships:
+
+| print | voter | when asked | when counted | cast |
+|---|---|---|---|---|
+| d462 | Aratha | +0.88 | +0.68 | For |
+| d462 | Tuven | **+0.07** | **−0.24** | Against |
+| d462 | Marauth | **+0.04** | **−0.21** | Against |
+| d584 | Tuven | **+0.05** | **−0.24** | Against |
+| d584 | Marauth | **+0.05** | **−0.25** | Against |
+
+Every voter moves against, every time, by 0.16 to 0.30. Twice the colony had a majority in favour at
+the moment it asked itself the question and a majority against three colony-days later, having done
+nothing in between but discuss it.
+
+**Sixteen prints were put to seed 4 over 2,160 days and not one carried.** It ended at seven living,
+sitting on 284 charge with 254 days of stores and eleven unbuilt sites. That is the colony Jeremy
+played, and it is why almost two colony-years went by with no new minds.
+
+### The fix
+
+`Fork.Standing` — each seated member's position on the fork's two drives, **read once, when the
+question is put**, and carried on the fork beside the `Pressure` that has been snapshotted for
+exactly the same reason since M12. `FallbackVote` reads the snapshot. Nothing the council does to
+itself during the vote can move the vote.
+
+> A fork is a question about a moment, so the moment is what it is answered on.
+
+**What it bought**, same three seeds, same 2,160 days, no mind at all:
+
+| | prints carried | builds carried | ended at | died early | wellbeing |
+|---|---|---|---|---|---|
+| seed 4, before | **0 of 16** | 5 of 35 | 7 living | 8 of 8 lives, 90 days each | 0.424 *coping* |
+| seed 4, after | **12 of 19** | 12 of 19 | **20 living** | **0 of 20** | **0.488 _well_** |
+| seed 7, after | 15 of 15 | 12 of 14 | 20 living | — | — |
+| seed 11, after | 13 of 21 | 12 of 12 | 20 living | — | — |
+
+The first print on seed 4 moves from **never** to **day 464**, and what is left of the wait is the
+economy rather than the politics: the census attributes 491 of those days to the Loom genuinely not
+holding enough to feed another mouth. Free time rises from 12.9% of the day to 18.5% and social from
+6.0% to 12.0%, because there are people to spend it with. **Despair stops taking days off lives
+entirely** — it was taking 90 on average and 252 at worst, and that turns out to have been a symptom
+of a colony too small to be good company rather than of the M15 coupling being mistuned.
+
+`--sweep` re-run at the new balance: at 3.0 the spread is 0.34 with the physical drives at
+0.15 / 0.19 / 0.27 and Belonging and Standing carrying the pressure at 0.49 / 0.48. The bar written
+in the sweep's own doc comment still passes, so `ReliefScale` stays at 3.0.
+
+### The fourth time, and the general form
+
+This is the same family as `Fork.Pressure` (M12), council selection (M14) and `Propose`'s ordering
+(M15), but it is a genuinely new mechanism, and the general statement is now larger than the one
+written at M15:
+
+> **A decision must not be a pure function of state that the act of deciding changes.** The first
+> three were decisions frozen because nothing could move them. This one moved — against itself,
+> every time, by construction.
+
+## The new instrument: `Emberloom.Sim --forks`
+
+The reason this survived twelve milestones of measurement is that **a tally of outcomes cannot tell
+a colony that decided against growth from a colony that was never able to decide for it.** Every
+existing readout counted what happened. This one counts what did not, and says why:
+
+```
+The print question, day by day, over 2,160 days:
+  the Loom could have printed             786
+  the question was free to be asked         3
+  held: at the population cap             824
+  held: put off after a no                687
+  held: the stores could not feed another 491
+  held: another question already open     156
+```
+
+It samples the Print gate once a colony-day, in `Detect`'s own order, and attributes every day the
+question was not asked to the first gate holding it shut — so the column reads as *what would have
+to change for the colony to be asked tomorrow*. It also prints every fork with its tally, and every
+print council's standing at both ends of the vote, which is what made the defect above visible in a
+single run.
+
+## The clock: two holds, not two memories
+
+Two things can hold the clock at 1x — the governor, when a turning point cannot be served fast
+enough, and a fork, when the player asked to be slowed for one. Each **saved the speed it had
+interrupted and put it back on release**, and each guarded itself with *"the clock is already at 1x,
+so there is nothing to do"*, which is true of the speed and false of the hold.
+
+So a governor throttle landing a moment before a fork opened swallowed that fork's auto-slow
+entirely, and when the throttle lifted — as it does the moment the budget frees up — the colony went
+back to 60x **with the vote still open**. Which is what Jeremy watched: a vote running for several
+colony-days with auto-slow switched on.
+
+Holds no longer stack or save anything. Each is a flag, `Speed` is the player's choice or 1x
+whichever is slower, and the player's own choice clears them all. Two tests, one per order.
+
+## A vote is now bounded in colony-days
+
+`ForkRules.TimeoutDays = 3.0` used to apply only when **no** mind was still working on the fork, so
+a vote was bounded in real time by the governor and in colony time by nothing. At Overnight that
+stood a council in the plaza for a dozen colony-days. It now applies either way: three colony-days
+is three real hours at 1x and forty-five real seconds at Overnight, and anyone whose mind has not
+come back is counted by where they stood. That is the bargain the governor makes everywhere else —
+go faster and the colony thinks less per day — stated for votes.
+
+## The hour
+
+Two mechanisms, and neither was the model being slow. A deliberation call takes about twenty-two
+seconds on this laptop, and a three-seat council measured **105 real seconds end to end, costing the
+colony 0.02 of a day** — opened d2.54 at 21:49:55, counted by 21:51:45, with the clock dropping to
+1x and coming back to 60x by itself.
+
+**First**, `MindGovernor.Submit` refused *undroppable* work when the queue was at depth with nothing
+droppable in it to make room:
+
+```csharp
+if (weakest is null || (!request.Undroppable && weakest.Priority >= request.Priority))
+{
+    _dropped++;
+    return false;
+}
+```
+
+`weakest is null` means every one of the thirty-two queued calls is itself undroppable — which is
+exactly what the queue looks like when the colony is busy kindling new minds and a fork opens. The
+refused seat's `AwaitingMinds` was never incremented, so **a council seat silently never got a mind
+and its vote was never coming**. The depth cap is there so the queue does not serve stale work for
+ever; undroppable work is never stale, so it now always enqueues.
+
+**Second**, a fork with nothing left to wait for stood until its deadline anyway. The seats that
+*were* submitted came back inside a minute, `AwaitingMinds` hit zero, and the fork then sat out the
+rest of its three colony-days — **three real hours at 1x, with the auto-slow holding the clock
+there**, in front of a question nobody was still answering. `Fork.NothingLeftToWaitFor` counts it as
+soon as every mind that was ever going to answer has.
+
+That is the hour, and the "several days in colony time" is the three-day deadline it was waiting
+out. The deadline is now only the backstop.
+
+## The drive bars have never drawn
+
+`.drive-fill` is a `<span>` inside a block, so it is `display: inline`, and an inline box has no
+width or height to set. **Every bar in the game measured 0×0 from M1 until now.** The black strips
+are the empty tracks, and the tracks are darker than the surface in dark mode because they are meant
+to be grooves. The roster's seven little bars had a second fault of the same kind: hiding the name
+and the value left the track as the only item in a three-column grid whose first column was `0`.
+
+Neither was caught in nineteen milestones because the number printed beside each bar was right all
+along, so the panel read as correct.
+
+## Wellbeing was there, and invisible
+
+M12's wellbeing has been in the DTO and on screen since it was built — as **one word**, in a line of
+other words, between the mood and the purse. That is why the work-life balance metric could not be
+found: it was spelled *coping*.
+
+It now has a bar of its own in the roster and a section in the inspector, scaled against the bands
+`WellbeingRules.Describe` actually uses rather than against thirds of [0,1], and captioned with what
+moves it and what it costs: under 0.38 it starts taking days off the end of the life.
+
+## One stock, one name
+
+Since M14 the Loom's charge is the colony's single resource — labour feeds it, the living eat from
+it, the player's light and warmth cost it, and a print spends it. The header called it **Stores**
+while every room bar and the Print verb called it **the Loom's charge**, which reads as two
+resources and is one. Both now say *The Loom*.
+
+The header also carried a flat `a print costs 25`, which is true of the spend and false of the
+decision: the colony is not asked until the Loom holds the print **plus two months of feeding one
+more mouth**, which is 73 at four founders and about 250 at twenty. That figure is now a readout of
+its own, with whether it is currently clear.
+
+## Still Jeremy's, unchanged
+
+- **`LifeRules.PopulationCap = 20`.** Worth restating now that it actually binds. Before this round
+  seed 4 never came near it, and the "10" in the notes was that colony's *measured* ending
+  population, not a cap. All three seeds now sit at 20 for most of their lives — seed 7 spends 1,281
+  of 2,160 days there. Raising it means minds for the notable and bodies for the rest.
+- **The five fragments in `Revelations.cs`.**

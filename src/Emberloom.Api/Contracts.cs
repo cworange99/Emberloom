@@ -210,6 +210,16 @@ public sealed record ColonyStateDto(
     double ChargeFlowPerDay,
     bool StoresOverflowing,
     double Shortfall,
+
+    /// <summary>
+    /// What the Loom must hold before the colony will even be asked about a print — the print
+    /// itself plus two months of feeding one more mouth, so it rises as the colony grows. Sent
+    /// because the client was showing a flat print cost of 25 while the body was waiting for
+    /// something between 73 and 250, which made the readout a lie about the only question the
+    /// charge is spent on.
+    /// </summary>
+    double ChargeToPrint,
+    bool CanFeedAnother,
     int Beds,
 
     /// <summary>M16: how far the player reaches into this colony, and what they have asked of it.</summary>

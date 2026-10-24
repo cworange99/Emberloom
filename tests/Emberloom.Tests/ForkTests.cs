@@ -245,22 +245,119 @@ public class ForkTests
     }
 
     /// <summary>
-    /// The timeout is in colony days, and at 60x a colony day passes in seconds. A fork still waiting
-    /// on its council's minds must not decide without them just because the clock is running fast.
+    /// **The council must not be able to argue a question away while it is being asked.**
+    /// <para>
+    /// A fork is decided in the plaza, and <c>Deliberate</c> relieves Belonging at 1.20 a day — the
+    /// strongest supply of it anywhere in the catalogue. The Print fork weighs Belonging against
+    /// Safety. So debating whether the colony is lonely enough to want another person cured the
+    /// loneliness, and nobody wanted one by the time the vote was counted: seed 4 was asked sixteen
+    /// times over 2,160 days and refused every one, twice from a position where every seated voter
+    /// had been in favour when the question was put.
+    /// </para>
+    /// <para>
+    /// Nothing the council does to itself during the vote may move the vote. The personal half of a
+    /// mindless vote is read once, when the question is put, and carried on the fork beside the
+    /// pressure that is already snapshotted for exactly the same reason.
+    /// </para>
     /// </summary>
     [Fact]
-    public void AForkStillWaitingOnMindsDoesNotTimeOut()
+    public void DeliberatingDoesNotTalkTheCouncilOutOfTheQuestion()
     {
         var (colony, body) = Start();
         var fork = OpenPrint(colony);
-        fork.AwaitingMinds = 3;
+
+        var before = fork.Participants
+            .Select(id => colony.Find(id)!)
+            .ToDictionary(c => c.Id, c => ForkRules.Standing(ForkKind.Print, c));
+
+        // Exactly what sitting in council does to them, and nothing else: the drive the question
+        // turns on, satisfied by the act of discussing it.
+        foreach (var id in fork.Participants)
+        {
+            colony.Find(id)!.Drives.Relieve(ActionCatalog.Deliberate.Relief, 3.0);
+        }
+
+        Assert.All(fork.Participants, id =>
+            Assert.True(ForkRules.Standing(ForkKind.Print, colony.Find(id)!) < before[id] - 0.05,
+                "the test's own premise: deliberating should have moved them against"));
+
+        foreach (var id in fork.Participants)
+        {
+            Assert.Equal(before[id], fork.Standing[id], 6);
+        }
 
         for (var tick = 0; tick < (ForkRules.TimeoutDays + 0.5) * Colony.TicksPerDay; tick++)
         {
             body.Tick();
         }
 
+        Assert.False(fork.IsOpen);
+
+        // Every vote cast on what they came in with, not on what the council did to them.
+        foreach (var (id, vote) in fork.Spoken)
+        {
+            var expected = ForkRules.FallbackVote(ForkKind.Print, colony.Find(id)!, fork.Pressure, before[id]);
+            Assert.Equal(expected.Stance, vote.Stance);
+        }
+    }
+
+        /// <summary>
+    /// A seat the governor never found room for is a vote that will never arrive, and a fork with
+    /// nothing left to wait for must be counted rather than stand until its deadline. It stood:
+    /// three colony-days at 1x is three real hours, and the auto-slow holds the clock there — which
+    /// is how one vote took over an hour of real time in front of a question nobody was answering.
+    /// </summary>
+    [Fact]
+    public void AForkWithNothingLeftToWaitForIsCountedAtOnce()
+    {
+        var (colony, body) = Start();
+        var fork = OpenPrint(colony);
+
+        // Two seats were handed to a mind and the third was refused by a full queue.
+        fork.MindsAsked = 2;
+        fork.AwaitingMinds = 2;
+
+        body.Tick();
         Assert.True(fork.IsOpen);
+
+        // Both of those minds come back without a vote between them, which is what a pair of
+        // failed calls leaves behind. Nothing further can arrive.
+        fork.AwaitingMinds = 0;
+        body.Tick();
+
+        Assert.False(fork.IsOpen);
+        Assert.True(colony.Day - (fork.ResolvedOnDay ?? 0) <= 0);
+        Assert.True(fork.ResolvedOnDay - fork.OpenedOnDay < ForkRules.TimeoutDays);
+    }
+
+    /// <summary>
+    /// A vote is bounded in colony-days whether or not minds are still working on it. It used to
+    /// wait for them however long they took, which is right at a speed somebody is watching and
+    /// wrong at one nobody is: nothing bounded it in colony time, so at Overnight one fork stood
+    /// the council in the plaza for a dozen colony-days — and deliberating relieves the very drives
+    /// the fork is weighed on. Anyone whose mind has not come back is counted by where they stood.
+    /// </summary>
+    [Fact]
+    public void AForkIsCountedOnceItsDeadlinePassesEvenWithMindsStillWorking()
+    {
+        var (colony, body) = Start();
+        var fork = OpenPrint(colony);
+        fork.AwaitingMinds = 3;
+
+        for (var tick = 0; tick < (ForkRules.TimeoutDays - 0.5) * Colony.TicksPerDay; tick++)
+        {
+            body.Tick();
+        }
+
+        Assert.True(fork.IsOpen);
+
+        for (var tick = 0; tick < Colony.TicksPerDay; tick++)
+        {
+            body.Tick();
+        }
+
+        Assert.False(fork.IsOpen);
+        Assert.All(fork.Votes.Values, v => Assert.True(v.WasFallback));
     }
 
     [Fact]

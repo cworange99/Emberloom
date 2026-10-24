@@ -87,6 +87,50 @@ public sealed class Fork
     /// </summary>
     public double Pressure { get; init; }
 
+    /// <summary>
+    /// Where each council member stood the moment the question was put, on the fork's own two
+    /// drives — and the reason it is a snapshot is the sharpest thing version 2 measured.
+    /// <para>
+    /// A council sits in the plaza and deliberates, and <c>Deliberate</c> relieves Belonging at
+    /// 1.20 a day, the strongest supply of it in the catalogue. The Print fork weighs Belonging
+    /// against Safety. So the act of debating whether the colony is lonely enough to want another
+    /// person *cures the loneliness*, and by the time the vote is counted the reason for it is
+    /// gone. Measured on seed 4: at two separate prints the two cautious voters stood at +0.07 and
+    /// +0.04 when the question was asked — a yes — and at -0.24 and -0.21 three colony days later
+    /// when it was counted. Sixteen prints were put to that colony over 2,160 days and not one
+    /// carried.
+    /// </para>
+    /// <para>
+    /// It is not only Print. <c>Deliberate</c> also relieves Meaning, which is Build's for-drive,
+    /// and Standing; nothing it relieves is ever a fork's *against*-drive. So holding a vote has
+    /// always biased it towards the status quo, on every question the colony can face, by an
+    /// amount that grows with how long the vote takes — which is to say with how fast the game is
+    /// running. A fork is a question about a moment, so the moment is what it is answered on.
+    /// </para>
+    /// </summary>
+    public IReadOnlyDictionary<string, double> Standing { get; private set; } =
+        new Dictionary<string, double>();
+
+    /// <summary>
+    /// Reads every seated member's standing now, while the question is still fresh. Called once,
+    /// by whichever factory opened the fork, and by the loader restoring one.
+    /// </summary>
+    internal Fork WithStanding(Colony colony)
+    {
+        Standing = Participants
+            .Select(id => (Id: id, Of: colony.Find(id)))
+            .Where(p => p.Of is not null)
+            .ToDictionary(p => p.Id, p => ForkRules.Standing(Kind, p.Of!));
+
+        return this;
+    }
+
+    internal Fork WithStanding(IReadOnlyDictionary<string, double> standing)
+    {
+        Standing = standing;
+        return this;
+    }
+
     /// <summary>For an Ascend fork, the place the colony is deciding whether to go up to.</summary>
     public string? SubjectPlaceId { get; init; }
 
@@ -119,6 +163,22 @@ public sealed class Fork
     /// is for a colony with no mind at all, where nothing is ever pending.
     /// </summary>
     public int AwaitingMinds { get; set; }
+
+    /// <summary>
+    /// How many seats were actually handed to a mind. It is not always every seat: the governor
+    /// refuses work when the queue is at depth, and a seat that was never asked is a vote that will
+    /// never arrive. Knowing the difference is what lets a fork tell "still being thought about"
+    /// from "nothing further is coming" — see <see cref="BodySimulation"/>'s AdvanceForks.
+    /// </summary>
+    public int MindsAsked { get; set; }
+
+    /// <summary>
+    /// True when every mind that was ever going to answer has. A fork in this state has nothing
+    /// left to wait for and should be counted at once rather than standing until its deadline —
+    /// which, at 1x with the auto-slow holding, is three real hours of a colony frozen in front of
+    /// a question nobody is still answering.
+    /// </summary>
+    public bool NothingLeftToWaitFor => MindsAsked > 0 && AwaitingMinds == 0;
 
     public IReadOnlyDictionary<string, Vote> Votes => _votes;
 
@@ -221,8 +281,15 @@ public static class ForkRules
     public const double EarliestDay = 2.0;
 
     /// <summary>
-    /// How long a fork with no minds working on it waits before deciding on where everyone stands.
-    /// Only a colony with no mind at all ever reaches it; see <see cref="Fork.AwaitingMinds"/>.
+    /// How long a question may stand open before it is counted, in colony-days — whether or not
+    /// anyone's mind is still working on it.
+    /// <para>
+    /// Three colony-days is three real hours at 1x and forty-five real seconds at Overnight, which
+    /// is the bargain the governor makes everywhere else stated for votes: a watched colony waits
+    /// for every mind, and an unwatched one gets as much thought as its speed can pay for and
+    /// counts the rest by where people stood. Bounding it at all is what stops a vote from
+    /// outlasting its own reason — see <see cref="Fork.Standing"/>.
+    /// </para>
     /// </summary>
     public const double TimeoutDays = 3.0;
 
@@ -629,7 +696,7 @@ public static class ForkRules
     /// with them. Thin on purpose, and marked as a fallback, so a colony running on stubs still
     /// decides but never looks like it argued.
     /// </summary>
-    public static Vote FallbackVote(ForkKind kind, Colonist colonist, double pressure = 0)
+    public static Vote FallbackVote(ForkKind kind, Colonist colonist, double pressure = 0, double? standing = null)
     {
         var (forDrive, againstDrive) = Pulls(kind);
 
@@ -643,8 +710,7 @@ public static class ForkRules
         // "shall we build?" is decided once at colony creation and never revisited. PressureWeight
         // is sized so that a plainly needed building carries someone who would rather rest, while
         // one the colony merely could have still has to be argued for.
-        var lean = colonist.Weights[forDrive] - colonist.Weights[againstDrive]
-                   + (colonist.Drives[forDrive] - colonist.Drives[againstDrive]) * 0.5
+        var lean = (standing ?? Standing(kind, colonist))
                    + pressure * PressureWeight
                    + Leaning(kind);
 
@@ -676,6 +742,24 @@ public static class ForkRules
     /// preference. See <see cref="Fork.Pressure"/>.
     /// </summary>
     public const double PressureWeight = 0.6;
+
+    /// <summary>
+    /// The personal half of a vote: who they are, plus how they are today, on this fork's two
+    /// drives. Read once when the question is put and carried on the fork — see
+    /// <see cref="Fork.Standing"/> for why it must not be read again when the vote is counted.
+    /// </summary>
+    public static double Standing(ForkKind kind, Colonist colonist)
+    {
+        var (forDrive, againstDrive) = Pulls(kind);
+
+        // Weights are who they are; levels are how they are today. Without the second term a stub
+        // vote is a constant, and the same council answers the same question identically for ever —
+        // which is what made a deadlocked colony of four deadlocked for its whole life rather than
+        // just this once. Someone whose Standing is pressing wants the thing built this month even
+        // if they are not, in general, the sort who does.
+        return colonist.Weights[forDrive] - colonist.Weights[againstDrive]
+               + (colonist.Drives[forDrive] - colonist.Drives[againstDrive]) * 0.5;
+    }
 
     private static string StockLine(ForkKind kind, Stance stance) => (kind, stance) switch
     {
@@ -717,7 +801,7 @@ public static class ForkRules
                 .Take(Seats(colony))
                 .Select(c => c.Id)
                 .ToList()
-        };
+        }.WithStanding(colony);
     }
 
     private static Fork Open(
@@ -730,7 +814,7 @@ public static class ForkRules
         double pressure = 0,
         string? forMeans = null,
         string? againstMeans = null,
-        string? abstainMeans = null) => new()
+        string? abstainMeans = null) => new Fork()
     {
         Id = $"fork-{colony.ForkHistory.Count + 1}",
         Kind = kind,
@@ -745,5 +829,5 @@ public static class ForkRules
         PlaceId = colony.Map.OfKind(PlaceKind.Plaza).FirstOrDefault()?.Id ?? "plaza",
         OpenedOnDay = colony.Day,
         Participants = Council(colony, kind)
-    };
+    }.WithStanding(colony);
 }

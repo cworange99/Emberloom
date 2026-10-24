@@ -106,7 +106,13 @@ public sealed class MindGovernor : IDisposable, IAsyncDisposable
                 return false;
             }
 
-            if (_queue.Count >= _maxQueueDepth)
+            // The depth cap exists so the queue does not serve stale work for ever, and undroppable
+            // work is never stale: a council seat or a newborn mind is wanted whenever it arrives.
+            // It used to be refused all the same when the queue held nothing droppable to make room
+            // — which happens exactly when the colony is busiest with kindlings and a fork opens —
+            // and a refused Deliberation is a seat that silently never gets a mind. The fork then
+            // waited out its whole deadline for a vote that was never coming.
+            if (_queue.Count >= _maxQueueDepth && !request.Undroppable)
             {
                 var weakest = _queue
                     .Where(r => !r.Undroppable)
@@ -115,8 +121,8 @@ public sealed class MindGovernor : IDisposable, IAsyncDisposable
                     .FirstOrDefault();
 
                 // Nothing droppable and nothing cheaper than this: refuse rather than grow without
-                // bound. A queue that never refuses is a queue that serves stale work forever.
-                if (weakest is null || (!request.Undroppable && weakest.Priority >= request.Priority))
+                // bound. A queue that never refuses is a queue that serves stale work for ever.
+                if (weakest is null || weakest.Priority >= request.Priority)
                 {
                     _dropped++;
                     return false;

@@ -93,6 +93,20 @@ Do not re-derive these.
 - **Keep raw numbers out of prompts.** The model reads every figure as something the colonist
   knows and hands it back as a belief ("Teachers who have a valence of +0.35 with me…").
   Feelings and weights go in as words.
+- **A decision must not be a pure function of state that the act of deciding changes.** Found four
+  times. The first three were votes frozen because nothing could move them. The fourth moved
+  *against itself*: a council deliberates in the plaza, `Deliberate` relieves Belonging at 1.20 a
+  day, and the Print fork weighs Belonging against Safety — so debating whether the colony was
+  lonely enough to want another person cured the loneliness, and seed 4 refused sixteen prints in a
+  row. Anything a fork is weighed on is snapshotted when the question is put (`Fork.Pressure`,
+  `Fork.Standing`). Check this whenever a new fork axis or a new relief is added.
+- **An outcome tally cannot find a decision that was never put.** Twelve milestones of measurement
+  missed the above because every readout counted what happened. `Emberloom.Sim --forks` counts the
+  days the question was *not* asked and names the gate that held it shut. When something "never
+  happens", measure the gate, not the outcome.
+- **A `<span>` inside a block is `display: inline`, and an inline box has no width or height.**
+  Every drive bar in the client measured 0x0 from M1 to M19 — nineteen milestones of looking at
+  them — because the number printed beside each bar was right, so the panel read as correct.
 - **Embeddings don't separate a paraphrase from a related belief below ~0.92.** On
   nomic-embed-text, "I am useful" / "My usefulness is proven" scored 0.85, below two genuinely
   different beliefs about the Loom. Merging duplicate beliefs is tuned for precision: a missed

@@ -2,6 +2,7 @@ using Emberloom.Core.Actions;
 using Emberloom.Core.Colonists;
 using Emberloom.Core.Drives;
 using Emberloom.Core.Events;
+using Emberloom.Core.Forks;
 using Emberloom.Core.Life;
 using Emberloom.Core.Simulation;
 using Emberloom.Core.Verbs;
@@ -42,6 +43,9 @@ for (var i = 0; i < args.Length; i++)
             return 0;
         case "--intent":
             Intents(days, colonists, seed);
+            return 0;
+        case "--forks":
+            Forks(days, colonists, seed);
             return 0;
         default:
             Console.Error.WriteLine($"Unrecognised argument: {args[i]}");
@@ -572,6 +576,180 @@ static void Sweep(int days, int colonists, int seed)
 }
 
 /// <summary>
+/// <summary>
+/// Every question the colony actually faced, and — far more usefully — every day it faced none.
+/// <para>
+/// Written after version 2 closed, because the first thing Jeremy noticed playing it was that
+/// almost two colony-years went by with no new minds, and nothing in the project could say whether
+/// that was a colony deciding against growth or a colony never being asked. A tally of forks cannot
+/// tell those apart: the interesting number is not how the votes went but how many days passed with
+/// the Loom able to print and nobody putting the question. So this samples the Print gate once a
+/// colony-day and attributes every day the question was not asked to whichever gate held it shut.
+/// </para>
+/// </summary>
+static void Forks(int days, int colonists, int seed)
+{
+    var random = new ColonyRandom(seed);
+    var colony = ColonyFactory.Create(colonists, random, seed);
+    var body = new BodySimulation(colony, random);
+
+    var couldPrint = 0;
+    var heldBy = new Dictionary<string, int>();
+    var asked = 0;
+    var lastDay = -1;
+
+    // Who sat on each print, and what each of them was actually weighing. A tally of outcomes says
+    // the colony refused; this says whether it could ever have done otherwise.
+    var seatings = new List<string>();
+    body.ForkOpened += fork =>
+    {
+        if (fork.Kind != ForkKind.Print)
+        {
+            return;
+        }
+
+        foreach (var id in fork.Participants)
+        {
+            if (colony.Find(id) is not { } voter)
+            {
+                continue;
+            }
+
+            var weight = voter.Weights[Drive.Belonging] - voter.Weights[Drive.Safety];
+            var level = (voter.Drives[Drive.Belonging] - voter.Drives[Drive.Safety]) * 0.5;
+            var world = fork.Pressure * ForkRules.PressureWeight;
+            seatings.Add(
+                $"  d{fork.OpenedOnDay,-6:F0} {voter.DisplayName,-10} "
+                + $"who they are {weight,6:F2}  how they are {level,6:F2}  the world {world,6:F2}"
+                + $"  =  {weight + level + world,6:F2}");
+        }
+    };
+
+    // And the same breakdown again when the vote is counted, because the two moments are up to
+    // three colony days apart and the council spends them deliberating in the plaza.
+    body.ForkResolved += (fork, _) =>
+    {
+        if (fork.Kind != ForkKind.Print)
+        {
+            return;
+        }
+
+        foreach (var (id, vote) in fork.Spoken)
+        {
+            if (colony.Find(id) is not { } voter)
+            {
+                continue;
+            }
+
+            var weight = voter.Weights[Drive.Belonging] - voter.Weights[Drive.Safety];
+            var level = (voter.Drives[Drive.Belonging] - voter.Drives[Drive.Safety]) * 0.5;
+            var world = fork.Pressure * ForkRules.PressureWeight;
+            seatings.Add(
+                $"     counted {voter.DisplayName,-10} "
+                + $"who they are {weight,6:F2}  how they are {level,6:F2}  the world {world,6:F2}"
+                + $"  =  {weight + level + world,6:F2}  {vote.Stance}");
+        }
+
+        seatings.Add(string.Empty);
+    };
+
+    for (var tick = 0; tick < days * Colony.TicksPerDay; tick++)
+    {
+        body.Tick();
+
+        var day = (int)colony.Day;
+        if (day == lastDay)
+        {
+            continue;
+        }
+
+        lastDay = day;
+
+        // In Detect's own order, because that is what decides which gate a day is spent behind.
+        // A day can be held by several of these; it is attributed to the first, so the column
+        // reads as "what would have to change for the question to be asked tomorrow".
+        var held =
+            colony.OpenFork is not null ? "another question already open"
+            : colony.Living.Count() < 2 ? "too few living"
+            : colony.Living.Any(c => c.AwaitingKindling) ? "someone is still being written"
+            : colony.Cores.Any(c => c.Fate == CoreFate.Waiting) ? "a core is waiting to be decided"
+            : colony.ForbiddenPlaces.Count > 0 && colony.Day >= colony.AskAgainOn(ForkKind.Ascend)
+                ? "a way up comes first"
+            : colony.Living.Count() >= LifeRules.PopulationCap ? "at the population cap"
+            : !ForkRules.CanFeedAnother(colony) ? "the stores could not feed another"
+            : colony.Day < colony.AskAgainOn(ForkKind.Print) ? "put off after a no"
+            : null;
+
+        if (held is null)
+        {
+            asked++;
+        }
+        else
+        {
+            heldBy[held] = heldBy.GetValueOrDefault(held) + 1;
+        }
+
+        if (colony.LoomCharge >= ForkRules.ChargeNeededToPrint(colony)
+            && colony.Living.Count() < LifeRules.PopulationCap)
+        {
+            couldPrint++;
+        }
+    }
+
+    Console.WriteLine($"Fork census — {days} colony-days, {colonists} founders, seed {seed}, no mind at all");
+    Console.WriteLine();
+
+    Console.WriteLine($"{"",-8}{"asked",6}{"carried",9}{"refused",9}{"first",7}{"last",7}{"mean gap",10}");
+    foreach (var kind in Enum.GetValues<ForkKind>())
+    {
+        var of = colony.ForkHistory.Where(f => f.Kind == kind).ToList();
+        if (of.Count == 0)
+        {
+            Console.WriteLine($"{kind,-8}{0,6}");
+            continue;
+        }
+
+        var opened = of.Select(f => f.OpenedOnDay).ToList();
+        var gaps = opened.Zip(opened.Skip(1), (a, b) => b - a).ToList();
+
+        Console.WriteLine(
+            $"{kind,-8}{of.Count,6}{of.Count(f => f.Carried == true),9}{of.Count(f => f.Carried != true),9}"
+            + $"{$"d{opened[0]:F0}",7}{$"d{opened[^1]:F0}",7}"
+            + $"{(gaps.Count == 0 ? "-" : $"{gaps.Average():F0}"),10}");
+    }
+
+    Console.WriteLine();
+    Console.WriteLine($"The print question, day by day, over {days:N0} days:");
+    Console.WriteLine($"  {"the Loom could have printed",-36}{couldPrint,7:N0}");
+    Console.WriteLine($"  {"the question was free to be asked",-36}{asked,7:N0}");
+    foreach (var (reason, count) in heldBy.OrderByDescending(p => p.Value))
+    {
+        Console.WriteLine($"  {"held: " + reason,-36}{count,7:N0}");
+    }
+
+    Console.WriteLine();
+    Console.WriteLine("What each council weighed at each print (over 0.05 is a for, under -0.05 against):");
+    foreach (var line in seatings)
+    {
+        Console.WriteLine(line);
+    }
+
+    Console.WriteLine();
+    Console.WriteLine("Every fork the colony faced:");
+    foreach (var fork in colony.ForkHistory)
+    {
+        Console.WriteLine(
+            $"  d{fork.OpenedOnDay,-6:F0} {fork.Kind,-7} {(fork.Outcome ?? "-"),-9}"
+            + $" for {fork.Count(Stance.For)} against {fork.Count(Stance.Against)} abstain {fork.Count(Stance.Abstain)}"
+            + $"  of {fork.Participants.Count}, needed {fork.Needed}"
+            + $"  pressure {fork.Pressure,6:F2}   {fork.Question}");
+    }
+
+    Console.WriteLine();
+    Console.WriteLine($"Ended at {colony.Living.Count()} living, charge {colony.LoomCharge:F0}, "
+                      + $"a print needs {ForkRules.ChargeNeededToPrint(colony):F0}.");
+}
+
 /// How a day's ticks are grouped for reading. Wander was the colony's only leisure through M12 and
 /// measured 0.0% at every population — it is explicitly the fallback when nothing else scores, and
 /// something always scores. Gather, from M13, is the line to read instead: a hall the colony voted

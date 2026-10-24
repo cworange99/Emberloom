@@ -308,7 +308,14 @@ public sealed record ForkSnapshot(
     Stance? Prevailed,
     string? Outcome,
     double? ResolvedOnDay,
-    double Pressure = 0)
+    double Pressure = 0,
+
+    /// <summary>
+    /// Where each member stood when the question was put. Defaulted rather than required so a
+    /// colony saved before this existed still loads; an open fork restored without it is answered
+    /// on the standing of whoever is in the room, which is what every fork used to do.
+    /// </summary>
+    IReadOnlyDictionary<string, double>? Standing = null)
 {
     public static ForkSnapshot Of(Fork fork) => new(
         fork.Id, fork.Kind, fork.Question, fork.Proposal, fork.Stakes,
@@ -316,7 +323,8 @@ public sealed record ForkSnapshot(
         fork.ForMeans, fork.AgainstMeans, fork.AbstainMeans,
         fork.PlaceId, fork.OpenedOnDay, fork.Participants.ToList(),
         fork.Votes.Select(v => new VoteSnapshot(v.Key, v.Value.Stance, v.Value.Conviction, v.Value.Line, v.Value.Reasoning, v.Value.WasFallback)).ToList(),
-        fork.Carried, fork.Prevailed, fork.Outcome, fork.ResolvedOnDay, fork.Pressure);
+        fork.Carried, fork.Prevailed, fork.Outcome, fork.ResolvedOnDay, fork.Pressure,
+        fork.Standing.ToDictionary(p => p.Key, p => p.Value));
 
     public Fork Rebuild()
     {
@@ -336,7 +344,7 @@ public sealed record ForkSnapshot(
             PlaceId = PlaceId,
             OpenedOnDay = OpenedOnDay,
             Participants = Participants.ToList()
-        };
+        }.WithStanding(Standing ?? new Dictionary<string, double>());
 
         foreach (var vote in Votes)
         {

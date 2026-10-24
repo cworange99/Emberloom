@@ -834,6 +834,7 @@ public sealed class SimulationHost : BackgroundService
         if (submitted)
         {
             fork.AwaitingMinds++;
+            fork.MindsAsked++;
         }
     }
 
@@ -1247,6 +1248,8 @@ public sealed class SimulationHost : BackgroundService
         Math.Round(colony.ChargeFlowPerDay, 2),
         colony.StoresOverflowing,
         Math.Round(colony.Shortfall, 3),
+        Math.Round(ForkRules.ChargeNeededToPrint(colony), 1),
+        ForkRules.CanFeedAnother(colony),
         colony.Beds,
         colony.Mode.ToString(),
         colony.Intents.Select(i => IntentDto.From(i, colony)).ToList(),
