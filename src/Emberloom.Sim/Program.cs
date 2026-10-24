@@ -38,7 +38,7 @@ for (var i = 0; i < args.Length; i++)
     }
 }
 
-var random = new Random(seed);
+var random = new ColonyRandom(seed);
 var colony = ColonyFactory.Create(colonists, random, seed);
 var body = new BodySimulation(colony, random);
 
@@ -263,7 +263,7 @@ static void Sweep(int days, int colonists, int seed)
     {
         ActionCatalog.ReliefScale = scale;
 
-        var random = new Random(seed);
+        var random = new ColonyRandom(seed);
         var colony = ColonyFactory.Create(colonists, random, seed);
         var body = new BodySimulation(colony, random);
         for (var tick = 0; tick < days * Colony.TicksPerDay; tick++)

@@ -80,6 +80,24 @@ public sealed class MemoryStore
         _episodic.Add(memory);
     }
 
+    /// <summary>
+    /// Puts a saved mind back exactly as it was. Record() folds repeats and Add() appends, both of
+    /// which are right while a colony runs and wrong when restoring one — a reload must not turn
+    /// two memories of the same thing into one with Repeats bumped.
+    /// </summary>
+    public void Restore(
+        IEnumerable<EpisodicMemory> episodic,
+        IEnumerable<ConsolidatedMemory> consolidated,
+        IEnumerable<Belief> beliefs)
+    {
+        _episodic.Clear();
+        _consolidated.Clear();
+        _beliefs.Clear();
+        _episodic.AddRange(episodic);
+        _consolidated.AddRange(consolidated);
+        _beliefs.AddRange(beliefs);
+    }
+
     public void Add(ConsolidatedMemory memory) => _consolidated.Add(memory);
 
     public void Add(Belief belief) => _beliefs.Add(belief);

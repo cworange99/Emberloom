@@ -109,6 +109,9 @@ public sealed class Colony
 
     public void PutOff(ForkKind kind, double until) => _askAgainOn[kind] = until;
 
+    /// <summary>Every question currently put off, and until when. For saving the colony.</summary>
+    public IReadOnlyDictionary<ForkKind, double> AskAgainEntries => _askAgainOn;
+
     /// <summary>Light and warmth the player keeps running on the Loom's charge, oldest first.</summary>
     public List<Provision> Provisions { get; } = [];
 

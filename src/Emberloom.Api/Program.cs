@@ -302,6 +302,22 @@ app.MapGet("/api/verbs/revelations", () => sim.ListRevelations());
 app.MapPost("/api/verbs/reveal", (RevealRequest request) =>
     VerbReply(sim.Reveal(request.RevelationId, request.ColonistId)));
 
+// ---- saved colonies (M11) ---------------------------------------------------
+
+// A colony no longer dies with the process. It writes itself under "autosave" every colony day;
+// these are for keeping one deliberately, and for going back to it.
+app.MapGet("/api/saves", () => sim.Store.List());
+
+app.MapPost("/api/saves/{name}", (string name) => Results.Ok(sim.Save(name)));
+
+app.MapPost("/api/saves/{name}/load", (string name) => sim.Load(name)
+    ? Results.Ok(sim.Snapshot())
+    : Results.NotFound(new { error = $"There is no colony saved as '{name}'." }));
+
+app.MapDelete("/api/saves/{name}", (string name) => sim.Store.Delete(name)
+    ? Results.Ok()
+    : Results.NotFound(new { error = $"There is no colony saved as '{name}'." }));
+
 // ---- the account of this session --------------------------------------------
 
 // The same text the game is keeping on disk, composed fresh. Reading it here costs nothing and

@@ -39,3 +39,6 @@ chronicles/
 
 # Live copies and test output built here while a server holds the normal ones open.
 scratch/
+
+# Saved colonies. A run belongs to whoever ran it, not to the project.
+saves/

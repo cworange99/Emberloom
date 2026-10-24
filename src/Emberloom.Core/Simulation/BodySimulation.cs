@@ -27,6 +27,17 @@ public sealed class BodySimulation
     private readonly Random _random;
     private long _nextMemoryId;
 
+    /// <summary>
+    /// Where the memory ids had got to. Saved and restored: ids are referenced by beliefs and by
+    /// the inspector chains, so a loaded colony that started counting again would hand new memories
+    /// the ids of old ones and quietly rewire what every belief cites.
+    /// </summary>
+    public long NextMemoryId
+    {
+        get => _nextMemoryId;
+        init => _nextMemoryId = value;
+    }
+
     /// <summary>Actions carried through to completion. Distinct from actions merely started.</summary>
     public int ActionsCompleted { get; private set; }
 
@@ -36,6 +47,13 @@ public sealed class BodySimulation
         _random = random;
         _scorer = new UtilityScorer(random);
     }
+
+    /// <summary>
+    /// Where the random stream has got to, when it is one that can say. A colony driven by a plain
+    /// <see cref="Random"/> still saves and loads correctly; it just cannot promise that the loaded
+    /// colony lives the same next day as the one that was saved. <see cref="ColonyRandom"/> can.
+    /// </summary>
+    public ulong? RandomState => (_random as ColonyRandom)?.State;
 
     public UtilityScorer Scorer => _scorer;
 

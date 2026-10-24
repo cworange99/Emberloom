@@ -50,6 +50,19 @@ public sealed class Relationship
 
     public void NoteSharedMemory() => SharedMemories++;
 
+    /// <summary>
+    /// Puts a tie back exactly as it was, for a loaded colony. Adjust() clamps and accumulates,
+    /// which is right while a colony is running and wrong when restoring one.
+    /// </summary>
+    public void Restore(double affinity, double trust, double respect, int shared, string? narrative)
+    {
+        Affinity = affinity;
+        Trust = trust;
+        Respect = respect;
+        SharedMemories = shared;
+        Narrative = narrative;
+    }
+
     public RelationshipStage Stage
     {
         get
@@ -97,6 +110,13 @@ public sealed class RelationshipLedger
     }
 
     public Relationship? Peek(string fromId, string toId) => _entries.GetValueOrDefault((fromId, toId));
+
+    /// <summary>Every tie in the colony, for saving it.</summary>
+    public IEnumerable<Relationship> All => _entries.Values;
+
+    /// <summary>Puts one tie back, for a loaded colony. See Relationship.Restore.</summary>
+    public void Restore(string fromId, string toId, double affinity, double trust, double respect, int shared, string? narrative) =>
+        Get(fromId, toId).Restore(affinity, trust, respect, shared, narrative);
 
     public IEnumerable<Relationship> Outgoing(string fromId) =>
         _entries.Values.Where(r => r.FromId == fromId);

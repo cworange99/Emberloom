@@ -87,6 +87,13 @@ public static class ActionCatalog
     /// </summary>
     public static double ReliefScale { get; set; } = 3.0;
 
+    /// <summary>
+    /// The definition for a kind. Deliberate is not in All — the scorer offers it only to a sitting
+    /// council — but a saved colonist can be in the middle of one.
+    /// </summary>
+    public static ActionDefinition ByKind(ActionKind kind) =>
+        All.Append(Deliberate).First(a => a.Kind == kind);
+
     private static DriveVector Relief(params (Drive Drive, double Amount)[] entries) =>
         new(entries.ToDictionary(e => e.Drive, e => e.Amount));
 

@@ -14,6 +14,7 @@ using Emberloom.Core.Forks;
 using Emberloom.Core.Verbs;
 using Emberloom.Core.Culture;
 using Emberloom.Core.Chronicle;
+using Emberloom.Core.Persistence;
 
 namespace Emberloom.Api;
 
@@ -135,7 +136,12 @@ public sealed class SimulationHost : BackgroundService
         _chronicleFolder = Path.GetFullPath(configuration.GetValue("Chronicle:Folder", "chronicles")!);
         _chronicleEnabled = configuration.GetValue("Chronicle:Enabled", true);
 
-        _random = new Random(seed);
+        // And where colonies themselves are kept, which is new at M11: before it, a colony was
+        // only ever as old as the process running it.
+        Store = new ColonyStore(configuration.GetValue("Save:File", "saves/colonies.db")!);
+        _autosaveEveryDays = configuration.GetValue("Save:AutosaveEveryColonyDays", 1.0);
+
+        _random = new ColonyRandom(seed);
         _colony = ColonyFactory.Create(colonists, _random, seed);
         _body = new BodySimulation(_colony, _random);
         AttachBody();
@@ -192,7 +198,7 @@ public sealed class SimulationHost : BackgroundService
         {
             _colony.Feed.Appended -= OnEvent;
 
-            _random = new Random(seed);
+            _random = new ColonyRandom(seed);
             _colony = ColonyFactory.Create(colonists, _random, seed);
             _body = new BodySimulation(_colony, _random);
             AttachBody();
@@ -426,6 +432,101 @@ public sealed class SimulationHost : BackgroundService
 
     private volatile bool _mythInFlight;
     private double _lastMythAttempt = double.NegativeInfinity;
+
+    // ---- colonies, on disk (M11) --------------------------------------------------------------
+
+    /// <summary>Where saved colonies live. The chronicle is the account of a run; this is the run.</summary>
+    public ColonyStore Store { get; }
+
+    private readonly double _autosaveEveryDays;
+    private double _lastAutosaveDay = double.NegativeInfinity;
+
+    /// <summary>The name the running colony writes itself under, so a crash costs at most a day.</summary>
+    public const string AutosaveName = "autosave";
+
+    /// <summary>
+    /// Writes the colony under a name. Taken under the lock, because a snapshot caught halfway
+    /// through a tick would be a colony that never existed.
+    /// </summary>
+    public SavedColony Save(string name)
+    {
+        lock (_gate)
+        {
+            Store.Save(name, _colony, _body);
+            _lastAutosaveDay = _colony.Day;
+        }
+
+        _logger.LogInformation("Colony saved as {Name} in {Path}.", name, Store.Path);
+        return Store.List().First(s => s.Name == name);
+    }
+
+    /// <summary>
+    /// Takes up a saved colony in place of the running one. Everything the host holds about the old
+    /// colony — what the minds were told, what the story on disk said — belongs to a colony that is
+    /// no longer here, so it is all reset, exactly as a restart does.
+    /// </summary>
+    public bool Load(string name)
+    {
+        if (Store.Load(name) is not { } restored)
+        {
+            return false;
+        }
+
+        WriteChronicle(ended: true);
+
+        lock (_gate)
+        {
+            _colony.Feed.Appended -= OnEvent;
+
+            _colony = restored.Colony;
+            _body = restored.Body;
+            AttachBody();
+            _lastDialogue.Clear();
+            _lastMythAttempt = double.NegativeInfinity;
+            _lastAutosaveDay = _colony.Day;
+
+            _storyWrittenAt = default;
+            _storyOnDisk = string.Empty;
+            _colony.Feed.Appended += OnEvent;
+
+            _chronicle = new SessionChronicle(_colony.Seed, _colony.Living.Count(), DateTimeOffset.Now);
+            _chronicleWrittenAt = DateTimeOffset.MinValue;
+        }
+
+        // Anyone the Loom printed while the mind was unreachable is still unwritten, and a loaded
+        // colony is exactly where that shows: Kindling is undroppable and has to be offered again.
+        QueueKindlingForEveryone();
+
+        _logger.LogInformation("Loaded the colony saved as {Name}; it is on day {Day:F1}.", name, _colony.Day);
+        Broadcast(Snapshot());
+        return true;
+    }
+
+    /// <summary>Every colony day, so an unplanned stop costs a day of a run rather than the run.</summary>
+    private void AutosaveIfDue()
+    {
+        if (_autosaveEveryDays <= 0)
+        {
+            return;
+        }
+
+        var day = Read((colony, _) => colony.Day);
+        if (day - _lastAutosaveDay < _autosaveEveryDays)
+        {
+            return;
+        }
+
+        try
+        {
+            Save(AutosaveName);
+        }
+        catch (Exception ex)
+        {
+            // A colony that cannot be saved must still be a colony that runs.
+            _lastAutosaveDay = day;
+            _logger.LogWarning(ex, "Could not autosave the colony to {Path}.", Store.Path);
+        }
+    }
 
     // ---- the account of this session, on disk -------------------------------------------------
 
@@ -1053,6 +1154,7 @@ public sealed class SimulationHost : BackgroundService
             }
 
             KeepTheRecord();
+            AutosaveIfDue();
             Broadcast(Snapshot());
         }
     }
@@ -1067,7 +1169,17 @@ public sealed class SimulationHost : BackgroundService
         await base.StopAsync(cancellationToken).ConfigureAwait(false);
 
         WriteChronicle(ended: true);
-        _logger.LogInformation("This colony's record is at {Path}.", ChroniclePath);
+
+        try
+        {
+            Save(AutosaveName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not save the colony on the way out.");
+        }
+
+        _logger.LogInformation("This colony's record is at {Path}; the colony itself is in {Save}.", ChroniclePath, Store.Path);
     }
 
     public ColonyStateDto Snapshot() => Read((colony, body) => new ColonyStateDto(
