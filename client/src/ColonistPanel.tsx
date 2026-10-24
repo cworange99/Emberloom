@@ -215,6 +215,8 @@ export function ColonistDetailView({
             <p>
               {colonist.isAlive ? colonist.lineage : 'dead'} · {colonist.ageDays.toFixed(0)} of ~
               {colonist.lifespanDays.toFixed(0)} days
+              {colonist.daysLostToDespair > 1 &&
+                ` · ${colonist.daysLostToDespair.toFixed(0)} fewer than they were born with`}
               {colonist.isAlive && colonist.isElder && ' · slowing'}
               {colonist.isAlive && (
                 <>

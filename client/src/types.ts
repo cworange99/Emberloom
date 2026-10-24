@@ -39,6 +39,8 @@ export interface Colonist {
   /** M13: what they have earned and not spent, and how many evenings it bought. */
   tokens: number
   eveningsBought: number
+  /** M15: how many days of this life despair has already taken. */
+  daysLostToDespair: number
   placeId: string
   doing: string | null
   doingTarget: string | null
@@ -109,6 +111,9 @@ export interface ColonyState {
   drawPerDay: number
   chargeFlowPerDay: number
   storesOverflowing: boolean
+  /** M15: what fraction of the day's draw went unpaid, and how many beds the colony has. */
+  shortfall: number
+  beds: number
   artifactsRecovered: number
   population: number
   actionsCompleted: number

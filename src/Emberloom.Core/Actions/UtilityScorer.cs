@@ -80,7 +80,7 @@ public sealed class UtilityScorer
         {
             foreach (var definition in ActionCatalog.All)
             {
-                if (!definition.CanHappenAt(place) || !IsAvailable(definition, place, colonist))
+                if (!definition.CanHappenAt(place) || !IsAvailable(definition, place, colonist, colony))
                 {
                     continue;
                 }
@@ -123,18 +123,24 @@ public sealed class UtilityScorer
     /// and the penalty is right. See DESIGN-V2.md for what the sweep said.
     /// </para>
     /// </summary>
-    private static bool IsAvailable(ActionDefinition definition, Place place, Colonist colonist)
+    private static bool IsAvailable(ActionDefinition definition, Place place, Colonist colonist, Colony colony)
     {
         if (definition.Price > colonist.Tokens)
         {
             return false;
         }
 
-        return Offered(definition, place);
+        return Offered(definition, place, colonist, colony);
     }
 
-    private static bool Offered(ActionDefinition definition, Place place) => definition.Kind switch
+    private static bool Offered(ActionDefinition definition, Place place, Colonist colonist, Colony colony) => definition.Kind switch
     {
+        // M15: a bed somebody else is in is not a bed. The colony has six to begin with, which runs
+        // out at about the first generation — after that it has to build somewhere for the people it
+        // grew, and a colonist with nowhere to sleep is simply never offered sleep, which shows up
+        // in the feed as the thing it is rather than as a number nobody can see.
+        ActionKind.Rest => colony.SleepingAt(place.Id, except: colonist.Id) < place.Beds,
+
         ActionKind.Forage => place.ForageYield > 0,
         ActionKind.Salvage => place.SalvageRemaining > 0 && !place.IsBlocked,
         ActionKind.Clear => place.IsBlocked,

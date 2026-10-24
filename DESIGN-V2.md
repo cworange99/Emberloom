@@ -553,6 +553,96 @@ days, plotting population. You are looking for the multiplier where the colony f
 occasional early deaths" to "extinct". A sharp threshold means the coupling needs a floor — cheap now,
 impossible to retrofit once the number is tuned.
 
+### M15's measured outcome — 24 October 2026
+
+Three couplings, which are what make everything v2 added cost something: the stores reach the body as
+hunger, a life going badly is a shorter life, and a bed somebody else is in is not a bed.
+
+#### The death spiral was real, and it was not where the scope expected
+
+The scope's riskiest assumption was that the wellbeing→lifespan feedback would run away: a death
+aggravates Belonging by 0.35 in everyone close, the largest single aggravation in the codebase, which
+lowers their wellbeing, which shortens their lives, which brings the next death forward, with nothing
+damping it. `--despair` sweeps the rate over 4000 days looking for the edge, and found one:
+
+| days lost per day | peak | ended | mean life | avg lost | worst | wellbeing | extinct |
+|---|---|---|---|---|---|---|---|
+| 0.0 | 12 | 9 | 2254 | 0 | 0 | 0.401 | no |
+| 1.0 | 12 | 9 | 2188 | 10 | 46 | 0.386 | no |
+| **1.5** | 10 | **2** | 2185 | 89 | 262 | **0.162** | no |
+| 3.0 | 11 | 5 | 2178 | 123 | 413 | 0.442 | no |
+| 6.0 | 10 | **1** | 2003 | 296 | 1034 | **0.107** | no |
+| 12.0 | 9 | **0** | 1745 | 425 | 1013 | 0.000 | **day 3958** |
+| 25.0 | 9 | **0** | 1734 | 499 | 1013 | 0.000 | **day 3300** |
+
+Not a slope — a **bistable cliff**, and non-monotonic across it (1.5 collapsed to two survivors while
+3.0 recovered to five), which is the signature of a system that sometimes runs away and sometimes
+doesn't depending on when the first death lands.
+
+**But the cause was not the lifespan coupling.** It was `WellbeingRules.Moment`. Urgency is
+`(level × weight)²`, so it runs to 4 rather than to 1, and the pressure term was subtracted from the
+hour unclamped — so it could be worth more than the entire hour it was discounting. Talk needs a
+partner and a gathering needs a hall, so **the last two people in a dying colony can never relieve
+Belonging at all**: their urgency pins above 2, every moment of their lives evaluates to exactly
+zero, and their remaining years burn off as fast as the cap allows. The spiral was loneliness, not
+despair.
+
+The fix is one clamp — `MostPressureCanTake = 0.30` — and it says something defensible: however badly
+you need something, the hour you spend asleep is still sleep. It leaves every figure measured at M12,
+M13 and M14 intact, because a colonist under ordinary pressure is nowhere near the cap. Re-swept:
+
+| days lost per day | 0.0 | 0.5 | 1.0 | 1.5 | 3.0 | 6.0 | 12.0 | 25.0 |
+|---|---|---|---|---|---|---|---|---|
+| mean life, seed 4 | 2254 | 2249 | 2239 | 2214 | 2219 | 2050 | 1916 | 1705 |
+| mean life, seed 1 | 2363 | 2363 | 2362 | 2362 | 2360 | 2357 | 2350 | 2311 |
+| mean life, seed 2 | 2401 | 2400 | 2400 | 2400 | 2399 | 2397 | 2394 | 2386 |
+| extinct, any seed | no | no | no | no | no | no | no | no |
+
+A smooth slope, no extinction anywhere across two decades of rate, and — the useful part — the
+coupling **discriminates**: at 6.0 the struggling colony loses 200 days off a mean life and the two
+healthy ones lose 6 and 4. Despair costs a colony that is actually failing and is nearly invisible to
+one that isn't, which is what it is for.
+
+`DespairDaysPerDay = 6.0`, with `MostOfALifeDespairCanTake = 0.4` so the worst possible life still
+runs three fifths of its course. `AdvanceLives` keeps its single death trigger and every existing
+death test holds.
+
+#### What the three couplings did
+
+Over 2160 days at four founders:
+
+| | seed 4 | seed 1 | seed 2 | seed 3 |
+|---|---|---|---|---|
+| lives shortened | **8 of 8** | 4 of 20 | 5 of 20 | 4 of 20 |
+| days lost, average · worst | **90 · 252** | 65 · 146 | 13 · 39 | 10 · 34 |
+| beds · living | 10 · 7 | 26 · 20 | 26 · 20 | 26 · 20 |
+| dwellings built | 1 | 5 | 5 | 5 |
+| rest | 30.5% | 22.6% | 23.3% | 22.4% |
+| wellbeing | 0.424 | 0.486 | 0.493 | 0.495 |
+| population | 4 → 7 | 4 → 20 | 4 → 20 | 4 → 20 |
+
+**Every life in the constrained colony is now shorter than it was born to be**, by about four percent,
+while the comfortable colonies lose a few lives' worth of years between twenty people. Seed 4's
+population fell from 10 at M14 to 7, and its wellbeing from 0.453 to 0.424 — the couplings cost it,
+which is the point of them.
+
+**Two of the three are safety nets that a healthy colony never trips.** The stores never empty on any
+seed, so hunger never fires; and the colony builds dwellings before it runs out of beds, so sleep is
+never refused. That is the system working rather than the system being inert — the bed *pressure* is
+what causes the dwellings to be built, and `CouplingTests` drives both couplings into their failure
+modes directly, because a coupling that is untested in the uncommon case is not a coupling.
+
+#### A defect found on the way: the city was built in the wrong order
+
+`ForkRules.Propose` picks what the colony is most obviously short of and then takes the nearest site
+of that kind to the plaza. It was written as
+`sites.Where(wanted).Concat(sites).OrderBy(distance).First()`, which sorts the *concatenation* — so a
+nearer site of the wrong kind outranks a farther site of the right one. Measured directly: a colony
+with ten people in six beds proposed a hall. The preference now resolves before the distance sort,
+and the `Concat` fallback means what it was meant to mean — having run out of the kind you want, not
+having to walk further. Dwellings built per seed went from 1 to 5 on the three comfortable seeds.
+
+
 ## M16 — Modes and intents
 
 **Delivers.** `ColonyMode` — **Simulation**, **Hybrid**, **Directed** — chosen when a colony is created

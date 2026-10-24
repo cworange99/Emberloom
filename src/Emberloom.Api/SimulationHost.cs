@@ -1194,6 +1194,8 @@ public sealed class SimulationHost : BackgroundService
         Math.Round(colony.DrawPerDay, 2),
         Math.Round(colony.ChargeFlowPerDay, 2),
         colony.StoresOverflowing,
+        Math.Round(colony.Shortfall, 3),
+        colony.Beds,
         colony.ArtifactsRecovered,
         colony.Living.Count(),
         body.ActionsCompleted,

@@ -127,6 +127,13 @@ public sealed class Colony
     public bool StoresOverflowing { get; set; }
 
     /// <summary>
+    /// What fraction of what the colony needed today it could not pay for, 0 to 1 — M15. The stores
+    /// are the colony's food, so an empty Loom is an empty table, and this is the one number that
+    /// turns that from an accounting fact into something a colonist feels.
+    /// </summary>
+    public double Shortfall { get; set; }
+
+    /// <summary>
     /// What the colony actually put into the Loom on the last full day. Measured rather than
     /// derived, because it depends on what everybody chose to do.
     /// </summary>
@@ -239,6 +246,19 @@ public sealed class Colony
     public IReadOnlyList<Colonist> Colonists => _colonists;
 
     public IEnumerable<Colonist> Living => _colonists.Where(c => c.IsAlive);
+
+    /// <summary>
+    /// How many people are asleep here right now, not counting one. The exception is the colonist
+    /// asking: somebody already in a bed is not kept out of it by their own occupancy.
+    /// </summary>
+    public int SleepingAt(string placeId, string? except = null) => Living.Count(c =>
+        c.Id != except
+        && c.PlaceId == placeId
+        && c.Current is { Definition.Kind: Actions.ActionKind.Rest } resting
+        && resting.Target.Id == placeId);
+
+    /// <summary>Every bed the colony has, found or built.</summary>
+    public int Beds => Map.Places.Sum(p => p.Beds);
 
     public IEnumerable<Colonist> ColonistsAt(string placeId) =>
         _colonists.Where(c => c.IsAlive && c.PlaceId == placeId);

@@ -185,7 +185,33 @@ public sealed class BodySimulation
             {
                 colonist.Drives.Aggravate(Drive.Rest, LifeRules.ElderWearPerDay * DayPerTick);
             }
+
+            Wear(colonist);
         }
+    }
+
+    /// <summary>
+    /// What a life spent badly costs it — M15. Despair shortens a life rather than ending one, so
+    /// <see cref="AdvanceLives"/> keeps its single death trigger and every existing death test
+    /// holds: a colonist who has been failing for years simply has fewer years left than they
+    /// were born with.
+    /// </summary>
+    private void Wear(Colonist colonist)
+    {
+        var lost = WellbeingRules.DaysLostIn(colonist.Wellbeing, DayPerTick);
+        if (lost <= 0)
+        {
+            return;
+        }
+
+        // Capped against what the life started as, not against what is left, so the cap cannot be
+        // walked past a day at a time.
+        var born = colonist.LifespanDays + colonist.DaysLostToDespair;
+        var allowed = born * WellbeingRules.MostOfALifeDespairCanTake - colonist.DaysLostToDespair;
+        lost = Math.Min(lost, Math.Max(0, allowed));
+
+        colonist.DaysLostToDespair += lost;
+        colonist.LifespanDays -= lost;
     }
 
     /// <summary>
@@ -292,7 +318,8 @@ public sealed class BodySimulation
         // What the living take, what the player keeps running, and whatever the Loom still makes on
         // its own — which from M14 is nothing unless the colony found a way to change that. The
         // charge going *in* is added by the hour in Work(), where it is earned.
-        _colony.LoomCharge -= (_colony.DrawPerDay + _colony.UpkeepPerDay - _colony.LoomChargePerDay) * DayPerTick;
+        var wanted = (_colony.DrawPerDay + _colony.UpkeepPerDay - _colony.LoomChargePerDay) * DayPerTick;
+        _colony.LoomCharge -= wanted;
 
         // What the player keeps running is paid for as it runs. When the Loom runs dry, the
         // newest provision goes out first, one a tick until the books balance — and each going
@@ -302,6 +329,9 @@ public sealed class BodySimulation
             PlayerVerbs.Lapse(_colony, this, _colony.Provisions[^1]);
         }
 
+        // What the colony needed and could not pay for. The charge is its food as well as its
+        // light, so an empty Loom is an empty table — M15.
+        _colony.Shortfall = wanted <= 0 ? 0 : Math.Clamp(-_colony.LoomCharge / wanted, 0, 1);
         _colony.LoomCharge = Math.Max(0, _colony.LoomCharge);
 
         // What there is nowhere to keep is not kept. Noticed once when it starts and once when it
@@ -335,6 +365,14 @@ public sealed class BodySimulation
         WellbeingRules.Advance(colonist, colonist.Current is { } doing && colonist.PlaceId != doing.Target.Id, DayPerTick);
 
         var here = _colony.Map[colonist.PlaceId];
+
+        // Going without. Aggravated rather than simply left unrelieved, because a colony whose
+        // stores have run out is not the same as one whose people have not got round to eating:
+        // Forage still works and still relieves, so without this the shortfall would be invisible.
+        if (_colony.Shortfall > 0)
+        {
+            colonist.Drives.Aggravate(Drive.Sustenance, _colony.Shortfall * EconomyRules.HungerPerEmptyDay * DayPerTick);
+        }
 
         // Standing somewhere dark and unstable is its own pressure on Safety.
         if (here.Danger > 0.2 || (_colony.LightAt(here) < 0.4 && _colony.IsNight))

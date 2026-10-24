@@ -32,6 +32,13 @@ public static class EconomyRules
     /// </summary>
     public const double GatheringPrice = 0.25;
 
+    /// <summary>
+    /// What a colony-day of entirely empty stores does to everyone's Sustenance — M15, and the
+    /// first time the colony's economy reaches anybody's body. Scaled by how much of the day's draw
+    /// went unpaid, so a thin day is felt thinly.
+    /// </summary>
+    public const double HungerPerEmptyDay = 0.6;
+
     /// <summary>Whether this is the sort of work that pays. Travel does not, and nor does sleep.</summary>
     public static bool IsPaid(ActionKind kind) => kind switch
     {

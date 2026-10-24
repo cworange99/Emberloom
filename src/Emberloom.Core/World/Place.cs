@@ -47,6 +47,24 @@ public sealed class Place
     public required string Name { get; init; }
 
     /// <summary>
+    /// How many people can sleep here — M15. Derived from what the place is rather than stored, so
+    /// a site that becomes a dwelling gains its beds the moment it stands and a save needs no new
+    /// field for it.
+    /// <para>
+    /// Two found shelters at three apiece is room for six, which is comfortable for four founders
+    /// and runs out at about the first generation. That is the point: a colony that grows has to
+    /// build somewhere for the people it grew, and "there was nowhere to sleep" is visible in the
+    /// feed in a way that a job queue never would be.
+    /// </para>
+    /// </summary>
+    public int Beds => Kind switch
+    {
+        PlaceKind.Shelter => 3,
+        PlaceKind.Dwelling => 4,
+        _ => 0
+    };
+
+    /// <summary>
     /// What this place is. Settable since M10 only because a site becomes the thing it was raised
     /// as: the ground where the colony voted for a hall is a Site until the work is done and a Hall
     /// afterwards, and that is one place changing rather than two places sharing a spot.

@@ -90,6 +90,14 @@ public sealed class Colonist
     /// <summary>How many evenings they have paid for. Kept so a run can be read back.</summary>
     public int EveningsBought { get; set; }
 
+    /// <summary>
+    /// How much of this life despair has already taken, in days — M15. Tracked rather than derived
+    /// so the loss can be capped at a fraction of the whole (see
+    /// <see cref="WellbeingRules.MostOfALifeDespairCanTake"/>) and so the chronicle can say that
+    /// somebody went early rather than merely that they died.
+    /// </summary>
+    public double DaysLostToDespair { get; set; }
+
     /// <summary>When they last had a successor. Pairing has a cooldown.</summary>
     public double LastPairedOnDay { get; set; } = double.NegativeInfinity;
 

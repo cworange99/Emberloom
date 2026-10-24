@@ -60,6 +60,10 @@ public sealed record ColonySnapshot
     public double ProducedPerDay { get; init; }
 
     public double ProducingToday { get; init; }
+
+    public double Shortfall { get; init; }
+
+    public bool StoresOverflowing { get; init; }
     public required int ArtifactsRecovered { get; init; }
     public required long NextMemoryId { get; init; }
 
@@ -99,6 +103,8 @@ public sealed record ColonySnapshot
         DrawPerHeadPerDay = colony.DrawPerHeadPerDay,
         ProducedPerDay = colony.ProducedPerDay,
         ProducingToday = colony.ProducingToday,
+        Shortfall = colony.Shortfall,
+        StoresOverflowing = colony.StoresOverflowing,
         ArtifactsRecovered = colony.ArtifactsRecovered,
         NextMemoryId = body.NextMemoryId,
         RandomState = body.RandomState,
@@ -146,6 +152,8 @@ public sealed record ColonySnapshot
             DrawPerHeadPerDay = DrawPerHeadPerDay,
             ProducedPerDay = ProducedPerDay,
             ProducingToday = ProducingToday,
+            Shortfall = Shortfall,
+            StoresOverflowing = StoresOverflowing,
             ArtifactsRecovered = ArtifactsRecovered
         };
 

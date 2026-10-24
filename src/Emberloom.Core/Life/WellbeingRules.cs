@@ -82,8 +82,28 @@ public static class WellbeingRules
         var dominant = colonist.Drives.Dominant(colonist.Weights);
         var urgency = colonist.Drives.Urgency(dominant, colonist.Weights[dominant]);
 
-        return Math.Clamp(ease - urgency * PressureBite, 0, 1);
+        return Math.Clamp(ease - Math.Min(urgency * PressureBite, MostPressureCanTake), 0, 1);
     }
+
+    /// <summary>
+    /// The floor under the pressure term, and the damper on M15's one feedback loop.
+    /// <para>
+    /// Urgency is <c>(level × weight)²</c>, so it runs to 4 rather than to 1, and without a cap the
+    /// pressure term can be worth more than the entire hour it is discounting. That is not an
+    /// abstract worry: Talk needs a partner and a gathering needs a hall, so the last two people in
+    /// a dying colony can never relieve Belonging at all, their urgency pins above 2, and every
+    /// moment of their lives reads as exactly zero. Measured at M15 over 4000 days, that was enough
+    /// to make the despair coupling bistable — at 1.5 days lost per day a colony of twelve fell to
+    /// two with mean wellbeing 0.162, and at 12 it went extinct — because a lonely survivor's life
+    /// shortened as fast as the cap allowed and each death made the rest lonelier.
+    /// </para>
+    /// <para>
+    /// Capping it says something defensible and keeps every measured figure above intact, since a
+    /// colonist under ordinary pressure is nowhere near the cap: however badly you need something,
+    /// the hour you spend asleep is still sleep.
+    /// </para>
+    /// </summary>
+    public const double MostPressureCanTake = 0.30;
 
     /// <summary>
     /// Moves a colonist's wellbeing one tick toward the life they are living. Called once per
@@ -97,6 +117,45 @@ public static class WellbeingRules
 
         colonist.Wellbeing += (Moment(colonist, travelling) - colonist.Wellbeing) * rate;
     }
+
+    /// <summary>
+    /// Below this, a life is being shortened — M15. Set at the bottom of the band the colony
+    /// measured into at M12 and M13 (0.40 to 0.50), so an ordinary hard life does not kill anybody
+    /// and a plainly bad one does.
+    /// </summary>
+    public const double DespairBelow = 0.38;
+
+    /// <summary>
+    /// How many days a life loses for each colony-day spent a full point below
+    /// <see cref="DespairBelow"/> — **measured, not chosen**; see DESIGN-V2.md for the sweep.
+    /// <para>
+    /// This is the one number in v2 with a feedback loop behind it. A death aggravates Belonging by
+    /// 0.35 in everyone close, the largest single aggravation in the codebase, which lowers their
+    /// wellbeing, which shortens their lives, which brings the next death forward. Nothing damps
+    /// that, so the sweep was looking for the value at which a colony flips from "stable with
+    /// occasional early deaths" to extinct, and for whether that edge is a slope or a cliff.
+    /// </para>
+    /// </summary>
+    /// <para>
+    /// Settable rather than const for the same reason ActionCatalog.ReliefScale is: the sweep that
+    /// decided it has to be able to turn it. The game never writes it.
+    /// </para>
+    public static double DespairDaysPerDay { get; set; } = 6.0;
+
+    /// <summary>
+    /// The most of a life despair can take, as a fraction of what it would have been. Despair makes
+    /// someone go early; it is not a second way to die. At 0.4 the worst possible life still runs
+    /// three fifths of its course, <c>AdvanceLives</c> keeps its single death trigger, and the
+    /// chronicle's "42 of about 46 days" line stays truthful.
+    /// </summary>
+    public const double MostOfALifeDespairCanTake = 0.4;
+
+    /// <summary>
+    /// What this colony-day of living like this costs the rest of the life, in days. Zero for
+    /// anybody who is merely having a hard time.
+    /// </summary>
+    public static double DaysLostIn(double wellbeing, double days) =>
+        wellbeing >= DespairBelow ? 0 : (DespairBelow - wellbeing) * DespairDaysPerDay * days;
 
     /// <summary>
     /// The number as a word, for the feed and the inspector. Bands rather than a scale because a

@@ -36,6 +36,9 @@ for (var i = 0; i < args.Length; i++)
         case "--prices":
             Prices(days, colonists, seed);
             return 0;
+        case "--despair":
+            Despair(days, colonists, seed);
+            return 0;
         default:
             Console.Error.WriteLine($"Unrecognised argument: {args[i]}");
             return 1;
@@ -241,6 +244,23 @@ if (lives.Count > 0)
     }
 }
 
+var lostDays = colony.Colonists.Select(c => c.DaysLostToDespair).Where(d => d > 0).ToList();
+if (lostDays.Count > 0)
+{
+    Console.WriteLine();
+    Console.WriteLine($"Despair took days off {lostDays.Count} of {colony.Colonists.Count} lives"
+        + $" - {lostDays.Average():F0} on average, {lostDays.Max():F0} at worst, of about {LifeRules.BaseLifespanDays:F0}");
+}
+else
+{
+    Console.WriteLine();
+    Console.WriteLine("Despair took nothing off anybody: nobody was below the line long enough to matter.");
+}
+
+var beds = colony.Beds;
+Console.WriteLine($"Beds {beds} for {colony.Living.Count()} living"
+    + $" - {colony.Map.Places.Count(p => p.Kind == PlaceKind.Dwelling)} built, {colony.Map.Places.Count(p => p.Kind == PlaceKind.Shelter)} found");
+
 var earners = colony.Colonists.Where(c => c.AgeInDays(colony.Day) >= 1).ToList();
 if (earners.Count > 0)
 {
@@ -316,6 +336,65 @@ return 0;
 /// drives low and the top of the stack — Standing, Meaning, Wonder — carrying the pressure.
 /// </para>
 /// </summary>
+/// <summary>
+/// How hard despair should shorten a life — M15's one real feedback loop, and the only sweep in the
+/// project looking for a cliff rather than a value.
+/// <para>
+/// A death aggravates Belonging by 0.35 in everyone close, the largest single aggravation in the
+/// codebase. That lowers their wellbeing, which shortens their lives, which brings the next death
+/// forward. Nothing damps it. So what is wanted here is not the "best" multiplier but the shape of
+/// the edge: a slope means the coupling is safe to tune, and a cliff means it needs a floor, which
+/// is cheap now and impossible once a number has been tuned against it.
+/// </para>
+/// </summary>
+static void Despair(int days, int colonists, int seed)
+{
+    Console.WriteLine($"Despair sweep — {days} colony-days, {colonists} founders, seed {seed}");
+    Console.WriteLine("Looking for the multiplier where a colony stops being able to replace itself.");
+    Console.WriteLine();
+    Console.WriteLine($"{"days/d",6} {"peak",6} {"ended",6} {"lived",6} {"died",5} {"mean life",10} {"lost",7} {"worst",7} {"well",6} {"extinct",8}");
+
+    foreach (var scale in new[] { 0.0, 0.5, 1.0, 1.5, 3.0, 6.0, 12.0, 25.0 })
+    {
+        WellbeingRules.DespairDaysPerDay = scale;
+
+        var random = new ColonyRandom(seed);
+        var colony = ColonyFactory.Create(colonists, random, seed);
+        var body = new BodySimulation(colony, random);
+
+        var peak = colony.Living.Count();
+        var extinctOn = -1.0;
+
+        for (var tick = 0; tick < days * Colony.TicksPerDay; tick++)
+        {
+            body.Tick();
+
+            if (colony.Tick % Colony.TicksPerDay != 0)
+            {
+                continue;
+            }
+
+            peak = Math.Max(peak, colony.Living.Count());
+            if (extinctOn < 0 && !colony.Living.Any())
+            {
+                extinctOn = colony.Day;
+            }
+        }
+
+        var dead = colony.Colonists.Where(c => !c.IsAlive).ToList();
+        var lost = colony.Colonists.Select(c => c.DaysLostToDespair).ToList();
+
+        Console.WriteLine(
+            $"{scale,6:F1} {peak,6} {colony.Living.Count(),6} {colony.Colonists.Count,6} {dead.Count,5} "
+            + $"{(dead.Count == 0 ? 0 : dead.Average(c => c.AgeInDays(c.DiedOnDay))),10:F0} "
+            + $"{lost.DefaultIfEmpty(0).Average(),7:F0} {lost.DefaultIfEmpty(0).Max(),7:F0} "
+            + $"{colony.Living.Select(c => c.Wellbeing).DefaultIfEmpty(0).Average(),6:F3} "
+            + $"{(extinctOn < 0 ? "no" : $"day {extinctOn:F0}"),8}");
+    }
+
+    WellbeingRules.DespairDaysPerDay = 6.0;
+}
+
 /// <summary>
 /// What an evening at the hall should cost — M13's one open question, answered by measurement.
 /// <para>

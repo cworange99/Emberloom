@@ -35,6 +35,8 @@ public sealed record ColonistSnapshot
     public double Tokens { get; init; }
 
     public int EveningsBought { get; init; }
+
+    public double DaysLostToDespair { get; init; }
     public required double LastPairedOnDay { get; init; }
     public required string Personality { get; init; }
     public required string Seed { get; init; }
@@ -68,6 +70,7 @@ public sealed record ColonistSnapshot
         Wellbeing = colonist.Wellbeing,
         Tokens = colonist.Tokens,
         EveningsBought = colonist.EveningsBought,
+        DaysLostToDespair = colonist.DaysLostToDespair,
         LastPairedOnDay = colonist.LastPairedOnDay,
         Personality = colonist.Personality,
         Seed = colonist.Seed,
@@ -107,6 +110,7 @@ public sealed record ColonistSnapshot
             Wellbeing = Wellbeing,
             Tokens = Tokens,
             EveningsBought = EveningsBought,
+            DaysLostToDespair = DaysLostToDespair,
             LastPairedOnDay = LastPairedOnDay,
             Personality = Personality,
             Seed = Seed,

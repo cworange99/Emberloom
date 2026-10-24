@@ -84,6 +84,9 @@ public sealed record ColonistDto(
     /// <summary>M13: what they have earned and not spent, and how many evenings it bought.</summary>
     double Tokens,
     int EveningsBought,
+
+    /// <summary>M15: how many days of this life despair has already taken.</summary>
+    double DaysLostToDespair,
     IReadOnlyList<PersonRefDto> Parents)
 {
     public static ColonistDto From(Colonist colonist, Colony colony) => new(
@@ -117,6 +120,7 @@ public sealed record ColonistDto(
         WellbeingRules.Describe(colonist.Wellbeing),
         Math.Round(colonist.Tokens, 2),
         colonist.EveningsBought,
+        Math.Round(colonist.DaysLostToDespair, 1),
         colonist.ParentIds.Select(id => new PersonRefDto(id, colony.Find(id)?.DisplayName ?? id)).ToList());
 }
 
@@ -204,6 +208,8 @@ public sealed record ColonyStateDto(
     double DrawPerDay,
     double ChargeFlowPerDay,
     bool StoresOverflowing,
+    double Shortfall,
+    int Beds,
     int ArtifactsRecovered,
     int Population,
     int ActionsCompleted,

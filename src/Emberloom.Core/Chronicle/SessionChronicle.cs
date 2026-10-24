@@ -174,7 +174,16 @@ public sealed class SessionChronicle
             var worst = living.OrderBy(c => c.Wellbeing).First();
 
             text.AppendLine($"- Taken together they are **{WellbeingRules.Describe(well)}**"
-                            + $" · the hardest life here is {worst.DisplayName}'s, and they are {WellbeingRules.Describe(worst.Wellbeing)}");
+                            + $" · the hardest life here is {worst.DisplayName}'s, and they are {WellbeingRules.Describe(worst.Wellbeing)}"
+                            + $" · {colony.Beds} beds for {living.Count} of them");
+
+            // M15: despair shortens a life rather than ending one, so the only place it is visible
+            // is here. A run where nobody lost anything says so, because that is also worth knowing.
+            var shortened = colony.Colonists.Where(c => c.DaysLostToDespair > 1).ToList();
+            text.AppendLine(shortened.Count == 0
+                ? "- Nobody here has been failing long enough for it to cost them anything."
+                : $"- **{shortened.Count} of them have lost time to it** — {shortened.Average(c => c.DaysLostToDespair):F0} days each on average, "
+                  + $"{shortened.Max(c => c.DaysLostToDespair):F0} at the worst, off lives of about {LifeRules.BaseLifespanDays:F0}");
         }
 
         // Three states, not two: a colony with no mind configured is a supported way to play, and

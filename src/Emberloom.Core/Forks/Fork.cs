@@ -344,19 +344,25 @@ public static class ForkRules
         }
 
         var heads = colony.Living.Count();
-        var beds = colony.Map.Places.Count(p => p.Kind is PlaceKind.Shelter or PlaceKind.Dwelling);
+        var beds = colony.Beds;
         var halls = colony.Map.Places.Count(p => p.Kind == PlaceKind.Hall);
 
-        var wanted = heads > beds * 3 ? PlaceKind.Dwelling
+        var wanted = heads > beds ? PlaceKind.Dwelling
             : halls == 0 ? PlaceKind.Hall
             : heads > halls * 8 ? PlaceKind.Hall
             : PlaceKind.Granary;
 
         // Whatever is wanted, nearest the plaza first, so the city grows outward from where the
         // colony already gathers rather than scattering.
-        return sites
-            .Where(p => p.Becomes == wanted)
-            .Concat(sites)
+        //
+        // The preference has to be resolved *before* the distance sort, not concatenated into it.
+        // Written the other way round — which it was until M15 — a nearer site of the wrong kind
+        // outranks a farther site of the right one, so a colony with ten people in six beds was
+        // measured proposing a hall. The fallback is for having run out of the kind it wants, not
+        // for having to walk further.
+        var preferred = sites.Where(p => p.Becomes == wanted).ToList();
+
+        return (preferred.Count > 0 ? preferred : sites)
             .OrderBy(p => colony.Map.Find("plaza") is { } plaza ? p.DistanceTo(plaza) : 0)
             .First();
     }
@@ -364,11 +370,11 @@ public static class ForkRules
     private static string Stakes(Colony colony, Place site)
     {
         var heads = colony.Living.Count();
-        var beds = colony.Map.Places.Count(p => p.Kind is PlaceKind.Shelter or PlaceKind.Dwelling);
+        var beds = colony.Beds;
 
         var need = site.Becomes switch
         {
-            PlaceKind.Dwelling => $"There are {heads} of us and {beds} places to sleep.",
+            PlaceKind.Dwelling => $"There are {heads} of us and {beds} beds.",
             PlaceKind.Hall => "There is nowhere any of us go that is not somewhere we work.",
             PlaceKind.Granary => "Everything any of us gathers is carried and eaten the same day.",
             _ => "The ground is there."
@@ -472,14 +478,15 @@ public static class ForkRules
     public static double Pressure(Colony colony, Place site)
     {
         var heads = colony.Living.Count();
-        var beds = colony.Map.Places.Count(p => p.Kind is PlaceKind.Shelter or PlaceKind.Dwelling);
+        var beds = colony.Beds;
         var halls = colony.Map.Places.Count(p => p.Kind == PlaceKind.Hall);
 
         return site.Becomes switch
         {
-            // Three to a room is crowded but liveable; past that it presses, and at six to a room
-            // it is the only thing anyone would vote for.
-            PlaceKind.Dwelling => Math.Clamp(heads / (beds * 3.0) - 1, 0, 1),
+            // M15 gave rooms a known number of beds, so this is no longer a guess at how many
+            // people a room holds: it is how many of them have nowhere to sleep. One person short
+            // presses, and a colony half of whom are sleeping on the floor votes for nothing else.
+            PlaceKind.Dwelling => beds <= 0 ? 1 : Math.Clamp((heads - beds) / (beds * 0.5), 0, 1),
 
             // Having nowhere to be together that is not somewhere you work is a standing complaint
             // rather than an emergency, so the first hall presses moderately and never more.
