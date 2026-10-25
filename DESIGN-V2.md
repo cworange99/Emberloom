@@ -1495,6 +1495,98 @@ them. Loading replaces everyone on screen and deleting cannot be undone, so both
 autosave is listed with the rest rather than hidden, marked with a dashed border, because it is the
 one that matters after a crash and also the one that gets written over.
 
+## Inference moves to the devbox — and the golden rule pays for itself
+
+One setting. `Mind:Endpoint` points at an SSH tunnel to the devbox's RTX 5070 instead of this
+laptop's CPU, and nothing else in the project changes, because every mind call carries its whole
+context and the server holds no colony state. That is the rule's first real dividend and it cost a
+config file.
+
+`appsettings.Target.json` has existed since M4.5 describing this setup and was never wired to
+anything. It is loaded by the standard convention — `ASPNETCORE_ENVIRONMENT=Target` — so
+`appsettings.json` keeps `127.0.0.1:11434` as the default and local play stays the thing that
+happens when you do nothing.
+
+```
+ssh -N -L 127.0.0.1:11436:127.0.0.1:11434 devbox
+ASPNETCORE_ENVIRONMENT=Target dotnet run --project src/Emberloom.Api
+```
+
+### What it bought
+
+The same sustained probe, twenty deliberation-shaped calls nose to tail:
+
+| | first five | last five | worst single run |
+|---|---|---|---|
+| laptop, CPU | 9.94 tok/s | **6.52** | **1.56** |
+| devbox, RTX 5070 | 112.15 tok/s | **132.59** | 108.83 |
+
+**The decay is gone.** On the laptop the last five calls are a third slower than the first five; on
+the GPU they are *faster*, because the first run is the only one paying a model load. Twenty calls
+took 519 real seconds on the laptop and 50 on the devbox, eleven of those being the load.
+
+Live, in the colony, with the same call shapes:
+
+| | laptop | devbox |
+|---|---|---|
+| Kindling | 119.8s, 1.77 tok/s | **2.1s, 177.5 tok/s** |
+| IdleThought | 2.2s, 20.2 tok/s | **0.7s, 250.6 tok/s** |
+| governor queue depth | 30–32, pinned at its ceiling | **0** |
+
+A queue depth of zero is the part that matters beyond the numbers: on the laptop the governor was
+permanently at its thirty-two-deep cap, dropping work and throttling the clock, so *every* figure
+the game reported about itself was a figure about congestion. It is now serving everything the
+colony asks for as fast as the colony asks.
+
+### The vote, measured
+
+The first fork on the restarted colony, three seats, no fallbacks:
+
+| | in | out | total | prefill | gen | queued | |
+|---|---|---|---|---|---|---|---|
+| Tuven | 786 | 94 | **0.7s** | 0.1 | 0.5 | 0.0 | 174 tok/s |
+| Marauth | 698 | 84 | **0.6s** | 0.1 | 0.5 | 0.0 | 171 tok/s |
+| Diven | 782 | 107 | **0.7s** | 0.1 | 0.6 | 0.0 | 184 tok/s |
+
+**Two seconds of inference for the whole council, against 276.2 on the laptop** — the same three
+seats measured earlier the same night at 72.0, 83.3 and 77.3. A hundred and thirty-eight times. The
+auto-slow still drops to 1× and hands the speed back, and from the outside the vote is now something
+that happens rather than something you wait out.
+
+### What was deliberately not changed
+
+`appsettings.Target.json` used to name **gemma4:12b** as the deep model, and it no longer does.
+Measured before switching:
+
+- It is **thinking-capable — the first such model the project has actually run** — and reproduces
+  M0's trap exactly. With `think` on it spends 440 characters reasoning, hits its cap and returns
+  unparseable JSON. `LaneConfig.Think` defaults to `false`, so this is already handled; it is
+  satisfying to watch a lesson learned on a benchmark catch a real model two years later.
+- What is **not** handled is the cap. On the deliberation shape, six samples each:
+
+  | model | cap | parsed | out mean | out max |
+  |---|---|---|---|---|
+  | gemma4:12b | 128 | **5 of 6** | 118 | 128 |
+  | gemma4:12b | 256 | 6 of 6 | 125 | 155 |
+  | llama3.2:3b | 128 | 6 of 6 | 52 | 94 |
+
+  `CallBudgets` puts deliberation at 128, measured against llama3.2:3b, which writes a mean of 52
+  into it. gemma4 writes 118 and loses roughly **one vote in six** to a truncated document — and a
+  lost vote is a stub vote, which is exactly the thing the trace marks so a colony running on
+  fallbacks never looks like a colony that thought.
+
+Moving the deep lane to a 12B model is a real upgrade — the minds get better, not just faster — and
+it needs `CallBudgets` re-measured with it. That is its own milestone, not a side effect of
+changing where inference happens.
+
+### The fragility, stated plainly
+
+Ollama on the devbox listens on localhost only, so the endpoint is a tunnel, and **the tunnel lives
+exactly as long as its `ssh` process.** When it dies every call falls back and the colony carries on
+without a mind — which is the architecture working as designed, and is not what anyone wanted. The
+durable alternative is binding the devbox's Ollama to the LAN, which is a change to another machine
+and a service exposed to the network; it has not been made.
+
 ## Still Jeremy's, unchanged
 
 - **`LifeRules.PopulationCap = 20`.** Worth restating now that it actually binds. Before this round

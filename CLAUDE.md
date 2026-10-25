@@ -100,6 +100,16 @@ Do not re-derive these.
   lonely enough to want another person cured the loneliness, and seed 4 refused sixteen prints in a
   row. Anything a fork is weighed on is snapshotted when the question is put (`Fork.Pressure`,
   `Fork.Standing`). Check this whenever a new fork axis or a new relief is added.
+- **The golden rule's first dividend was a config file.** Moving inference to the devbox's RTX
+  5070 is `Mind:Endpoint` and nothing else: run with `ASPNETCORE_ENVIRONMENT=Target` over a tunnel
+  (`ssh -N -L 127.0.0.1:11436:127.0.0.1:11434 devbox`). A three-seat vote went from 276.2 seconds
+  of inference to **2.0**, and the governor's queue from pinned at its 32-deep cap to zero. The
+  tunnel lives as long as its ssh process; when it dies the colony falls back and keeps running.
+- **A cap measured against one model is not a cap.** `gemma4:12b` writes a mean of 118 tokens into
+  deliberation's 128 where llama3.2:3b writes 52, and loses one vote in six to a truncated
+  document. It is also thinking-capable — the first such model actually run here — and reproduces
+  M0's trap exactly when `think` is on. Moving the deep lane to a 12B model needs `CallBudgets`
+  re-measured with it.
 - **A benchmark taken in bursts does not predict a system that runs continuously.** This laptop
   reaches 10 tok/s and holds 1.5–6.5: twenty calls nose to tail decay from 9.94 (first five) to
   6.52 (last five), with individual runs at 1.56. M0 sampled three runs per scenario with gaps, so
