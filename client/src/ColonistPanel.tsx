@@ -934,10 +934,24 @@ function TraceEntry({ colonistId, row, links }: { colonistId: string; row: Trace
           {row.wasFallback ? (
             <span className="tagline stub">fallback</span>
           ) : (
-            <span className="trace-cost">
+            <span
+              className="trace-cost"
+              title={
+                `${row.generateSeconds.toFixed(1)}s writing ${row.completionTokens} tokens — ` +
+                `${(row.completionTokens / (row.generateSeconds || 1)).toFixed(1)} a second, which is the model's real speed. ` +
+                `${row.prefillSeconds.toFixed(1)}s reading the prompt. ` +
+                `${row.waitingSeconds.toFixed(1)}s neither, which is time spent queued behind another call.`
+              }
+            >
               {' · '}
               {row.model} · {row.promptTokens} in / {row.completionTokens} out ·{' '}
               {row.seconds.toFixed(1)}s
+              {/* The split matters more than the total. Divide tokens by the total and you measure
+                  how busy the server was, not how fast it is — which is how a vote came to look
+                  six times slower than every other call on the same model. */}
+              {row.waitingSeconds > 1 && (
+                <span className="of"> {row.waitingSeconds.toFixed(0)}s queued</span>
+              )}
             </span>
           )}
         </p>

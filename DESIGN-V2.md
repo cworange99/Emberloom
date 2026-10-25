@@ -1299,6 +1299,76 @@ soon as every mind that was ever going to answer has.
 That is the hour, and the "several days in colony time" is the three-day deadline it was waiting
 out. The deadline is now only the backstop.
 
+## Chasing the deliberation anomaly — and finding the instrument was lying
+
+Jeremy's second data point on the first vote was 4–5 real minutes, against the 105 seconds this
+session had claimed. The server had recorded it: Marauth 72.0s, Tuven 83.3s, Aratha 77.3s — **233
+seconds of inference**, so his number was right and the earlier one was a single badly-taken sample.
+
+Pulling the whole trace to check turned up something that looked far worse:
+
+| call | n | prompt | compl | secs | med tok/s | best | worst |
+|---|---|---|---|---|---|---|---|
+| IdleThought | 88 | 394 | 24 | 2.2 | 20.20 | 29.5 | 1.5 |
+| Dialogue | 68 | 904 | 75 | 25.7 | 3.85 | 7.1 | 0.9 |
+| Coinage | 9 | 731 | 49 | 12.2 | 3.94 | 6.6 | 2.9 |
+| Reflection | 4 | 1114 | 349 | 87.2 | 6.20 | 6.5 | 1.6 |
+| Kindling | 4 | 731 | 188 | 36.5 | 6.50 | 6.6 | 3.5 |
+| **Deliberation** | **3** | **671** | **82** | **77.5** | **1.08** | **1.1** | **1.0** |
+
+Same model, same lane, same `num_ctx`. Deliberation at a sixth of its neighbours' rate, on a
+*smaller* prompt than Reflection — and in a band of 1.0 to 1.1 where Dialogue scatters from 0.9 to
+7.1. A tight band looks like a deterministic cause, so the schema was the obvious suspect:
+`Deliberation` is the only call carrying a bounded `Number(0, 1)`.
+
+**It is not the schema.** Same model, same ~670-token prompt, same cap, varying only the shape:
+
+| schema | out | prefill | gen | gen tok/s |
+|---|---|---|---|---|
+| none (free prose) | 77 | 0.1s | 8.2s | 9.40 |
+| the real schema | 109 | 0.1s | 11.6s | 9.40 |
+| conviction unbounded | 128 | 0.2s | 16.1s | 7.95 |
+| no conviction at all | 128 | 0.1s | 13.2s | 9.67 |
+| strings only | 30 | 0.2s | 3.4s | 8.92 |
+
+Generation sits at 8–9.7 tokens a second whatever the schema asks for. But the client's wall clock
+for those same calls was 28 to 67 seconds, against 3 to 16 seconds of actual work — so the question
+became where the rest went:
+
+| | out | load | prefill | gen | = parts | ollama total | client wall | recorded rate | real rate |
+|---|---|---|---|---|---|---|---|---|---|
+| solo 1 | 38 | 0.0 | 18.2 | 3.5 | 21.8s | **52.2s** | 52.5s | 0.73 tok/s | 10.70 |
+| solo 2 | 128 | 0.0 | 0.1 | 11.9 | 12.0s | **41.3s** | 41.3s | 3.10 tok/s | 10.75 |
+| solo 3 | 49 | 0.0 | 0.1 | 5.1 | 5.2s | **73.9s** | 73.9s | 0.66 tok/s | 9.67 |
+
+**`total_duration` tracks the client's wall clock exactly, and it includes every second the request
+spent queued inside the inference server waiting its turn.** The model generates at a steady ten
+tokens a second throughout.
+
+`ModelCallRecord.Seconds` is that `total_duration`, and it is the only timing the trace kept. So
+**completion tokens over seconds measures how busy the server was and reports it as how fast the
+model is** — which is how a perfectly healthy call type came to look six times slower than its
+neighbours, and why three samples from the single busiest moment in a colony's life (a fork opening
+at day two, with the queue at its thirty-two-deep ceiling) landed in a suspiciously tight band.
+
+### What changed
+
+The breakdown has always been in `CompletionResult` — `LoadDuration`, `PromptEvalDuration`,
+`EvalDuration`, straight from the server — and `ModelCallRecord` threw all three away.
+It now carries them, with `WaitingSeconds` as what is left over, and the Trace tab shows
+`Ns queued` on any call that spent more than a second of its life waiting.
+
+> The one number that distinguishes a slow model from a busy one was measured and discarded.
+
+### What is still open, honestly
+
+These probes ran while the colony was running, so they had two clients contending and cannot give a
+clean single-client baseline. The governor is strictly serial — one worker, one `await` — so during
+ordinary play the game should be the only thing in the server's queue, and a live deliberation's 77
+seconds for about twenty seconds of load, prefill and generation is **not yet explained**. The next
+vote taken on a restarted server will say, in the trace, which of the four it was. That is the
+point of putting the numbers there.
+
 ## The drive bars have never drawn
 
 `.drive-fill` is a `<span>` inside a block, so it is `display: inline`, and an inline box has no

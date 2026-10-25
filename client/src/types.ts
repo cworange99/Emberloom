@@ -269,6 +269,9 @@ export interface TraceRow {
   promptTokens: number
   completionTokens: number
   seconds: number
+  prefillSeconds: number
+  generateSeconds: number
+  waitingSeconds: number
   produced: string
   wasFallback: boolean
   /** Ids of the beliefs and consolidated memories this call wrote. */

@@ -100,6 +100,12 @@ Do not re-derive these.
   lonely enough to want another person cured the loneliness, and seed 4 refused sixteen prints in a
   row. Anything a fork is weighed on is snapshotted when the question is put (`Fork.Pressure`,
   `Fork.Standing`). Check this whenever a new fork axis or a new relief is added.
+- **A call's wall time is not its speed.** Ollama's `total_duration` includes every second the
+  request spent queued behind another one, so completion tokens over it measures congestion and
+  reports it as throughput. Measured: a deliberation's recorded rate was 1.06 tok/s while the same
+  model on the same prompt with the same schema generated at 9.4. `ModelCallRecord` now carries
+  `LoadSeconds`, `PrefillSeconds` and `GenerateSeconds` as well, and any claim about speed has to
+  be made from those. Schema shape, incidentally, costs nothing measurable.
 - **An outcome tally cannot find a decision that was never put.** Twelve milestones of measurement
   missed the above because every readout counted what happened. `Emberloom.Sim --forks` counts the
   days the question was *not* asked and names the gate that held it shut. When something "never

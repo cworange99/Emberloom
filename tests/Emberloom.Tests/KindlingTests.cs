@@ -312,4 +312,64 @@ public class KindlingPromptTests
         Assert.Contains("1.4 to 1.8", prompt);
         Assert.Contains("0.4 to 0.7", prompt);
     }
+    /// <summary>
+    /// A call's seconds are not a measure of how fast the model is, and the trace has to carry the
+    /// split that says so.
+    /// <para>
+    /// Measured 24 October 2026, chasing a vote that took four minutes: a deliberation's recorded
+    /// rate was 1.06 tokens a second while the same model, same prompt and same schema generated at
+    /// 9.4. The difference was entirely time the request spent queued inside the inference server.
+    /// Completion tokens over total seconds therefore measures congestion and reports it as speed,
+    /// which is how one perfectly healthy call type came to look six times slower than its
+    /// neighbours — and how most of an evening went into chasing it.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void ACallsTimeIsBrokenDownSoItsSpeedCanBeToldFromItsWaiting()
+    {
+        var record = new ModelCallRecord
+        {
+            CallType = "Deliberation",
+            Day = 2.0,
+            Model = "llama3.2:3b",
+            Lane = "deep",
+            PromptTokens = 671,
+            CompletionTokens = 82,
+            Seconds = 77.5,
+            LoadSeconds = 0,
+            PrefillSeconds = 11.9,
+            GenerateSeconds = 8.7,
+            Produced = "voted for",
+        };
+
+        // What is left is what the call spent waiting its turn — most of it, in the case that
+        // prompted this.
+        Assert.Equal(56.9, record.WaitingSeconds, 1);
+
+        // The honest rate, and the misleading one that reading Seconds alone would give.
+        Assert.Equal(9.4, record.CompletionTokens / record.GenerateSeconds, 1);
+        Assert.Equal(1.1, record.CompletionTokens / record.Seconds, 1);
+    }
+
+    /// <summary>A breakdown adding up to more than the total cannot make the waiting negative.</summary>
+    [Fact]
+    public void WaitingNeverGoesNegativeWhenTheServerRoundsAgainstUs()
+    {
+        var record = new ModelCallRecord
+        {
+            CallType = "IdleThought",
+            Day = 1.0,
+            Model = "llama3.2:1b",
+            Lane = "fast",
+            PromptTokens = 394,
+            CompletionTokens = 24,
+            Seconds = 2.2,
+            PrefillSeconds = 1.4,
+            GenerateSeconds = 1.1,
+            Produced = "thought something",
+        };
+
+        Assert.Equal(0, record.WaitingSeconds);
+    }
+
 }

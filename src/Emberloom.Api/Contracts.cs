@@ -378,6 +378,14 @@ public sealed record TraceRowDto(
     int PromptTokens,
     int CompletionTokens,
     double Seconds,
+
+    /// <summary>
+    /// What those seconds were actually spent on. Without the split, completion tokens over
+    /// seconds measures congestion and calls it speed — see <see cref="ModelCallRecord.Seconds"/>.
+    /// </summary>
+    double PrefillSeconds,
+    double GenerateSeconds,
+    double WaitingSeconds,
     string Produced,
     bool WasFallback,
     IReadOnlyList<string> ProducedIds,

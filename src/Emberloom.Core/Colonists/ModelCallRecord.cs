@@ -30,7 +30,39 @@ public sealed record ModelCallRecord
 
     public required int CompletionTokens { get; init; }
 
+    /// <summary>
+    /// Wall-clock for the whole call, as the inference server reports it — and **not** a measure of
+    /// how fast the model is.
+    /// <para>
+    /// Measured 24 October 2026, chasing a vote that took four minutes: a deliberation's recorded
+    /// rate was 1.06 tokens a second while the same model on the same prompt generated at 9.4. The
+    /// gap is time the request spent inside the server neither loading, reading the prompt nor
+    /// writing — waiting its turn. Dividing completion tokens by this number therefore measures
+    /// congestion and calls it speed, which is how a perfectly healthy call type came to look six
+    /// times slower than its neighbours.
+    /// </para>
+    /// <para>
+    /// The three numbers below are the breakdown, and they are what any claim about speed has to
+    /// be made from. The server has always reported them; the trace used to throw them away.
+    /// </para>
+    /// </summary>
     public required double Seconds { get; init; }
+
+    /// <summary>Loading the model. Non-zero means <c>keep_alive</c> had expired.</summary>
+    public double LoadSeconds { get; init; }
+
+    /// <summary>Reading the prompt. Falls to almost nothing when the KV prefix cache hits.</summary>
+    public double PrefillSeconds { get; init; }
+
+    /// <summary>Writing the answer. This, over the completion tokens, is the model's real speed.</summary>
+    public double GenerateSeconds { get; init; }
+
+    /// <summary>
+    /// What the call spent neither loading, reading nor writing — queued behind something else.
+    /// A large figure here is a busy inference server, not a slow one.
+    /// </summary>
+    public double WaitingSeconds =>
+        Math.Max(0, Seconds - LoadSeconds - PrefillSeconds - GenerateSeconds);
 
     /// <summary>What the call actually changed. This is the line the Trace tab reads.</summary>
     public required string Produced { get; init; }
