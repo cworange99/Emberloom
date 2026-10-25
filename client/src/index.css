@@ -1760,3 +1760,246 @@ button {
   font-size: 12px;
   color: var(--ink-soft);
 }
+
+
+/* ---------- names, on and off ---------- */
+
+/* Hidden with display rather than visibility, because the scene writes visibility itself every
+   frame to cull labels behind the camera and the two must not fight over the same property. */
+.city-labels.names-off .city-label {
+  display: none;
+}
+
+.city-labels.names-off .city-label.is-hovered,
+.city-labels .city-label.is-colonist {
+  display: block;
+}
+
+.map-legend button {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+.map-legend button:hover {
+  border-color: var(--flag);
+  color: var(--flag);
+}
+
+.map-legend button[aria-pressed='true'] {
+  color: var(--flag);
+  border-color: var(--flag);
+  background: var(--flag-wash);
+}
+
+/* ---------- the town from above ---------- */
+
+.town-map {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  background: var(--ground);
+  z-index: 3;
+}
+
+.town-map[hidden] {
+  display: none;
+}
+
+.town-map-scroll {
+  min-height: 0;
+  display: grid;
+  padding: 10px;
+}
+
+.town-map-scroll svg {
+  width: 100%;
+  height: 100%;
+}
+
+.map-street {
+  fill: none;
+  stroke: var(--line);
+  stroke-width: 3;
+  stroke-linejoin: round;
+}
+
+.map-node {
+  fill: var(--surface);
+  stroke: var(--body-layer);
+  stroke-width: 2;
+}
+
+.map-place.is-sealed .map-node {
+  fill: var(--surface-sunk);
+  stroke: var(--flag);
+  stroke-dasharray: 4 3;
+}
+
+/* Ground the colony has not raised yet: an outline, because there is nothing there. */
+.map-place.is-site .map-node {
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 1.5;
+  stroke-dasharray: 3 4;
+}
+
+.map-raised {
+  fill: none;
+  stroke: var(--mind-layer);
+  stroke-width: 3;
+}
+
+.map-place.is-where .map-node {
+  stroke: var(--flag);
+  stroke-width: 3;
+}
+
+.map-place:hover .map-node {
+  stroke: var(--flag);
+}
+
+.map-name {
+  font-family: var(--mono);
+  font-size: 17px;
+  fill: var(--ink);
+  text-anchor: middle;
+  paint-order: stroke;
+  stroke: var(--ground);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
+
+.map-place.is-site .map-name {
+  fill: var(--muted);
+}
+
+.map-level {
+  font-family: var(--mono);
+  font-size: 13px;
+  fill: var(--muted);
+  text-anchor: middle;
+}
+
+.map-folk {
+  fill: var(--body-layer);
+  stroke: var(--ground);
+  stroke-width: 1.5;
+  cursor: pointer;
+}
+
+.map-folk.is-selected {
+  fill: var(--flag);
+  stroke-width: 2;
+}
+
+/* ---------- the shelf ---------- */
+
+.saves-pop {
+  width: min(420px, 86vw);
+}
+
+.saves-pop input {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 4px 8px;
+}
+
+.saves-pop input:focus {
+  outline: none;
+  border-color: var(--flag);
+}
+
+.saves-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+  max-height: 46vh;
+  overflow: auto;
+}
+
+.saves-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 7px;
+  background: var(--surface-sunk);
+  border: 1px solid var(--line-soft);
+  border-radius: 3px;
+}
+
+/* The one that writes itself. Marked, because it is also the one that gets written over. */
+.saves-list li.is-auto {
+  border-style: dashed;
+}
+
+.saves-what {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+}
+
+.saves-what b {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.saves-what small {
+  font-size: 9.5px;
+  color: var(--muted);
+}
+
+.saves-acts,
+.saves-confirm {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.saves-confirm span {
+  font-size: 9.5px;
+  color: var(--flag);
+}
+
+.saves-list button {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 2px 7px;
+  cursor: pointer;
+}
+
+.saves-list button:hover:not(:disabled) {
+  color: var(--flag);
+  border-color: var(--flag);
+}
+
+.saves-list button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}

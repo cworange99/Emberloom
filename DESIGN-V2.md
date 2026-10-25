@@ -1402,6 +1402,99 @@ decision: the colony is not asked until the Loom holds the print **plus two mont
 more mouth**, which is 73 at four founders and about 250 at twenty. That figure is now a readout of
 its own, with whether it is currently clear.
 
+## The machine does not hold ten tokens a second — it reaches it
+
+The deliberation anomaly is not an anomaly, and the two explanations before this one were both
+wrong. Written out because the sequence is the lesson.
+
+**First wrong answer: the schema.** Deliberation is the only call carrying a bounded
+`Number(0, 1)`, and it was the only call under 2 tok/s. Measured with `bench/probes/schema-probe.js`
+— same model, same prompt, same cap, varying only the shape — generation sits at **8 to 9.7 tokens a
+second whether the call is free prose, the real schema, the schema without its bounded number, or
+strings alone.** Schema shape costs nothing measurable.
+
+**Second wrong answer: queueing.** `bench/probes/queue-probe.js` showed `total_duration` tracking the
+client's wall clock exactly while load, prefill and generation summed to a fifth of it, so the
+recorded rate looked like a measure of congestion. That was true of *that probe* — it was the second
+client, waiting behind the game — and the instrumentation added to settle it immediately said
+otherwise about the game itself:
+
+| | in | out | total | prefill | gen | **queued** | real |
+|---|---|---|---|---|---|---|---|
+| Tuven | 758 | 81 | 100.9s | 38.1s | 62.7s | **0.2s** | 1.3 tok/s |
+| Aratha | 741 | 107 | 98.0s | 39.2s | 58.6s | **0.1s** | 1.8 tok/s |
+| Diven | 730 | 68 | 77.3s | 33.2s | 44.0s | **0.1s** | 1.5 tok/s |
+
+The game's calls wait for nothing. The generation really is slow.
+
+**Not the request either.** Replaying that exact call outside the game — same system prompt, same
+prompt, same schema, same `num_predict`, same `num_ctx`, read back out of the trace — generates at
+**9.28 tok/s** against the 1.3 the game recorded for it.
+
+**Not the simulation's CPU load.** The same replay, at three settings, holding everything else still:
+
+| | mean |
+|---|---|
+| colony paused | 10.26 tok/s |
+| colony at 60× | 10.50 tok/s |
+| paused again | 10.43 tok/s |
+
+### What it is
+
+Every measurement that said *fast* was taken in a short burst after an idle spell — M0 runs three
+samples per scenario with gaps, and these probes were a handful of calls at a time. Every
+measurement that said *slow* came out of the game, where the governor empties a thirty-deep queue
+back to back with no gaps at all.
+
+`bench/probes/sustained-probe.js` — twenty deliberation-shaped calls, nose to tail:
+
+| | |
+|---|---|
+| first five | **9.94 tok/s** |
+| last five | **6.52 tok/s** |
+| run 17 | **1.56 tok/s** |
+
+**The laptop reaches ten tokens a second and cannot hold it.** Under continuous load it falls to
+between one and a half and six and a half — and one and a half is exactly what the game records for
+a vote, because a vote is three long prompts served nose to tail at the end of a queue.
+
+So Jeremy's four-to-five-minute vote is the honest cost of three deliberations on a CPU that has
+been generating without a pause: there is nothing wrong with the call, the schema, the governor or
+the colony. The fix is not in this repository. `Mind:Endpoint` in `appsettings.json` is the whole of
+it, and the golden rule is what makes that a one-line change.
+
+> **A benchmark taken in bursts does not predict a system that runs continuously.** `CallBudgets`
+> and the governor's ceiling were both sized from M0's burst figures, which are roughly six times
+> what this machine sustains.
+
+The instrumentation added chasing the wrong answer is worth keeping anyway: it is what ruled
+queueing out in one reading, and `WaitingSeconds` will say immediately if a queue ever does form.
+
+## Three things from playing it
+
+**Names on the map are a toggle now, and off by default.** Twelve names standing over twelve
+buildings reads as a labelled diagram rather than a city. Off, the one under the pointer still
+shows — a name is wanted when you are looking for it. Hiding is `display` rather than `visibility`,
+because the scene writes `visibility` itself every frame to cull labels behind the camera and the
+two must not fight over one property.
+
+**The town from above.** A flat SVG map drawn from the same coordinates the scene uses, so the two
+agree about where everything is: every place named at a size that is not competing with a building
+for room, streets as the right angles the walkers actually take, unbuilt ground as an outline with
+an arc for how far it has been raised, and everybody shown as a dot fanned around the place they
+are standing in. Click a building to go inside it, click somebody to read their mind. It fits the
+pane rather than setting its own size, since seeing all of it at once is the only reason to leave
+the 3D view for it.
+
+**The shelf.** M11 made a colony outlive the process — SQLite, a versioned document, the random
+stream saved with it so a loaded colony lives the same life the saved one would have — and then
+gave it no front door at all. `/api/saves` has been there since and nothing in the client had ever
+called it. There is now a panel beside *print*: keep this colony under a name, see what is on the
+shelf with its day, its living, its seed and how long ago it was kept, and load or delete any of
+them. Loading replaces everyone on screen and deleting cannot be undone, so both ask first. The
+autosave is listed with the rest rather than hidden, marked with a dashed border, because it is the
+one that matters after a crash and also the one that gets written over.
+
 ## Still Jeremy's, unchanged
 
 - **`LifeRules.PopulationCap = 20`.** Worth restating now that it actually binds. Before this round

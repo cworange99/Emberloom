@@ -2,6 +2,8 @@ import type { ColonyState } from './types'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { CityView } from './CityView'
 import { RoomView } from './RoomView'
+import { TownMap } from './TownMap'
+import { SavesPanel } from './SavesPanel'
 import { ForkBanner } from './ForkBanner'
 import { PrintVerb } from './PrintVerb'
 import { PlaceVerbs } from './PlaceVerbs'
@@ -57,8 +59,10 @@ export default function App() {
   // The room view is mounted the first time a room is opened, then kept: going back to the city
   // and in again should not rebuild a scene from nothing.
   const [roomOpened, setRoomOpened] = useState(view.kind === 'room')
+  const [mapOpened, setMapOpened] = useState(view.kind === 'map')
   useEffect(() => {
     if (view.kind === 'room') setRoomOpened(true)
+    if (view.kind === 'map') setMapOpened(true)
   }, [view])
 
   const feedRef = useRef<HTMLDivElement>(null)
@@ -82,6 +86,17 @@ export default function App() {
 
   const showCity = () => {
     window.location.hash = ''
+  }
+
+  const showMap = () => {
+    window.location.hash = 'map'
+  }
+
+  // Loading a colony replaces everyone on screen, so the inspector's selection — a colonist who
+  // may not exist in the colony that just arrived — goes with it.
+  const onLoaded = () => {
+    setSelectedId(null)
+    showCity()
   }
 
   const placeNames = useMemo(
@@ -156,6 +171,8 @@ export default function App() {
         >
           new colony
         </button>
+
+        <SavesPanel day={state.day} onLoaded={onLoaded} />
 
         <PrintVerb
           charge={state.loomCharge}
@@ -291,7 +308,20 @@ export default function App() {
               onOpenPlace={openRoom}
               active={view.kind === 'city'}
               speech={speech}
+              onOpenMap={showMap}
             />
+            {mapOpened && (
+              <TownMap
+                places={world.places}
+                placeStates={state.places}
+                colonists={state.colonists}
+                selectedId={selectedId}
+                active={view.kind === 'map'}
+                onSelect={openColonist}
+                onOpenPlace={openRoom}
+                onBack={showCity}
+              />
+            )}
             {roomOpened && (
               <RoomView
                 placeId={view.kind === 'room' ? view.placeId : null}
@@ -367,11 +397,12 @@ export default function App() {
   )
 }
 
-type View = { kind: 'city' } | { kind: 'room'; placeId: string }
+type View = { kind: 'city' } | { kind: 'room'; placeId: string } | { kind: 'map' }
 
 function viewFromHash(): View {
   const match = /^#room=(.+)$/.exec(window.location.hash)
-  return match ? { kind: 'room', placeId: decodeURIComponent(match[1]) } : { kind: 'city' }
+  if (match) return { kind: 'room', placeId: decodeURIComponent(match[1]) }
+  return window.location.hash === '#map' ? { kind: 'map' } : { kind: 'city' }
 }
 
 function formatTimeOfDay(fraction: number) {

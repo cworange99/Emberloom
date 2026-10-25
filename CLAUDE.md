@@ -100,6 +100,13 @@ Do not re-derive these.
   lonely enough to want another person cured the loneliness, and seed 4 refused sixteen prints in a
   row. Anything a fork is weighed on is snapshotted when the question is put (`Fork.Pressure`,
   `Fork.Standing`). Check this whenever a new fork axis or a new relief is added.
+- **A benchmark taken in bursts does not predict a system that runs continuously.** This laptop
+  reaches 10 tok/s and holds 1.5–6.5: twenty calls nose to tail decay from 9.94 (first five) to
+  6.52 (last five), with individual runs at 1.56. M0 sampled three runs per scenario with gaps, so
+  every figure in `CallBudgets` and the governor's ceiling is sized from roughly six times what the
+  machine sustains. The game always runs in the sustained regime, which is why a three-seat vote
+  costs four real minutes. Re-measure with `bench/probes/sustained-probe.js`; the fix is
+  `Mind:Endpoint`, not code.
 - **A call's wall time is not its speed.** Ollama's `total_duration` includes every second the
   request spent queued behind another one, so completion tokens over it measures congestion and
   reports it as throughput. Measured: a deliberation's recorded rate was 1.06 tok/s while the same
