@@ -104,7 +104,9 @@ Do not re-derive these.
   5070 is `Mind:Endpoint` and nothing else: run with `ASPNETCORE_ENVIRONMENT=Target` over a tunnel
   (`ssh -N -L 127.0.0.1:11436:127.0.0.1:11434 devbox`). A three-seat vote went from 276.2 seconds
   of inference to **2.0**, and the governor's queue from pinned at its 32-deep cap to zero. The
-  tunnel lives as long as its ssh process; when it dies the colony falls back and keeps running.
+  tunnel lives as long as its ssh process, and it does drop — use `scripts/devbox-tunnel.sh`,
+  which reconnects. Recovery needs no restart: HttpClient reopens the connection and the call
+  carries its own context, so the colony is left with a minute of stub votes, marked as stubs.
 - **A cap measured against one model is not a cap.** `gemma4:12b` writes a mean of 118 tokens into
   deliberation's 128 where llama3.2:3b writes 52, and loses one vote in six to a truncated
   document. It is also thinking-capable — the first such model actually run here — and reproduces

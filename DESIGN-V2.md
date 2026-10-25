@@ -1587,6 +1587,18 @@ without a mind — which is the architecture working as designed, and is not wha
 durable alternative is binding the devbox's Ollama to the LAN, which is a change to another machine
 and a service exposed to the network; it has not been made.
 
+**It dropped within the hour.** `Connection reset by peer`, and the colony went on without a mind
+for six calls before anyone noticed — seventeen fallbacks where there had been one. So the tunnel is
+now `scripts/devbox-tunnel.sh`, which reconnects rather than exits, with `ServerAliveInterval` so a
+dead peer shows up in seconds instead of hanging a half-open socket.
+
+**The recovery is clean, which is worth knowing.** Nothing needed restarting: the mind reattached by
+itself, and the next twenty-five seconds served five calls with zero fallbacks. `HttpClient` drops
+the broken pooled connection and opens a new one, and because every call carries its own whole
+context there is no session to re-establish — a colony that lost its mind for a minute simply has a
+minute of stub votes in its trace, marked as stubs. That is the fallback design and the golden rule
+doing exactly what they were built for, on the first occasion either was tested by accident.
+
 ## Still Jeremy's, unchanged
 
 - **`LifeRules.PopulationCap = 20`.** Worth restating now that it actually binds. Before this round
