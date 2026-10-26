@@ -198,6 +198,151 @@ public class PersistenceTests
         }
     }
 
+    /// <summary>
+    /// **A colony that cannot be written down is a colony that is lost.**
+    /// <para>
+    /// The overnight run of 25 October 2026 failed to save 1,337 times in a row — once per colony
+    /// day, from day 38 to day 1,986 — on <c>UNIQUE constraint failed: belief.colony, belief.id</c>,
+    /// and nobody noticed because nothing in the game misbehaved. It simply could not be kept.
+    /// </para>
+    /// <para>
+    /// The cause was an id taken from <c>Beliefs.Count</c>. A reflection drafts several beliefs and
+    /// numbers them from the count; one of them is a near-duplicate and is merged into the row it
+    /// duplicates rather than added. Fewer land than were numbered, the count falls behind, and the
+    /// next reflection re-issues a live id. This reproduces that sequence exactly.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void MergingADuplicateBeliefDoesNotMakeTheNextIdACollision()
+    {
+        var (colony, _) = Run(days: 2);
+        var colonist = colony.Living.First();
+
+        // A reflection that drafts two and lands two.
+        var first = NewBelief(colonist);
+        var second = NewBelief(colonist);
+        colonist.Memory.Add(first);
+        colonist.Memory.Add(second);
+
+        // A reflection that drafts two and lands one, because the other is a near-duplicate of a
+        // belief already held and is merged into it in place.
+        var third = NewBelief(colonist);
+        var duplicate = NewBelief(colonist);
+        colonist.Memory.Add(third);
+        colonist.Memory.Replace(first, first with { Claim = "merged", Confidence = 0.9 });
+
+        // And one more, which is where the old scheme handed out an id that was already in use.
+        colonist.Memory.Add(NewBelief(colonist));
+
+        var ids = colonist.Memory.Beliefs.Select(b => b.Id).ToList();
+        Assert.Equal(ids.Count, ids.Distinct().Count());
+        Assert.NotEqual(third.Id, duplicate.Id);
+    }
+
+    /// <summary>
+    /// And a save of such a colony goes through, which is the thing that actually failed. The
+    /// beliefs are written through the real path rather than hand-built, so the test fails if the
+    /// id scheme regresses anywhere between here and the table.
+    /// </summary>
+    [Fact]
+    public void AColonyWhoseBeliefsHaveBeenMergedCanStillBeWrittenDown()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "emberloom-store-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            var (colony, body) = Run(days: 40);
+
+            foreach (var colonist in colony.Living)
+            {
+                for (var round = 0; round < 12; round++)
+                {
+                    var kept = NewBelief(colonist);
+                    var merged = NewBelief(colonist);
+                    colonist.Memory.Add(kept);
+
+                    // Every other round, the second draft is merged away instead of added — which
+                    // is what makes the count stop tracking the number of ids handed out.
+                    if (round % 2 == 0)
+                    {
+                        colonist.Memory.Replace(kept, kept with { Claim = "merged " + round });
+                    }
+                    else
+                    {
+                        colonist.Memory.Add(merged);
+                    }
+                }
+            }
+
+            var store = new ColonyStore(Path.Combine(folder, "colonies.db"));
+            store.Save("merged", colony, body);
+
+            var loaded = store.Load("merged");
+            Assert.NotNull(loaded);
+
+            foreach (var colonist in loaded!.Value.Colony.Colonists)
+            {
+                var ids = colonist.Memory.Beliefs.Select(b => b.Id).ToList();
+                Assert.Equal(ids.Count, ids.Distinct().Count());
+            }
+        }
+        finally
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// A loaded colonist must not start counting from one again. None of the three sequences is in
+    /// the snapshot — adding them would not help a colony saved before they existed — so they are
+    /// read back off the ids already held.
+    /// </summary>
+    [Fact]
+    public void ALoadedColonistCarriesOnFromTheIdsItAlreadyHandedOut()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "emberloom-store-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            var (colony, body) = Run(days: 40);
+            var writer = colony.Living.First();
+
+            for (var i = 0; i < 5; i++)
+            {
+                writer.Memory.Add(NewBelief(writer));
+            }
+
+            var before = writer.Memory.Beliefs.Select(b => b.Id).ToList();
+
+            var store = new ColonyStore(Path.Combine(folder, "colonies.db"));
+            store.Save("resumed", colony, body);
+            var loaded = store.Load("resumed")!.Value.Colony;
+
+            var same = loaded.Find(writer.Id)!;
+            var next = same.NextBeliefId();
+
+            Assert.DoesNotContain(next, before);
+            Assert.DoesNotContain(same.NextCallId(), same.Trace.Select(t => t.Id));
+        }
+        finally
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    /// <summary>One belief, numbered the way the mind numbers them.</summary>
+    private static Belief NewBelief(Colonist colonist) => new()
+    {
+        Id = colonist.NextBeliefId(),
+        OwnerId = colonist.Id,
+        FormedOnDay = 1,
+        Claim = "something held",
+        Confidence = 0.6,
+        SourceMemoryIds = [],
+    };
+
     [Fact]
     public void AColonyWrittenToDiskComesBackOffDisk()
     {

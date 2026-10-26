@@ -155,6 +155,13 @@ public sealed record ColonistSnapshot
             colonist.RecordCall(call);
         }
 
+        // Last, once the trace and the memory are both in place: pick the id sequences back up
+        // where this colonist left off. Without it a loaded colony starts counting from one again
+        // and re-issues ids that its own restored rows are already using — which is the same fault
+        // that made an overnight run unsaveable, wearing a different hat. See
+        // <see cref="Colonist.ResumeSequences"/>.
+        colonist.ResumeSequences();
+
         return colonist;
     }
 }

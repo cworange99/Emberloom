@@ -1599,6 +1599,45 @@ context there is no session to re-establish — a colony that lost its mind for 
 minute of stub votes in its trace, marked as stubs. That is the fallback design and the golden rule
 doing exactly what they were built for, on the first occasion either was tested by accident.
 
+## A colony that cannot be written down
+
+The first overnight run on GPU inference reached day 1,986 and **could not be saved**. Autosave had
+failed **1,337 times in a row** — once per colony day since day 38 — on
+`UNIQUE constraint failed: belief.colony, belief.id`, and nothing in the game misbehaved while it
+happened. Nineteen hundred colony days were unrecoverable; only the chronicle survived, because the
+chronicle is written to its own file as the run goes.
+
+**The id came from the collection's own count:**
+
+```csharp
+Id = $"b-{colonist.Id}-{colonist.Memory.Beliefs.Count + index + 1}",
+```
+
+A count is unique only while nothing is ever removed, and beliefs *are* removed. A reflection drafts
+several and numbers them from the count; one turns out to be a near-duplicate of a belief already
+held, and `MemoryStore.Replace` merges it into that row rather than adding it. Fewer beliefs land
+than ids were handed out, the count falls behind, and the next reflection re-issues an id that is
+already in use. The consolidated-memory id on the line above was built the same way and had the
+same fault waiting.
+
+> **A counter cannot be derived from a population that anything is allowed to remove from.**
+
+The fix was already in the same method, three lines up: `colonist.NextCallId()`, a monotonic
+sequence. Beliefs and consolidated memories now have one each.
+
+**Two things the fix had to get right beyond that.** None of the three sequences is in the snapshot,
+and adding them would not have helped a colony saved before they existed — so a loaded colonist
+reads its counters back off the ids it is already holding (`Colonist.ResumeSequences`). That makes
+a colony carrying duplicates from the old scheme stop making new ones, with no migration. And the
+call sequence had the identical latent fault: a loaded colony used to start counting calls from one
+again, over a restored trace that already held those ids.
+
+**Verified by reverting.** Both new tests were run against the count-derived scheme first and both
+failed — the save one with the production stack trace, `ColonyStore.Save` line 146, the same SQLite
+exception. Then live: a colony run to day 50 on the GPU reached the state that breaks the old
+scheme — one colonist holding seventeen beliefs with ids up to #18, so one had been merged away —
+and **47 autosaves succeeded with none failing**, a named save went to the shelf, and it loaded back.
+
 ## Still Jeremy's, unchanged
 
 - **`LifeRules.PopulationCap = 20`.** Worth restating now that it actually binds. Before this round

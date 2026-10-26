@@ -193,7 +193,7 @@ public sealed class MindService : IDisposable
 
         var consolidated = new ConsolidatedMemory
         {
-            Id = $"cm-{colonist.Id}-{colonist.Memory.Consolidated.Count + 1}",
+            Id = colonist.NextConsolidatedId(),
             OwnerId = colonist.Id,
             Day = colony.Day,
             Text = result.ConsolidatedText,
@@ -203,9 +203,9 @@ public sealed class MindService : IDisposable
         };
 
         var beliefs = result.Beliefs
-            .Select((draft, index) => new Belief
+            .Select(draft => new Belief
             {
-                Id = $"b-{colonist.Id}-{colonist.Memory.Beliefs.Count + index + 1}",
+                Id = colonist.NextBeliefId(),
                 OwnerId = colonist.Id,
                 FormedOnDay = colony.Day,
                 Claim = draft.Claim,

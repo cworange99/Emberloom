@@ -112,6 +112,8 @@ public sealed class Colonist
 
     private readonly List<ModelCallRecord> _trace = [];
     private int _callSequence;
+    private int _beliefSequence;
+    private int _consolidatedSequence;
 
     /// <summary>
     /// How many of the most recent calls keep their full prompt and response. The text is the heavy
@@ -156,6 +158,71 @@ public sealed class Colonist
     public string NextCallId()
     {
         lock (_trace) { return $"{Id}-call-{++_callSequence}"; }
+    }
+
+    /// <summary>
+    /// The same sequence discipline for the two durable artifacts a mind writes, and for the same
+    /// reason — but this one was learned the expensive way.
+    /// <para>
+    /// Both used to take their number from the collection's own <c>Count</c>, which is unique only
+    /// while the collection never shrinks. Beliefs shrink: a reflection drafts two, one of them is
+    /// a near-duplicate of a belief already held, and <see cref="Memory.MemoryStore.Replace"/>
+    /// merges it into the existing row instead of adding it. So fewer beliefs land than ids were
+    /// handed out, the count falls behind the sequence, and the next reflection re-issues an id
+    /// that is already in use.
+    /// </para>
+    /// <para>
+    /// Found by an overnight run on 25 October 2026, which had failed to save **1,337 times in a
+    /// row** — once per colony day since day 38 — on
+    /// <c>UNIQUE constraint failed: belief.colony, belief.id</c>. The colony itself was fine and
+    /// nothing in the game misbehaved; it simply could not be written down, and nineteen hundred
+    /// colony days were unrecoverable. A counter cannot be derived from a population that anything
+    /// is allowed to remove from.
+    /// </para>
+    /// </summary>
+    public string NextBeliefId()
+    {
+        lock (_trace) { return $"b-{Id}-{++_beliefSequence}"; }
+    }
+
+    public string NextConsolidatedId()
+    {
+        lock (_trace) { return $"cm-{Id}-{++_consolidatedSequence}"; }
+    }
+
+    /// <summary>
+    /// Picks the sequences back up where a restored colonist left off.
+    /// <para>
+    /// None of the three counters is in the snapshot, and adding them would not help a colony saved
+    /// before they existed. Reading them back off the ids already held does both: a loaded colony
+    /// resumes correctly whatever version wrote it, and a colony carrying duplicates from the old
+    /// scheme stops making new ones. Called by the loader once everything else is in place.
+    /// </para>
+    /// </summary>
+    public void ResumeSequences()
+    {
+        lock (_trace)
+        {
+            _callSequence = Highest(_trace.Select(t => t.Id), $"{Id}-call-");
+            _beliefSequence = Highest(Memory.Beliefs.Select(b => b.Id), $"b-{Id}-");
+            _consolidatedSequence = Highest(Memory.Consolidated.Select(c => c.Id), $"cm-{Id}-");
+        }
+
+        static int Highest(IEnumerable<string> ids, string prefix)
+        {
+            var highest = 0;
+            foreach (var id in ids)
+            {
+                if (id.StartsWith(prefix, StringComparison.Ordinal)
+                    && int.TryParse(id.AsSpan(prefix.Length), out var n)
+                    && n > highest)
+                {
+                    highest = n;
+                }
+            }
+
+            return highest;
+        }
     }
 
     /// <summary>

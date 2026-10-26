@@ -112,6 +112,13 @@ Do not re-derive these.
   document. It is also thinking-capable — the first such model actually run here — and reproduces
   M0's trap exactly when `think` is on. Moving the deep lane to a 12B model needs `CallBudgets`
   re-measured with it.
+- **A counter cannot be derived from a population that anything is allowed to remove from.**
+  Belief ids were `Beliefs.Count + index + 1`, and beliefs get merged away by duplicate detection —
+  so the count fell behind the ids handed out and the next reflection re-issued a live one. An
+  overnight run failed to save **1,337 times in a row** without anything in the game misbehaving:
+  it simply could not be kept, and 1,900 colony days were lost. Ids come from monotonic sequences
+  (`NextCallId`, `NextBeliefId`, `NextConsolidatedId`) and a loaded colonist reads them back off
+  the ids it already holds. Anything new that gets an id needs the same.
 - **A benchmark taken in bursts does not predict a system that runs continuously.** This laptop
   reaches 10 tok/s and holds 1.5–6.5: twenty calls nose to tail decay from 9.94 (first five) to
   6.52 (last five), with individual runs at 1.56. M0 sampled three runs per scenario with gaps, so
