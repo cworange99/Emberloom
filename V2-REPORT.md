@@ -144,6 +144,47 @@ dotnet run --project src/Emberloom.Sim -- --days 2160 --colonists 4 --seed 4 --q
 colony that decided against growth from a colony that was never able to decide for it.** Every other
 readout counts what happened; this one counts what did not, and names the gate that held it shut.
 
+## What playing it found
+
+Version 2 closed on measurement. Then Jeremy played it, and four days of play found more than the
+twelve milestones had — because every instrument built along the way measured *outcomes*, and each
+of these was a fault in a *mechanism* that produced perfectly plausible outcomes.
+
+| found by | what it was |
+|---|---|
+| clicking **new colony** mid-run | the host died writing the outgoing colony's record while the tick loop wrote the same file, and `UnauthorizedAccessException` does not derive from `IOException` |
+| noticing **no new minds in two colony-years** | a council deliberates in the plaza, and deliberating relieves the very drive the vote is weighed on — the colony cured its own loneliness by debating it |
+| noticing **the health bars are black** | every drive bar in the client had measured 0×0 since M1 — a `<span>` in a block is `display: inline` |
+| asking **where is the happiness metric** | it had been on screen since M12, as a single word between the mood and the purse |
+| timing **a vote at four minutes** | the laptop reaches 10 tok/s and holds 1.5–6.5, and `CallBudgets` was sized from burst figures six times that |
+| **letting it run overnight** | the colony had been unable to save itself for 1,337 consecutive colony days without anything misbehaving |
+
+The last one is the sharpest. The colony ran correctly for nineteen hundred days while being quietly
+impossible to keep, and the only reason it surfaced at all is that the run was long enough for a
+belief merge to happen and that a log got read when an unrelated check timed out.
+
+> **A system can be wrong in a way that nothing it reports about itself will ever show.** Every one
+> of these was invisible to the tests, the sim runs and the chronicle, and visible within minutes to
+> somebody using the thing.
+
+## Where it ended
+
+Shut down on 26 October 2026 at day **3,963**, twenty living of forty-four who had lived, on GPU
+inference through the devbox.
+
+The save fix got the verification it needed by accident: that colony ran on after the fix went in
+and autosaved every colony day for nearly four thousand days.
+
+| | before the fix | after |
+|---|---|---|
+| autosaves succeeded | **0** | **3,456** |
+| autosaves failed | **1,337** (every one) | **1** |
+| `belief.id` constraint violations | every save | **0** |
+
+The single failure was a different and much rarer thing — `NOT NULL constraint failed:
+colony.document`, once in 3,457, self-recovered on the next colony day. Not diagnosed, not
+reproduced, and written down here rather than guessed at.
+
 ## The golden rule
 
 Held throughout. Everything version 2 added — wellbeing, tokens, the work-fed Loom, build progress,
