@@ -47,6 +47,9 @@ for (var i = 0; i < args.Length; i++)
         case "--forks":
             Forks(days, colonists, seed);
             return 0;
+        case "--population":
+            Population(days, colonists, seed);
+            return 0;
         default:
             Console.Error.WriteLine($"Unrecognised argument: {args[i]}");
             return 1;
@@ -748,6 +751,121 @@ static void Forks(int days, int colonists, int seed)
     Console.WriteLine();
     Console.WriteLine($"Ended at {colony.Living.Count()} living, charge {colony.LoomCharge:F0}, "
                       + $"a print needs {ForkRules.ChargeNeededToPrint(colony):F0}.");
+}
+
+/// <summary>
+/// Does a colony find its own ceiling? — the question the population cap has been standing in for.
+/// <para>
+/// <c>LifeRules.PopulationCap = 20</c> was never a balance figure. It is a thinking budget: every
+/// living mind costs the governor calls, and twenty was what the laptop could afford. The hope is
+/// that the body does not need it — that lives ending and lives beginning settle at a sustainable
+/// number on their own, the way they would anywhere.
+/// </para>
+/// <para>
+/// The mechanics say it could go either way and that is exactly why it has to be run. A colonist is
+/// fertile between <c>MaturityDays</c> (648) and elderhood (1,836), so for about 55% of a life, and
+/// the pair cooldown is 648 days, so each person can be a parent perhaps twice. Twice per *person*
+/// is four per couple, which doubles every generation; twice per *couple* is replacement. Which one
+/// happens depends on whether people bond with more than one partner across a life, and on how much
+/// the sibling and parent exclusions bite in a colony where everyone is related to everyone.
+/// </para>
+/// <para>
+/// So: several caps including none at all, over four and a half lifespans, with the population
+/// sampled every colony-year. What is wanted is not a number but a *shape* — a curve that levels,
+/// a curve that climbs without stopping, or a curve that overshoots and crashes.
+/// </para>
+/// </summary>
+static void Population(int days, int colonists, int seed)
+{
+    Console.WriteLine($"Population dynamics — {days:N0} colony-days ({days / LifeRules.BaseLifespanDays:F1} lifespans), "
+                      + $"{colonists} founders, seed {seed}, no mind at all");
+    Console.WriteLine("Does the colony find its own ceiling, or does it need one imposed?");
+    Console.WriteLine();
+    Console.WriteLine($"{"cap",6} {"peak",6} {"ended",6} {"born",6} {"died",6} {"births",8} {"deaths",8} "
+                      + $"{"mean life",10} {"lost",6} {"well",6} {"settled",9}");
+    Console.WriteLine($"{"",6} {"",6} {"",6} {"",6} {"",6} {"per 100 colonist-years",17} "
+                      + $"{"",10} {"days",6} {"",6} {"",9}");
+
+    var original = LifeRules.PopulationCap;
+
+    try
+    {
+        foreach (var cap in new[] { 20, 30, 40, 60, LifeRules.Uncapped })
+        {
+            LifeRules.PopulationCap = cap;
+
+            var random = new ColonyRandom(seed);
+            var colony = ColonyFactory.Create(colonists, random, seed);
+            var body = new BodySimulation(colony, random);
+
+            var curve = new List<int>();
+            var lastYear = -1;
+
+            for (var tick = 0; tick < days * Colony.TicksPerDay; tick++)
+            {
+                body.Tick();
+
+                // Once a colony-year, which is the unit a population moves in.
+                var year = (int)(colony.Day / 360);
+                if (year != lastYear)
+                {
+                    lastYear = year;
+                    curve.Add(colony.Living.Count());
+                }
+
+                if (!colony.Living.Any())
+                {
+                    break;
+                }
+            }
+
+            var dead = colony.Colonists.Where(c => !c.IsAlive).ToList();
+            var living = colony.Living.ToList();
+            var born = colony.Colonists.Count - colonists;
+
+            // Lived-years is the honest denominator: a rate per colonist-year rather than per
+            // colony-day, so colonies of different sizes can be compared at all.
+            var livedYears = colony.Colonists
+                .Sum(c => c.AgeInDays(c.IsAlive ? colony.Day : c.DiedOnDay)) / 360.0;
+
+            // "Settled" asks whether the last fifth of the run stayed inside a band rather than
+            // still climbing — a ceiling the colony found rather than one it was given.
+            var tail = curve.Skip(curve.Count * 4 / 5).ToList();
+            var settled = tail.Count < 2 ? "—"
+                : Math.Abs(tail[^1] - tail[0]) <= Math.Max(2, tail.Max() * 0.1) ? "yes"
+                : tail[^1] > tail[0] ? "climbing"
+                : "falling";
+
+            Console.WriteLine(
+                $"{(cap == LifeRules.Uncapped ? "none" : cap.ToString()),6} "
+                + $"{curve.DefaultIfEmpty(0).Max(),6} {living.Count,6} {born,6} {dead.Count,6} "
+                + $"{(livedYears <= 0 ? 0 : born / livedYears * 100),8:F1} "
+                + $"{(livedYears <= 0 ? 0 : dead.Count / livedYears * 100),8:F1} "
+                + $"{(dead.Count == 0 ? 0 : dead.Average(c => c.AgeInDays(c.DiedOnDay))),10:F0} "
+                + $"{(colony.Colonists.Count == 0 ? 0 : colony.Colonists.Average(c => c.DaysLostToDespair)),6:F0} "
+                + $"{living.Select(c => c.Wellbeing).DefaultIfEmpty(0).Average(),6:F3} "
+                + $"{settled,9}");
+
+            Console.WriteLine($"       curve, every 10 colony-years: {string.Join(" ", Every(curve, 10))}");
+        }
+    }
+    finally
+    {
+        LifeRules.PopulationCap = original;
+    }
+
+    Console.WriteLine();
+    Console.WriteLine("A cap that is never reached is a cap that is not doing anything; one the colony");
+    Console.WriteLine("sits against for most of its life is the thing deciding the population.");
+}
+
+/// <summary>Every nth sample, so a long curve fits on a line and still shows its shape.</summary>
+static IEnumerable<int> Every(IReadOnlyList<int> values, int step)
+{
+    for (var i = 0; i < values.Count; i += step)
+    {
+        yield return values[i];
+    }
 }
 
 /// How a day's ticks are grouped for reading. Wander was the colony's only leisure through M12 and

@@ -67,8 +67,21 @@ public static class LifeRules
     /// </summary>
     public const double PairChancePerDay = 0.35 * 40 / BaseLifespanDays;
 
-    /// <summary>The city has room, but not endless room — and every mind costs the governor.</summary>
-    public const int PopulationCap = 20;
+    /// <summary>
+    /// The city has room, but not endless room — and every mind costs the governor.
+    /// <para>
+    /// Settable rather than const for the same reason <c>ActionCatalog.ReliefScale</c> and
+    /// <c>WellbeingRules.DespairDaysPerDay</c> are: the sweep that decides it has to be able to
+    /// turn it. <see cref="Uncapped"/> takes it off entirely. The game never writes it.
+    /// </para>
+    /// </summary>
+    public static int PopulationCap { get; set; } = 20;
+
+    /// <summary>
+    /// No cap at all — for asking whether births and deaths find their own ceiling. Not a number
+    /// the colony can reach, so every <c>&lt; PopulationCap</c> test simply passes.
+    /// </summary>
+    public const int Uncapped = int.MaxValue;
 
     /// <summary>How many of each parent's strongest memories a child dreams.</summary>
     public const int DreamsPerParent = 2;

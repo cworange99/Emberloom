@@ -230,6 +230,20 @@ export default function App() {
               <span className="of">{state.canFeedAnother ? 'affordable' : 'not yet'}</span>
             </dd>
           </div>
+          {/* Who is here, and who has been. A count of the living alone cannot tell a colony
+              holding steady from one that never lost anybody — and the deaths have only ever been
+              legible in the chronicle, after the fact. */}
+          <div
+            className="readout"
+            title={`${state.population} alive now, of ${state.everLived} who have ever lived here. ${state.died} have died.`}
+          >
+            <dt>People</dt>
+            <dd>
+              {state.population}
+              <span className="of">of {state.everLived}</span>
+              {state.died > 0 && <span className="of">−{state.died}</span>}
+            </dd>
+          </div>
           <div className="readout">
             <dt>Salvage</dt>
             <dd>{state.artifactsRecovered}</dd>

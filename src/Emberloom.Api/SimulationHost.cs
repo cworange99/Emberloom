@@ -1255,6 +1255,8 @@ public sealed class SimulationHost : BackgroundService
         colony.Intents.Select(i => IntentDto.From(i, colony)).ToList(),
         colony.ArtifactsRecovered,
         colony.Living.Count(),
+        colony.Colonists.Count,
+        colony.Colonists.Count(c => !c.IsAlive),
         body.ActionsCompleted,
         ClockSnapshot(),
         GovernorSnapshot(),

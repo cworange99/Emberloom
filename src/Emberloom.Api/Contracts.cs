@@ -226,7 +226,16 @@ public sealed record ColonyStateDto(
     string Mode,
     IReadOnlyList<IntentDto> Intents,
     int ArtifactsRecovered,
+
+    /// <summary>
+    /// Who is here, who has ever been here, and who has died. Deaths have been in the chronicle
+    /// since M7 and in the sim's summary, and were never once on screen — so the only way to know
+    /// whether a colony was turning over was to read the record afterwards. A population that is
+    /// only ever a count of the living cannot show you a colony that is replacing itself.
+    /// </summary>
     int Population,
+    int EverLived,
+    int Died,
     int ActionsCompleted,
     ClockDto Clock,
     GovernorDto? Governor,

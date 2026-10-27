@@ -132,6 +132,8 @@ export interface ColonyState {
   intents: Intent[]
   artifactsRecovered: number
   population: number
+  everLived: number
+  died: number
   actionsCompleted: number
   clock: Clock
   governor: Governor | null
